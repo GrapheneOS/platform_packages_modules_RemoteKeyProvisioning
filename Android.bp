@@ -1,0 +1,80 @@
+// Copyright (C) 2022 The Android Open Source Project
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
+rust_dependencies = [
+    "android.security.rkpd-rust",
+    "libandroid_logger",
+    "libbinder_rs",
+    "liblog_rust",
+]
+
+rust_library {
+    name: "librkpd",
+    crate_name: "rkpd",
+    srcs: ["src/lib.rs"],
+    rustlibs: rust_dependencies,
+    apex_available: [
+        "//apex_available:platform",
+        "com.android.rkpd",
+    ],
+    min_sdk_version: "33",
+}
+
+rust_binary {
+    name: "rkpd",
+    srcs: ["src/rkpd_main.rs"],
+    init_rc: ["rkpd.rc"],
+    rustlibs: rust_dependencies + [ "librkpd" ],
+    apex_available: [
+        "//apex_available:platform",
+        "com.android.rkpd",
+    ],
+    min_sdk_version: "33",
+    bootstrap: true,
+}
+
+prebuilt_etc {
+    name: "com.android.rkpd.init.rc",
+    src: "rkpd.rc",
+    filename: "init.rc",
+    installable: false,
+}
+
+rust_test {
+    name: "rkpd_client_test",
+    srcs: [
+        "src/rkpd_client_test.rs",
+    ],
+    require_root: true,
+    rustlibs: [
+        "android.security.rkpd-rust",
+        "libbinder_rs",
+        "librkpd",
+    ],
+}
+
+cc_library_static {
+    name: "rkpd_aidl_ndk",
+    whole_static_libs: [
+        "android.security.rkpd-ndk",
+    ],
+    apex_available: [
+        "com.android.rkpd",
+    ],
+    min_sdk_version: "33",
+}
