@@ -1,0 +1,13 @@
+# Start the rkpd service.
+#
+# See system/core/init/README.md for information on the init.rc language.
+
+service rkpd /apex/com.android.rkpd/bin/rkpd
+    class rkpd
+    user system
+    group system
+    interface aidl rkpd.registrar
+    interface aidl rkpd.refresh
+    oneshot
+    disabled
+    updatable
