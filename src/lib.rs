@@ -31,6 +31,10 @@ pub struct MyRegistration;
 impl Interface for MyRegistration {}
 
 impl IRegistration for MyRegistration {
+    fn waitForRemotelyProvisionedKey(&self, key_id: i32) -> BinderResult<RemotelyProvisionedKey> {
+        self.getRemotelyProvisionedKey(key_id)
+    }
+
     fn getRemotelyProvisionedKey(&self, key_id: i32) -> BinderResult<RemotelyProvisionedKey> {
         info!("keyId provided: {}", key_id);
         Ok(RemotelyProvisionedKey { keyBlob: vec![0; 32], encodedCertChain: vec![0; 32] })

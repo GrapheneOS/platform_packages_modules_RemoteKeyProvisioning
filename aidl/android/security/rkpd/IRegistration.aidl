@@ -36,14 +36,9 @@ interface IRegistration {
      * applications are able to correlate keys to uniquely identify a
      * device/user.
      *
-     * If this registration is rkp only (see isRkpOnly parameter in
-     * {@link IRegistrar#getRegistration()}), and no keys are immediately
-     * available, then this function blocks until the remote provisioning
-     * service can be contacted and either keys are provisioned or an error
-     * occurs.
-     *
-     * If this registration is NOT rkp only, and no keys are available, this
-     * function returns null.
+     * If no keys are immediately available, then this function returns immediately
+     * with null. The waitForRemotelyProvisionedKey call is similar to this one, but
+     * it will block until keys are available.
      *
      * @param keyId This is a client-chosen key identifier, used to
      * differentiate between keys for varying client-specific use-cases. For
@@ -52,6 +47,17 @@ interface IRegistration {
      * key.
      */
     RemotelyProvisionedKey getRemotelyProvisionedKey(int keyId);
+
+    /**
+     * Block until a remotely provisioned key is available. If no keys are
+     * immediately available, then this function blocks, waiting until the
+     * remote provisioning server can be contacted to provision a key.
+     *
+     * @see getRemotelyProvisionedKey()
+     *
+     * @param keyId a client-chosen key identifier
+     */
+    RemotelyProvisionedKey waitForRemotelyProvisionedKey(int keyId);
 
     /**
      * Key upgrade is a mechanism that prevents keys from being used on a
@@ -71,7 +77,8 @@ interface IRegistration {
      *
      * @param keyId The identifier of the key being upgraded.
      * @param oldKeyBlob The blob contained in the RemotelyProvisionedKey that was
-     * returned by getRemotelyProvisionedKey. This blob will be replaced.
+     * returned by either waitForRemotelyProvisionedKey or getRemotelyProvisionedKey.
+     * This blob will be replaced.
      *
      * @return The new blob that replaced oldKeyBlob.
      *
