@@ -35,7 +35,7 @@ fn test_function() {
     let a = registrar_service.getRegistration("some remotely provisioned component", true);
     if let Ok(value) = a {
         let _b = value.getRemotelyProvisionedKey(123123);
-        let _c = value.upgradeKey(123123, &[0; 32]);
+        let _c = value.storeUpgradedKey(123123, &[0; 32]);
     }
     let refresh_service = get_refresh_service();
     let _d = refresh_service.refreshData();
