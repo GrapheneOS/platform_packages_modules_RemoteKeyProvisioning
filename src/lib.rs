@@ -40,9 +40,9 @@ impl IRegistration for MyRegistration {
         Ok(RemotelyProvisionedKey { keyBlob: vec![0; 32], encodedCertChain: vec![0; 32] })
     }
 
-    fn upgradeKey(&self, key_id: i32, _old_key_blob: &[u8]) -> BinderResult<std::vec::Vec<u8>> {
+    fn storeUpgradedKey(&self, key_id: i32, _new_key_blob: &[u8]) -> BinderResult<()> {
         info!("keyId provided: {}", key_id);
-        Ok(vec![0; 32])
+        Ok(())
     }
 }
 
