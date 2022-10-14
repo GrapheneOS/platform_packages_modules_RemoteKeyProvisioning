@@ -16,28 +16,22 @@ package {
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
-apex_key {
-    name: "com.android.rkpd.key",
-    public_key: "com.android.rkpd.avbpubkey",
-    private_key: "com.android.rkpd.pem",
-}
-
-android_app_certificate {
-    name: "com.android.rkpd.certificate",
-    certificate: "com.android.rkpd",
-}
-
-apex {
-    name: "com.android.rkpd",
-    manifest: "manifest.json",
-    file_contexts: ":com.android.rkpd-file_contexts",
-    key: "com.android.rkpd.key",
-    certificate: ":com.android.rkpd.certificate",
-    systemserverclasspath_fragments: [
-        "com.android.rkpd-systemserverclasspath-fragment",
+android_test {
+    name: "service-rkp-unittest",
+    srcs: ["src/**/*.java"],
+    static_libs: [
+        "androidx.test.ext.junit",
+        "androidx.test.runner",
+        "mockito-target",
+        "service-rkp.impl",
+        "truth-prebuilt",
     ],
-    updatable: true,
-    min_sdk_version: "33",
-    apps: ["rkpdapp"],
-    compile_multilib: "both",
+    libs: [
+        "android.test.mock",
+    ],
+    target_sdk_version: "current",
+    test_suites: [
+        "general-tests",
+        "mts-rkpd",
+    ],
 }
