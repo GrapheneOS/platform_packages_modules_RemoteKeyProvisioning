@@ -35,10 +35,6 @@ apex {
     certificate: ":com.android.rkpd.certificate",
     updatable: true,
     min_sdk_version: "33",
-    prebuilts: ["com.android.rkpd.init.rc"],
-    native_shared_libs: [
-        "android.security.rkpd-ndk",
-    ],
-    binaries: [ "rkpd" ],
+    apps: [ "rkpdapp" ],
     compile_multilib: "both",
 }
