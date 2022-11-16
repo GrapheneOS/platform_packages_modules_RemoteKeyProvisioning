@@ -27,6 +27,8 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 import android.content.ComponentName;
 import android.content.Context;
@@ -35,7 +37,9 @@ import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.content.pm.ServiceInfo;
+import android.os.CancellationSignal;
 import android.os.IBinder;
+import android.os.OperationCanceledException;
 import android.os.OutcomeReceiver;
 import android.os.RemoteException;
 import android.os.UserHandle;
@@ -45,9 +49,11 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 
+import com.android.rkpdapp.IGetKeyCallback;
 import com.android.rkpdapp.IGetRegistrationCallback;
 import com.android.rkpdapp.IRegistration;
 import com.android.rkpdapp.IRemoteProvisioning;
+import com.android.rkpdapp.RemotelyProvisionedKey;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -301,6 +307,110 @@ public class RegistrationProxyTests {
         final Exception error = receiver.waitForError();
         assertThat(error).isInstanceOf(RemoteException.class);
         assertThat(error).hasMessageThat().isEqualTo(errorString);
+    }
+
+    @Test
+    public void getKeyAsyncSuccess() throws Exception {
+        final Context context = mock(Context.class);
+        final IRegistration mockIRegistration =
+                createMockRegistrationForComponent(context, FAKE_COMPONENT, FAKE_IRPC);
+
+        final int fakeKeyId = 31415;
+        final RemotelyProvisionedKey fakeKey = new RemotelyProvisionedKey();
+        fakeKey.keyBlob = new byte[]{1, 2, 3, 4, 5, 6};
+        fakeKey.encodedCertChain = new byte[]{8, 6, 7, 5, 3, 0, 9};
+
+        doAnswer(answerVoid((keyId, callback) -> ((IGetKeyCallback) callback).onSuccess(fakeKey)))
+                .when(mockIRegistration).getKey(eq(fakeKeyId), any());
+
+        final var registrationReceiver = new ResultReceiver<RegistrationProxy>();
+        RegistrationProxy.createAsync(context, FAKE_CALLER_UID, FAKE_IRPC, BIND_TIMEOUT, mExecutor,
+                registrationReceiver);
+        final RegistrationProxy registration = registrationReceiver.waitForResult();
+
+        final var keyReceiver =
+                new ResultReceiver<android.security.rkp.service.RemotelyProvisionedKey>();
+        registration.getKeyAsync(fakeKeyId, new CancellationSignal(), mExecutor, keyReceiver);
+        mExecutor.shutdown();
+        final android.security.rkp.service.RemotelyProvisionedKey key = keyReceiver.waitForResult();
+        assertThat(key.getKeyBlob()).isEqualTo(fakeKey.keyBlob);
+        assertThat(key.getEncodedCertChain()).isEqualTo(fakeKey.encodedCertChain);
+    }
+
+    @Test
+    public void getKeyAsyncCancelRequest() throws Exception {
+        final Context context = mock(Context.class);
+        final IRegistration mockIRegistration =
+                createMockRegistrationForComponent(context, FAKE_COMPONENT, FAKE_IRPC);
+
+        doAnswer(answerVoid(callback -> ((IGetKeyCallback) callback).onCancel()))
+                .when(mockIRegistration).cancelGetKey(any());
+
+        final var registrationReceiver = new ResultReceiver<RegistrationProxy>();
+        RegistrationProxy.createAsync(context, FAKE_CALLER_UID, FAKE_IRPC, BIND_TIMEOUT, mExecutor,
+                registrationReceiver);
+        final RegistrationProxy registration = registrationReceiver.waitForResult();
+
+        final var cancelSignal = new CancellationSignal();
+        final var errorReceiver =
+                new ErrorReceiver<android.security.rkp.service.RemotelyProvisionedKey>();
+        registration.getKeyAsync(123, cancelSignal, mExecutor, errorReceiver);
+        cancelSignal.cancel();
+        mExecutor.shutdown();
+        assertThat(errorReceiver.waitForError()).isInstanceOf(OperationCanceledException.class);
+    }
+
+    @Test
+    public void getKeyAsyncCancelAfterComplete() throws Exception {
+        final Context context = mock(Context.class);
+        final IRegistration mockIRegistration =
+                createMockRegistrationForComponent(context, FAKE_COMPONENT, FAKE_IRPC);
+
+        doAnswer(answerVoid((keyId, callback) ->
+                ((IGetKeyCallback) callback).onSuccess(new RemotelyProvisionedKey())))
+                .when(mockIRegistration).getKey(anyInt(), any());
+
+        final var registrationReceiver = new ResultReceiver<RegistrationProxy>();
+        RegistrationProxy.createAsync(context, FAKE_CALLER_UID, FAKE_IRPC, BIND_TIMEOUT, mExecutor,
+                registrationReceiver);
+        final RegistrationProxy registration = registrationReceiver.waitForResult();
+
+        final var cancelSignal = new CancellationSignal();
+        final var keyReceiver =
+                new ResultReceiver<android.security.rkp.service.RemotelyProvisionedKey>();
+        registration.getKeyAsync(123, cancelSignal, mExecutor, keyReceiver);
+        assertThat(keyReceiver.waitForResult()).isNotNull();
+
+        cancelSignal.cancel();
+
+        // Ensure we don't miss any queued up cancellation tasks that might be in flight
+        mExecutor.shutdown();
+
+        verify(mockIRegistration, never()).cancelGetKey(any());
+    }
+
+    @Test
+    public void getKeyAsyncHandleError() throws Exception {
+        final Context context = mock(Context.class);
+        final IRegistration mockIRegistration =
+                createMockRegistrationForComponent(context, FAKE_COMPONENT, FAKE_IRPC);
+
+        final String errorMsg = "oopsie, it didn't work";
+        doAnswer(answerVoid((keyId, callback) -> ((IGetKeyCallback) callback).onError(errorMsg)))
+                .when(mockIRegistration).getKey(anyInt(), any());
+
+        final var registrationReceiver = new ResultReceiver<RegistrationProxy>();
+        RegistrationProxy.createAsync(context, FAKE_CALLER_UID, FAKE_IRPC, BIND_TIMEOUT, mExecutor,
+                registrationReceiver);
+        final RegistrationProxy registration = registrationReceiver.waitForResult();
+
+        final var errorReceiver =
+                new ErrorReceiver<android.security.rkp.service.RemotelyProvisionedKey>();
+        registration.getKeyAsync(1234, new CancellationSignal(), mExecutor, errorReceiver);
+        mExecutor.shutdown();
+        final Exception error = errorReceiver.waitForError();
+        assertThat(error).isInstanceOf(RemoteException.class);
+        assertThat(error).hasMessageThat().isEqualTo(errorMsg);
     }
 
     /** Mock up the given binder as a bound service for the given name. */
