@@ -60,5 +60,5 @@ interface IRegistrar {
      * @return an IRegistration that is used to fetch remotely provisioned
      * keys for the given IRemotelyProvisionedComponent.
      */
-    IRegistration getRegistration(String irpcName, boolean isRkpOnly);
+    IRegistration getRegistration(String irpcName);
 }
