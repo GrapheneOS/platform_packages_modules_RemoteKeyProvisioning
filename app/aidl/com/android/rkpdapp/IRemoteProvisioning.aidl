@@ -14,12 +14,13 @@
  * limitations under the License.
  */
 
-package android.security.rkpd;
+package com.android.rkpdapp;
 
-import android.security.rkpd.IRegistration;
+import com.android.rkpdapp.IRegistration;
+import com.android.rkpdapp.IGetRegistrationCallback;
 
 /**
- * {@link IRegistrar} is the interface provided to use the remote key
+ * {@link IRemoteProvisioning} is the interface provided to use the remote key
  * provisioning functionality from the Remote Key Provisioning Daemon (RKPD).
  * This would be the first service that RKPD clients would interact with. The
  * intent is for the clients to get the {@link IRegistration} object from this
@@ -27,38 +28,36 @@ import android.security.rkpd.IRegistration;
  *
  * @hide
  */
-interface IRegistrar {
+oneway interface IRemoteProvisioning {
     /**
      * Takes a remotely provisioned component service name and gets a
      * registration bound to that service and the caller's UID.
      *
-     * @param irpcName The name of the IRemotelyProvisionedComponent for which
-     * remotely provisioned keys should be managed.
+     * @param irpcName The name of the {@code IRemotelyProvisionedComponent}
+     * for which remotely provisioned keys should be managed.
+     * @param callback Receives the result of the call. A callback must only
+     * be used with one {@code getRegistration} call at a time.
      *
      * Notes:
      * - This function will attempt to get the service named by irpcName. This
      *   implies that a lazy/dynamic aidl service will be instantiated, and this
      *   function blocks until the service is up. Upon return, any binder tokens
      *   are dropped, allowing the lazy/dynamic service to shutdown.
-     * - The returned registration object is unique per caller. If two different
+     * - The created registration object is unique per caller. If two different
      *   UIDs call getRegistration with the same irpcName, they will receive
-     *   different registrations back. This prevents two different applications
-     *   from being able to see the same keys.
+     *   different registrations. This prevents two different applications from
+     *   being able to see the same keys.
      * - This function is idempotent per calling UID. Additional calls to
      *   getRegistration with the same parameters, from the same caller, will have
      *   no side effects.
      *
-     * Errors:
-     * - If irpcName does not reference an IRemotelyProvisionedComponent that can
-     *   be fetched from IServiceManager, this function fails with
-     *   STATUS_BAD_VALUE.
-     *
-     * @see IRegistration#getRemotelyProvisionedKey()
-     * @see IRegistration#waitForRemotelyProvisionedKey()
+     * @see IRegistration#getKey()
      * @see IRemotelyProvisionedComponent
      *
-     * @return an IRegistration that is used to fetch remotely provisioned
-     * keys for the given IRemotelyProvisionedComponent.
      */
-    IRegistration getRegistration(String irpcName);
+    void getRegistration(String irpcName, IGetRegistrationCallback callback);
+
+    /**
+     */
+    void cancelGetRegistration(IGetRegistrationCallback callback);
 }

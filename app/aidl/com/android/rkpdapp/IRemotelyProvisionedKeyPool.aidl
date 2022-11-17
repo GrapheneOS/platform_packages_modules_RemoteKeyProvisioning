@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-package android.security.rkpd;
+package com.android.rkpdapp;
 
-import android.security.rkpd.RemotelyProvisionedKey;
+import com.android.rkpdapp.RemotelyProvisionedKey;
 
 /**
  * This is the interface providing access to remotely-provisioned attestation
@@ -29,11 +29,10 @@ interface IRemotelyProvisionedKeyPool {
     /**
      * Fetches an attestation key for the given uid and
      * {@link IRemotelyProvisionedComponent}, as identified by the given id.
-     * Callers require the rkpd::get_attestation_key permission.
      *
      * Errors:
      * {@link ResponseCode::PERMISSION_DENIED} if the caller does not have the
-     * {@link rkpd::get_attestation_key} permission
+     * {@link rkpdapp::get_attestation_key} permission
      *
      * @param clientUid The client application for which an attestation key is
      * needed.

@@ -14,50 +14,50 @@
  * limitations under the License.
  */
 
-package android.security.rkpd;
+package com.android.rkpdapp;
 
-import android.security.rkpd.RemotelyProvisionedKey;
+import com.android.rkpdapp.IGetKeyCallback;
 
 /**
  * This interface is associated with the registration of an
  * IRemotelyProvisionedComponent. Each component has a unique database of keys
  * and certificates that are provisioned to the device for attestation. An
- * IRegistration binder is created by calling {@link IRegistrar#getRegistration()}.
+ * IRegistration binder is created by calling
+ * {@link IRemoteProvisioning#getRegistration()}.
  *
  * This interface is used to query for available keys and certificates for the
  * registered component.
  *
  * @hide
  */
-interface IRegistration {
+oneway interface IRegistration {
     /**
      * Fetch a remotely provisioned key for the given keyId. Keys are unique
      * per caller/keyId/registration tuple. This ensures that no two
      * applications are able to correlate keys to uniquely identify a
-     * device/user.
+     * device/user. Callers receive their key via {@code callback}.
      *
-     * If no keys are immediately available, then this function returns immediately
-     * with null. The waitForRemotelyProvisionedKey call is similar to this one, but
-     * it will block until keys are available.
+     * If a key is available, this call immediately invokes {@code callback}.
+     *
+     * If no keys are immediately available, then this function contacts the
+     * remote provisioning server to provision a key. After provisioning is
+     * completed, the key is passed to {@code callback}.
      *
      * @param keyId This is a client-chosen key identifier, used to
      * differentiate between keys for varying client-specific use-cases. For
      * example, keystore2 passes the UID of the applications that call it as
      * the keyId value here, so that each of keystore2's clients gets a unique
      * key.
+     * @param callback Receives the result of the call. A callback must only
+     * be used with one {@code getKey} call at a time.
      */
-    RemotelyProvisionedKey getRemotelyProvisionedKey(int keyId);
+    void getKey(int keyId, IGetKeyCallback callback);
 
     /**
-     * Block until a remotely provisioned key is available. If no keys are
-     * immediately available, then this function blocks, waiting until the
-     * remote provisioning server can be contacted to provision a key.
-     *
-     * @see getRemotelyProvisionedKey()
-     *
-     * @param keyId a client-chosen key identifier
+     * Cancel an active request for a remotely provisioned key, as initiated via
+     * {@link getKey}. Upon cancellation, {@code callback.onCancel} will be invoked.
      */
-    RemotelyProvisionedKey waitForRemotelyProvisionedKey(int keyId);
+    void cancelGetKey(IGetKeyCallback callback);
 
     /**
      * Replace the key blob with the given key id with an upgraded key blob.
@@ -71,8 +71,7 @@ interface IRegistration {
      *
      * Once a key has been upgraded, the IRegistration where the key is stored
      * needs to be told about the new blob. After calling storeUpgradedKey,
-     * getRemotelyProvisionedKey will return the new key blob instead of the old
-     * one.
+     * getKey will return the new key blob instead of the old one.
      *
      * Note that this function does NOT extend the lifetime of key blobs. The
      * certificate for the key is unchanged, and the key will still expire at
