@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package android.security.rkpd;
+package com.android.rkpdapp;
 
 /**
  * A {@link RemotelyProvisionedKey} holds an attestation key and the
