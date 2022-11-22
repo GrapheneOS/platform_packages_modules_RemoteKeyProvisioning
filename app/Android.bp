@@ -21,8 +21,8 @@ genrule {
     name: "statslog-rkpd-java-gen",
     tools: ["stats-log-api-gen"],
     cmd: "$(location stats-log-api-gen) --java $(out) --module remoteprovisioner " +
-         "--javaPackage com.android.rkpd --javaClass RkpdStatsLog",
-    out: ["com/android/rkpd/RkpdStatsLog.java"],
+         "--javaPackage com.android.rkpdapp --javaClass RkpdStatsLog",
+    out: ["com/android/rkpdapp/RkpdStatsLog.java"],
 }
 
 aidl_interface {
@@ -59,14 +59,17 @@ android_app {
     privileged: true,
     libs: [
         "framework-annotations-lib",
+        "framework-connectivity.stubs.module_lib",
+        "framework-statsd.stubs.module_lib",
     ],
     static_libs: [
-        "com.android.rkpdapp-aidl-java",
+        "android.hardware.security.rkp-V3-java",
         "androidx.work_work-runtime",
+        "com.android.rkpdapp-aidl-java",
     ],
     resource_dirs: ["res"],
     srcs: [
-        //":statslog-rkpd-java-gen",
+        ":statslog-rkpd-java-gen",
         "src/**/*.java"
     ],
     plugins: ["java_api_finder"],
