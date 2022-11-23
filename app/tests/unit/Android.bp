@@ -65,6 +65,7 @@ android_test {
 
 // There's no Ed25519 support yet, in conscrypt, so we pull in a Tink
 // prebuild jar to supply that functionality.
+// Ed25519/X25519 support in conscrypt is tracked by b/214203951
 java_import {
     name: "rkpdapp-tink-prebuilt",
     jars: ["tink-android-1.5.0.jar"],
