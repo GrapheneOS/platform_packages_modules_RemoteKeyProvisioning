@@ -1,0 +1,5 @@
+-keep class com.android.rkpd.utils.Settings { *; }
+
+# Temporarily keep everything until we finish porting RemoteProvisioner
+# b/260139801
+-keep class com.android.rkpdapp.** { *; }
