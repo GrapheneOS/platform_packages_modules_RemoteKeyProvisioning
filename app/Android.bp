@@ -76,7 +76,6 @@ android_app {
         ":statslog-rkpd-java-gen",
         "src/**/*.java"
     ],
-    plugins: ["java_api_finder"],
     apex_available: [
         "com.android.rkpd",
     ],
