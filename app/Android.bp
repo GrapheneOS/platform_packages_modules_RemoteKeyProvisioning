@@ -59,12 +59,16 @@ android_app {
     privileged: true,
     libs: [
         "framework-annotations-lib",
-        "framework-connectivity.stubs.module_lib",
-        "framework-statsd.stubs.module_lib",
+        "framework-connectivity",
+        "framework-statsd",
     ],
+    optimize: {
+        proguard_flags_files: ["proguard.flags"]
+    },
     static_libs: [
         "android.hardware.security.rkp-V3-java",
         "androidx.work_work-runtime",
+        "cbor-java",
         "com.android.rkpdapp-aidl-java",
     ],
     resource_dirs: ["res"],
@@ -72,7 +76,6 @@ android_app {
         ":statslog-rkpd-java-gen",
         "src/**/*.java"
     ],
-    plugins: ["java_api_finder"],
     apex_available: [
         "com.android.rkpd",
     ],
