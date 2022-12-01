@@ -31,13 +31,16 @@ import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.ResolveInfoFlags;
 import android.content.pm.ResolveInfo;
 import android.content.pm.ServiceInfo;
+import android.os.CancellationSignal;
 import android.os.IBinder;
+import android.os.OperationCanceledException;
 import android.os.OutcomeReceiver;
 import android.os.RemoteException;
 import android.os.UserHandle;
 import android.util.Log;
 
 import com.android.internal.annotations.GuardedBy;
+import com.android.rkpdapp.IGetKeyCallback;
 import com.android.rkpdapp.IGetRegistrationCallback;
 import com.android.rkpdapp.IRegistration;
 import com.android.rkpdapp.IRemoteProvisioning;
@@ -47,6 +50,7 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 /**
@@ -213,5 +217,79 @@ public final class RegistrationProxy {
 
     private RegistrationProxy(IRegistration binder) {
         mBinder = binder;
+    }
+
+    /**
+     * Begins an async operation to fetch a key from rkp. The receiver will be notified on
+     * completion or error. Cancellation is reported as an error, passing OperationCanceledException
+     * to the receiver.
+     * @param keyId An arbitrary, caller-chosen identifier for the key. If a key has previously
+     *              been assigned this id, then that key will be returned. Else, an unassigned key
+     *              is chosen and keyId is assigned to that key.
+     * @param cancellationSignal Signal object used to indicate to the asynchronous code that a
+     *                           pending call should be cancelled.
+     * @param executor The executor on which to call receiver.
+     * @param receiver Asynchronously receives a RemotelyProvisionedKey on success, else an
+     *                 exception is received.
+     */
+    public void getKeyAsync(int keyId,
+            @NonNull CancellationSignal cancellationSignal,
+            @NonNull @CallbackExecutor Executor executor,
+            @NonNull OutcomeReceiver<RemotelyProvisionedKey, Exception> receiver) {
+        final AtomicBoolean operationComplete = new AtomicBoolean(false);
+
+        final var callback = new IGetKeyCallback.Stub() {
+            @Override
+            public void onSuccess(com.android.rkpdapp.RemotelyProvisionedKey key) {
+                if (operationComplete.compareAndSet(false, true)) {
+                    executor.execute(() -> receiver.onResult(new RemotelyProvisionedKey(key)));
+                } else {
+                    Log.w(TAG, "Ignoring extra success for " + this);
+                }
+            }
+
+            @Override
+            public void onProvisioningNeeded() {
+                Log.i(TAG, "Provisioning required before keys are available for " + this);
+            }
+
+            @Override
+            public void onCancel() {
+                if (operationComplete.compareAndSet(false, true)) {
+                    executor.execute(() -> receiver.onError(new OperationCanceledException()));
+                } else {
+                    Log.w(TAG, "Ignoring extra cancel for " + this);
+                }
+            }
+
+            @Override
+            public void onError(String error) {
+                if (operationComplete.compareAndSet(false, true)) {
+                    executor.execute(() -> receiver.onError(new RemoteException(error)));
+                } else {
+                    Log.w(TAG, "Ignoring extra error for " + this);
+                }
+            }
+        };
+
+        cancellationSignal.setOnCancelListener(() -> {
+            if (operationComplete.get()) {
+                Log.w(TAG, "Ignoring cancel call after operation complete for " + callback);
+            } else {
+                try {
+                    Log.i(TAG, "Attempting to cancel getKeyAsync for " + callback);
+                    mBinder.cancelGetKey(callback);
+                } catch (RemoteException e) {
+                    Log.e(TAG, "Error cancelling getKey operation", e);
+                }
+            }
+        });
+
+        try {
+            Log.i(TAG, "getKeyAsync operation started with callback " + callback);
+            mBinder.getKey(keyId, callback);
+        } catch (RemoteException e) {
+            throw e.rethrowAsRuntimeException();
+        }
     }
 }
