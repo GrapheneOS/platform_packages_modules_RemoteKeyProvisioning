@@ -1,0 +1,15 @@
+// Signature format: 2.0
+package android.security.rkp.service {
+
+  public final class RegistrationProxy {
+    method public static void createAsync(@NonNull android.content.Context, int, @NonNull String, @NonNull java.time.Duration, @NonNull java.util.concurrent.Executor, @NonNull android.os.OutcomeReceiver<android.security.rkp.service.RegistrationProxy,java.lang.Exception>);
+    method public void getKeyAsync(int, @NonNull android.os.CancellationSignal, @NonNull java.util.concurrent.Executor, @NonNull android.os.OutcomeReceiver<android.security.rkp.service.RemotelyProvisionedKey,java.lang.Exception>);
+  }
+
+  public class RemotelyProvisionedKey {
+    method @NonNull public byte[] getEncodedCertChain();
+    method @NonNull public byte[] getKeyBlob();
+  }
+
+}
+
