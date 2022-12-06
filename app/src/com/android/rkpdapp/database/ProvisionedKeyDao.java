@@ -22,8 +22,6 @@ import androidx.room.Query;
 import androidx.room.Transaction;
 import androidx.room.Update;
 
-import com.android.rkpdapp.RkpdException;
-
 import java.time.Instant;
 import java.util.List;
 
@@ -105,12 +103,15 @@ public abstract class ProvisionedKeyDao {
      * @param irpcHal Searches for unassigned keys for this remotely provisioned component.
      * @param clientUid Uid for RKPD's client that needs to set up the key for its own client.
      * @param keyId Client provided identifier to set up the key with.
+     *
+     * @return the key that has been assigned to the given (irpcHal, clientUid, keyId) tuple,
+     * else null if no keys are available to be assigned.
      */
     @Transaction
-    public ProvisionedKey assignKey(String irpcHal, int clientUid, int keyId) throws RkpdException {
+    public ProvisionedKey assignKey(String irpcHal, int clientUid, int keyId) {
         ProvisionedKey availableKey = getUnassignedKeyForIrpc(irpcHal);
         if (availableKey == null) {
-            throw new RkpdException(RkpdException.Status.OUT_OF_KEYS, "Out of keys.");
+            return null;
         }
         availableKey.clientUid = clientUid;
         availableKey.keyId = keyId;
