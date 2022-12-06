@@ -21,13 +21,13 @@ genrule {
     name: "statslog-rkpd-java-gen",
     tools: ["stats-log-api-gen"],
     cmd: "$(location stats-log-api-gen) --java $(out) --module remoteprovisioner " +
-         "--javaPackage com.android.rkpdapp --javaClass RkpdStatsLog",
+        "--javaPackage com.android.rkpdapp --javaClass RkpdStatsLog",
     out: ["com/android/rkpdapp/RkpdStatsLog.java"],
 }
 
 aidl_interface {
     name: "com.android.rkpdapp-aidl",
-    srcs: [ "aidl/**/*.aidl" ],
+    srcs: ["aidl/**/*.aidl"],
     local_include_dir: "aidl",
     unstable: true,
     backend: {
@@ -47,7 +47,7 @@ aidl_interface {
         },
         rust: {
             enabled: false,
-        }
+        },
     },
 }
 
@@ -63,10 +63,11 @@ android_app {
         "framework-statsd",
     ],
     optimize: {
-        proguard_flags_files: ["proguard.flags"]
+        proguard_flags_files: ["proguard.flags"],
     },
     static_libs: [
         "android.hardware.security.rkp-V3-java",
+        "androidx.room_room-runtime",
         "androidx.work_work-runtime",
         "cbor-java",
         "com.android.rkpdapp-aidl-java",
@@ -74,7 +75,10 @@ android_app {
     resource_dirs: ["res"],
     srcs: [
         ":statslog-rkpd-java-gen",
-        "src/**/*.java"
+        "src/**/*.java",
+    ],
+    plugins: [
+        "androidx.room_room-compiler-plugin",
     ],
     apex_available: [
         "com.android.rkpd",
