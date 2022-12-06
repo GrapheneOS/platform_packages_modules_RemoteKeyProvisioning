@@ -16,24 +16,27 @@
 
 package com.android.rkpdapp.database;
 
+import java.time.Instant;
+
 import co.nstant.in.cbor.model.DataItem;
 
 /**
  * In-memory key representation for Remotely Provisioned Keys.
  */
 public final class RkpKey {
-    private final ProvisionedKey mPersistentKey;
     private final byte[] mMacedPublicKey;
     private final DataItem mCoseKey;
+    private final byte[] mKeyBlob;
+    private final String mIrpcHal;
+    private final byte[] mPublicKey;
 
-    public RkpKey(ProvisionedKey key, byte[] macedPublicKey, DataItem coseKey) {
-        this.mPersistentKey = key;
+    public RkpKey(byte[] keyBlob, byte[] macedPublicKey, DataItem coseKey, String irpcHal,
+            byte[] publicKey) {
+        this.mKeyBlob = keyBlob;
         this.mMacedPublicKey = macedPublicKey;
         this.mCoseKey = coseKey;
-    }
-
-    public ProvisionedKey getProvisionedKey() {
-        return mPersistentKey;
+        this.mIrpcHal = irpcHal;
+        this.mPublicKey = publicKey;
     }
 
     public byte[] getMacedPublicKey() {
@@ -42,5 +45,16 @@ public final class RkpKey {
 
     public DataItem getCoseKey() {
         return mCoseKey;
+    }
+
+    /**
+     * Creates the provisioned key with the information present in this data object as well as the
+     * provided expiration time and certificate chain.
+     *
+     * This function is helpful to generate the provisioned key only when required instead of
+     * generating and storing it separately.
+     */
+    public ProvisionedKey generateProvisionedKey(byte[] certificateChain, Instant expirationTime) {
+        return new ProvisionedKey(mKeyBlob, mIrpcHal, mPublicKey, certificateChain, expirationTime);
     }
 }
