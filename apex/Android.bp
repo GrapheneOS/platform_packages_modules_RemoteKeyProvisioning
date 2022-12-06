@@ -33,11 +33,8 @@ apex {
     file_contexts: ":com.android.rkpd-file_contexts",
     key: "com.android.rkpd.key",
     certificate: ":com.android.rkpd.certificate",
-    systemserverclasspath_fragments: [
-        "com.android.rkpd-systemserverclasspath-fragment",
-    ],
     updatable: true,
     min_sdk_version: "33",
-    apps: ["rkpdapp"],
+    apps: [ "rkpdapp" ],
     compile_multilib: "both",
 }
