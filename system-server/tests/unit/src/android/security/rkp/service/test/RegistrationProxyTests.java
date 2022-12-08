@@ -280,7 +280,7 @@ public class RegistrationProxyTests {
     @Test
     public void getRegistrationBinderReturnsSuccess() throws Exception {
         final Context context = mock(Context.class);
-        createMockRegistrationForComponent(context, FAKE_COMPONENT, FAKE_IRPC);
+        createMockRegistrationForComponent(context, FAKE_COMPONENT, FAKE_IRPC, FAKE_CALLER_UID);
 
         final var receiver = new ResultReceiver<RegistrationProxy>();
         RegistrationProxy.createAsync(context, FAKE_CALLER_UID, FAKE_IRPC, BIND_TIMEOUT, mExecutor,
@@ -293,9 +293,9 @@ public class RegistrationProxyTests {
     public void getRegistrationBinderReturnsError() throws Exception {
         final String errorString = "oh noes!";
         final IRemoteProvisioning.Stub remoteProvisioning = mock(IRemoteProvisioning.Stub.class);
-        doAnswer(answerVoid((unusedIrpcName, callbackHandler) -> {
+        doAnswer(answerVoid((unusedCallerUid, unusedIrpcName, callbackHandler) -> {
             ((IGetRegistrationCallback) callbackHandler).onError(errorString);
-        })).when(remoteProvisioning).getRegistration(eq(FAKE_IRPC), any());
+        })).when(remoteProvisioning).getRegistration(eq(FAKE_CALLER_UID), eq(FAKE_IRPC), any());
 
         final Context context = mock(Context.class);
         addBoundSystemServiceToContext(context, FAKE_COMPONENT, remoteProvisioning);
@@ -313,7 +313,8 @@ public class RegistrationProxyTests {
     public void getKeyAsyncSuccess() throws Exception {
         final Context context = mock(Context.class);
         final IRegistration mockIRegistration =
-                createMockRegistrationForComponent(context, FAKE_COMPONENT, FAKE_IRPC);
+                createMockRegistrationForComponent(context, FAKE_COMPONENT, FAKE_IRPC,
+                        FAKE_CALLER_UID);
 
         final int fakeKeyId = 31415;
         final RemotelyProvisionedKey fakeKey = new RemotelyProvisionedKey();
@@ -341,7 +342,8 @@ public class RegistrationProxyTests {
     public void getKeyAsyncCancelRequest() throws Exception {
         final Context context = mock(Context.class);
         final IRegistration mockIRegistration =
-                createMockRegistrationForComponent(context, FAKE_COMPONENT, FAKE_IRPC);
+                createMockRegistrationForComponent(context, FAKE_COMPONENT, FAKE_IRPC,
+                        FAKE_CALLER_UID);
 
         doAnswer(answerVoid(callback -> ((IGetKeyCallback) callback).onCancel()))
                 .when(mockIRegistration).cancelGetKey(any());
@@ -364,7 +366,8 @@ public class RegistrationProxyTests {
     public void getKeyAsyncCancelAfterComplete() throws Exception {
         final Context context = mock(Context.class);
         final IRegistration mockIRegistration =
-                createMockRegistrationForComponent(context, FAKE_COMPONENT, FAKE_IRPC);
+                createMockRegistrationForComponent(context, FAKE_COMPONENT, FAKE_IRPC,
+                        FAKE_CALLER_UID);
 
         doAnswer(answerVoid((keyId, callback) ->
                 ((IGetKeyCallback) callback).onSuccess(new RemotelyProvisionedKey())))
@@ -393,7 +396,8 @@ public class RegistrationProxyTests {
     public void getKeyAsyncHandleError() throws Exception {
         final Context context = mock(Context.class);
         final IRegistration mockIRegistration =
-                createMockRegistrationForComponent(context, FAKE_COMPONENT, FAKE_IRPC);
+                createMockRegistrationForComponent(context, FAKE_COMPONENT, FAKE_IRPC,
+                        FAKE_CALLER_UID);
 
         final String errorMsg = "oopsie, it didn't work";
         doAnswer(answerVoid((keyId, callback) -> ((IGetKeyCallback) callback).onError(errorMsg)))
@@ -441,13 +445,13 @@ public class RegistrationProxyTests {
      * to quickly add a mock registration to their context.
      */
     private IRegistration createMockRegistrationForComponent(Context context,
-            ComponentName componentName, String irpcName) throws Exception {
+            ComponentName componentName, String irpcName, int callerUid) throws Exception {
         final IRegistration mockIRegistration = mock(IRegistration.Stub.class);
 
         final IRemoteProvisioning.Stub remoteProvisioning = mock(IRemoteProvisioning.Stub.class);
-        doAnswer(answerVoid((unusedIrpcName, callbackHandler) ->
+        doAnswer(answerVoid((unusedCallerUid, unusedIrpcName, callbackHandler) ->
                 ((IGetRegistrationCallback) callbackHandler).onSuccess(mockIRegistration)
-        )).when(remoteProvisioning).getRegistration(eq(irpcName), any());
+        )).when(remoteProvisioning).getRegistration(eq(callerUid), eq(irpcName), any());
 
         addBoundSystemServiceToContext(context, componentName, remoteProvisioning);
 
