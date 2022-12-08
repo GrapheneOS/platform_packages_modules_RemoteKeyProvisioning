@@ -39,15 +39,19 @@ public class ProvisionedKey {
     public byte[] keyBlob;
 
     @ColumnInfo(name = "irpc_hal")
+    @NonNull
     public String irpcHal;
 
     @ColumnInfo(name = "public_key")
+    @NonNull
     public byte[] publicKey;
 
     @ColumnInfo(name = "certificate_chain")
+    @NonNull
     public byte[] certificateChain;
 
     @ColumnInfo(name = "expiration_time", index = true)
+    @NonNull
     public Instant expirationTime;
 
     @ColumnInfo(name = "client_uid")
@@ -56,8 +60,14 @@ public class ProvisionedKey {
     @ColumnInfo(name = "key_id")
     public Integer keyId;
 
-    public ProvisionedKey(@NonNull byte[] keyBlob) {
+    public ProvisionedKey(@NonNull byte[] keyBlob, @NonNull String irpcHal,
+            @NonNull byte[] publicKey, @NonNull byte[] certificateChain,
+            @NonNull Instant expirationTime) {
         this.keyBlob = keyBlob;
+        this.irpcHal = irpcHal;
+        this.publicKey = publicKey;
+        this.certificateChain = certificateChain;
+        this.expirationTime = expirationTime;
     }
 
     @Override
