@@ -208,7 +208,7 @@ public final class RegistrationProxy {
 
             final IRemoteProvisioning remoteProvisioningService =
                     connection.waitForRemoteProvisioningService(bindTimeout);
-            remoteProvisioningService.getRegistration(irpcName, callbackHandler);
+            remoteProvisioningService.getRegistration(callerUid, irpcName, callbackHandler);
         } catch (Exception e) {
             Log.e(TAG, "Error getting registration", e);
             executor.execute(() -> receiver.onError(e));
