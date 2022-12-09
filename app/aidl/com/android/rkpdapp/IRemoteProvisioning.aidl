@@ -16,8 +16,8 @@
 
 package com.android.rkpdapp;
 
-import com.android.rkpdapp.IRegistration;
 import com.android.rkpdapp.IGetRegistrationCallback;
+import com.android.rkpdapp.IRegistration;
 
 /**
  * {@link IRemoteProvisioning} is the interface provided to use the remote key
@@ -33,6 +33,10 @@ oneway interface IRemoteProvisioning {
      * Takes a remotely provisioned component service name and gets a
      * registration bound to that service and the caller's UID.
      *
+     * @param callerUid The caller who is requesting a registration. This cannot
+     * be determined via getCallingUid, because calls are routed from the actual
+     * clients (e.g. keystore) through system server. Thus, we rely on system
+     * server to pass the actual caller's UID as a parameter.
      * @param irpcName The name of the {@code IRemotelyProvisionedComponent}
      * for which remotely provisioned keys should be managed.
      * @param callback Receives the result of the call. A callback must only
@@ -53,11 +57,15 @@ oneway interface IRemoteProvisioning {
      *
      * @see IRegistration#getKey()
      * @see IRemotelyProvisionedComponent
-     *
      */
-    void getRegistration(String irpcName, IGetRegistrationCallback callback);
+    void getRegistration(int callerUid, String irpcName, IGetRegistrationCallback callback);
 
     /**
+     * Cancel a getRegistration call. If the call is already completed, this method
+     * is a noop.
+     *
+     * @param callback the callback previously passed to getRegistration, indicating
+     * which call should be cancelled.
      */
     void cancelGetRegistration(IGetRegistrationCallback callback);
 }
