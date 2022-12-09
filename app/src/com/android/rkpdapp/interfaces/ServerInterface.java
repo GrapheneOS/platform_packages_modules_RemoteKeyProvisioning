@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (C) 2022 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,15 +14,20 @@
  * limitations under the License.
  */
 
-package com.android.remoteprovisioner;
+package com.android.rkpdapp.interfaces;
 
 import android.content.Context;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.TrafficStats;
-import android.security.IGenerateRkpKeyService;
 import android.util.Base64;
 import android.util.Log;
+
+import com.android.rkpdapp.GeekResponse;
+import com.android.rkpdapp.ProvisionerMetrics;
+import com.android.rkpdapp.RkpdException;
+import com.android.rkpdapp.utils.CborUtils;
+import com.android.rkpdapp.utils.Settings;
 
 import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
@@ -43,7 +48,7 @@ public class ServerInterface {
 
     private static final int TIMEOUT_MS = 20000;
 
-    private static final String TAG = "ServerInterface";
+    private static final String TAG = "RkpdServerInterface";
     private static final String GEEK_URL = ":fetchEekChain";
     private static final String CERTIFICATE_SIGNING_URL = ":signCertificates?challenge=";
 
@@ -62,66 +67,21 @@ public class ServerInterface {
      *                    chain for one attestation key pair.
      */
     public static List<byte[]> requestSignedCertificates(Context context, byte[] csr,
-            byte[] challenge, ProvisionerMetrics metrics) throws RemoteProvisioningException {
-        TrafficStats.setThreadStatsTag(0);
-        checkDataBudget(context, metrics);
-        int bytesTransacted = 0;
-        try (ProvisionerMetrics.StopWatch serverWaitTimer = metrics.startServerWait()) {
-            URL url = new URL(SettingsManager.getUrl(context) + CERTIFICATE_SIGNING_URL
-                              + Base64.encodeToString(challenge, Base64.URL_SAFE));
-            HttpURLConnection con = (HttpURLConnection) url.openConnection();
-            con.setRequestMethod("POST");
-            con.setDoOutput(true);
-            con.setConnectTimeout(TIMEOUT_MS);
-            con.setReadTimeout(TIMEOUT_MS);
-
-            // May not be able to use try-with-resources here if the connection gets closed due to
-            // the output stream being automatically closed.
-            try (OutputStream os = con.getOutputStream()) {
-                os.write(csr, 0, csr.length);
-                bytesTransacted += csr.length;
-            }
-
-            metrics.setHttpStatusError(con.getResponseCode());
-            if (con.getResponseCode() != HttpURLConnection.HTTP_OK) {
-                serverWaitTimer.stop();
-                int failures = SettingsManager.incrementFailureCounter(context);
-                Log.e(TAG, "Server connection for signing failed, response code: "
-                        + con.getResponseCode() + "\nRepeated failure count: " + failures);
-                Log.e(TAG, readErrorFromConnection(con));
-                SettingsManager.consumeErrDataBudget(context, bytesTransacted);
-                RemoteProvisioningException ex =
-                        RemoteProvisioningException.createFromHttpError(con.getResponseCode());
-                if (ex.getErrorCode() == IGenerateRkpKeyService.Status.DEVICE_NOT_REGISTERED) {
-                    metrics.setStatus(ProvisionerMetrics.Status.SIGN_CERTS_DEVICE_NOT_REGISTERED);
-                } else {
-                    metrics.setStatus(ProvisionerMetrics.Status.SIGN_CERTS_HTTP_ERROR);
-                }
-                throw ex;
-            }
-            serverWaitTimer.stop();
-            SettingsManager.clearFailureCounter(context);
-            BufferedInputStream inputStream = new BufferedInputStream(con.getInputStream());
-            ByteArrayOutputStream cborBytes = new ByteArrayOutputStream();
-            byte[] buffer = new byte[1024];
-            int read = 0;
-            serverWaitTimer.start();
-            while ((read = inputStream.read(buffer, 0, buffer.length)) != -1) {
-                cborBytes.write(buffer, 0, read);
-                bytesTransacted += read;
-            }
-            serverWaitTimer.stop();
-            return CborUtils.parseSignedCertificates(cborBytes.toByteArray());
-        } catch (SocketTimeoutException e) {
-            Log.e(TAG, "Server timed out", e);
-            metrics.setStatus(ProvisionerMetrics.Status.SIGN_CERTS_TIMED_OUT);
-        } catch (IOException e) {
-            Log.e(TAG, "Failed to request signed certificates from the server", e);
-            metrics.setStatus(ProvisionerMetrics.Status.SIGN_CERTS_IO_EXCEPTION);
+            byte[] challenge, ProvisionerMetrics metrics) throws RkpdException {
+        String connectionEndpoint = CERTIFICATE_SIGNING_URL
+                + Base64.encodeToString(challenge, Base64.URL_SAFE);
+        byte[] cborBytes = connectAndGetData(context, metrics, connectionEndpoint, csr,
+                ProvisionerMetrics.Status.SIGN_CERTS_HTTP_ERROR,
+                ProvisionerMetrics.Status.SIGN_CERTS_TIMED_OUT,
+                ProvisionerMetrics.Status.SIGN_CERTS_IO_EXCEPTION);
+        List<byte[]> certChains = CborUtils.parseSignedCertificates(cborBytes);
+        if (certChains == null) {
+            metrics.setStatus(ProvisionerMetrics.Status.INTERNAL_ERROR);
+            throw new RkpdException(
+                    RkpdException.Status.INTERNAL_ERROR,
+                    "Response failed to parse.");
         }
-        SettingsManager.incrementFailureCounter(context);
-        SettingsManager.consumeErrDataBudget(context, bytesTransacted);
-        throw makeNetworkError(context, "Error getting CSR signed.", metrics);
+        return certChains;
     }
 
     /**
@@ -134,96 +94,63 @@ public class ServerInterface {
      * request to get keys signed.
      *
      * @param context The application context which is required to use SettingsManager.
-     * @param metrics
      * @return A GeekResponse object which optionally contains configuration data.
      */
     public static GeekResponse fetchGeek(Context context,
-            ProvisionerMetrics metrics) throws RemoteProvisioningException {
-        TrafficStats.setThreadStatsTag(0);
-        checkDataBudget(context, metrics);
-        int bytesTransacted = 0;
-        try {
-            URL url = new URL(SettingsManager.getUrl(context) + GEEK_URL);
-            ByteArrayOutputStream cborBytes = new ByteArrayOutputStream();
-            try (ProvisionerMetrics.StopWatch serverWaitTimer = metrics.startServerWait()) {
-                HttpURLConnection con = (HttpURLConnection) url.openConnection();
-                con.setRequestMethod("POST");
-                con.setConnectTimeout(TIMEOUT_MS);
-                con.setReadTimeout(TIMEOUT_MS);
-                con.setDoOutput(true);
-
-                byte[] config = CborUtils.buildProvisioningInfo(context);
-                try (OutputStream os = con.getOutputStream()) {
-                    os.write(config, 0, config.length);
-                    bytesTransacted += config.length;
-                }
-
-                metrics.setHttpStatusError(con.getResponseCode());
-                if (con.getResponseCode() != HttpURLConnection.HTTP_OK) {
-                    serverWaitTimer.stop();
-                    int failures = SettingsManager.incrementFailureCounter(context);
-                    Log.e(TAG, "Server connection for GEEK failed, response code: "
-                            + con.getResponseCode() + "\nRepeated failure count: " + failures);
-                    Log.e(TAG, readErrorFromConnection(con));
-                    SettingsManager.consumeErrDataBudget(context, bytesTransacted);
-                    metrics.setStatus(ProvisionerMetrics.Status.FETCH_GEEK_HTTP_ERROR);
-                    throw RemoteProvisioningException.createFromHttpError(con.getResponseCode());
-                }
-                serverWaitTimer.stop();
-                SettingsManager.clearFailureCounter(context);
-                BufferedInputStream inputStream = new BufferedInputStream(con.getInputStream());
-                byte[] buffer = new byte[1024];
-                int read = 0;
-                serverWaitTimer.start();
-                while ((read = inputStream.read(buffer, 0, buffer.length)) != -1) {
-                    cborBytes.write(buffer, 0, read);
-                    bytesTransacted += read;
-                }
-                inputStream.close();
-            }
-            GeekResponse resp = CborUtils.parseGeekResponse(cborBytes.toByteArray());
-            if (resp == null) {
-                metrics.setStatus(ProvisionerMetrics.Status.FETCH_GEEK_HTTP_ERROR);
-                throw new RemoteProvisioningException(
-                        IGenerateRkpKeyService.Status.HTTP_SERVER_ERROR,
-                        "Response failed to parse.");
-            }
-            return resp;
-        } catch (SocketTimeoutException e) {
-            Log.e(TAG, "Server timed out", e);
-            metrics.setStatus(ProvisionerMetrics.Status.FETCH_GEEK_TIMED_OUT);
-        } catch (IOException e) {
-            // This exception will trigger on a completely malformed URL.
-            Log.e(TAG, "Failed to fetch GEEK from the servers.", e);
-            metrics.setStatus(ProvisionerMetrics.Status.FETCH_GEEK_IO_EXCEPTION);
+            ProvisionerMetrics metrics) throws RkpdException {
+        byte[] input = CborUtils.buildProvisioningInfo(context);
+        byte[] cborBytes = connectAndGetData(context, metrics, GEEK_URL, input,
+                ProvisionerMetrics.Status.FETCH_GEEK_HTTP_ERROR,
+                ProvisionerMetrics.Status.FETCH_GEEK_TIMED_OUT,
+                ProvisionerMetrics.Status.FETCH_GEEK_IO_EXCEPTION);
+        GeekResponse resp = CborUtils.parseGeekResponse(cborBytes);
+        if (resp == null) {
+            metrics.setStatus(ProvisionerMetrics.Status.FETCH_GEEK_HTTP_ERROR);
+            throw new RkpdException(
+                    RkpdException.Status.HTTP_SERVER_ERROR,
+                    "Response failed to parse.");
         }
-        SettingsManager.incrementFailureCounter(context);
-        SettingsManager.consumeErrDataBudget(context, bytesTransacted);
-        throw makeNetworkError(context, "Error fetching GEEK", metrics);
+        return resp;
     }
 
     private static void checkDataBudget(Context context, ProvisionerMetrics metrics)
-            throws RemoteProvisioningException {
-        if (!SettingsManager.hasErrDataBudget(context, null /* curTime */)) {
+            throws RkpdException {
+        if (!Settings.hasErrDataBudget(context, null /* curTime */)) {
             metrics.setStatus(ProvisionerMetrics.Status.OUT_OF_ERROR_BUDGET);
-            int bytesConsumed = SettingsManager.getErrDataBudgetConsumed(context);
+            int bytesConsumed = Settings.getErrDataBudgetConsumed(context);
             throw makeNetworkError(context,
                     "Out of data budget due to repeated errors. Consumed "
                     + bytesConsumed + " bytes.", metrics);
         }
     }
 
-    private static RemoteProvisioningException makeNetworkError(Context context, String message,
+    private static RkpdException makeNetworkError(Context context, String message,
             ProvisionerMetrics metrics) {
         ConnectivityManager cm = context.getSystemService(ConnectivityManager.class);
         NetworkInfo networkInfo = cm.getActiveNetworkInfo();
         if (networkInfo != null && networkInfo.isConnected()) {
-            return new RemoteProvisioningException(
-                    IGenerateRkpKeyService.Status.NETWORK_COMMUNICATION_ERROR, message);
+            return new RkpdException(
+                    RkpdException.Status.NETWORK_COMMUNICATION_ERROR, message);
         }
         metrics.setStatus(ProvisionerMetrics.Status.NO_NETWORK_CONNECTIVITY);
-        return new RemoteProvisioningException(
-                IGenerateRkpKeyService.Status.NO_NETWORK_CONNECTIVITY, message);
+        return new RkpdException(
+                RkpdException.Status.NO_NETWORK_CONNECTIVITY, message);
+    }
+
+    /**
+     * Fetch a GEEK from the server and update SettingsManager appropriately with the return
+     * values. This will also delete all keys in the attestation key pool if the server has
+     * indicated that RKP should be turned off.
+     */
+    public static GeekResponse fetchGeekAndUpdate(Context context, ProvisionerMetrics metrics)
+            throws RkpdException {
+        GeekResponse resp = ServerInterface.fetchGeek(context, metrics);
+
+        Settings.setDeviceConfig(context,
+                resp.numExtraAttestationKeys,
+                resp.timeToRefresh,
+                resp.provisioningUrl);
+        return resp;
     }
 
     /**
@@ -237,7 +164,7 @@ public class ServerInterface {
             return "Unexpected content type from the server: " + contentType;
         }
 
-        InputStream inputStream = null;
+        InputStream inputStream;
         try {
             inputStream = con.getInputStream();
         } catch (IOException exception) {
@@ -284,5 +211,73 @@ public class ServerInterface {
             Log.w(TAG, "Unsupported charset: " + charsetString + "; defaulting to ASCII");
             return StandardCharsets.US_ASCII;
         }
+    }
+
+    private static byte[] connectAndGetData(Context context, ProvisionerMetrics metrics,
+            String connectionEndpoint, byte[] input, ProvisionerMetrics.Status failureStatus,
+            ProvisionerMetrics.Status serverTimeOutStatus,
+            ProvisionerMetrics.Status serverIoExceptionStatus) throws RkpdException {
+        TrafficStats.setThreadStatsTag(0);
+        checkDataBudget(context, metrics);
+        int bytesTransacted = 0;
+        try {
+            URL url = new URL(Settings.getUrl(context) + connectionEndpoint);
+            ByteArrayOutputStream cborBytes = new ByteArrayOutputStream();
+            try (ProvisionerMetrics.StopWatch serverWaitTimer = metrics.startServerWait()) {
+                HttpURLConnection con = (HttpURLConnection) url.openConnection();
+                con.setRequestMethod("POST");
+                con.setConnectTimeout(TIMEOUT_MS);
+                con.setReadTimeout(TIMEOUT_MS);
+                con.setDoOutput(true);
+
+                // May not be able to use try-with-resources here if the connection gets closed due
+                // to the output stream being automatically closed.
+                try (OutputStream os = con.getOutputStream()) {
+                    os.write(input, 0, input.length);
+                    bytesTransacted += input.length;
+                }
+
+                metrics.setHttpStatusError(con.getResponseCode());
+                if (con.getResponseCode() != HttpURLConnection.HTTP_OK) {
+                    serverWaitTimer.stop();
+                    int failures = Settings.incrementFailureCounter(context);
+                    Log.e(TAG, "Server connection failed to " + url + ", response code: "
+                            + con.getResponseCode() + "\nRepeated failure count: " + failures);
+                    Log.e(TAG, readErrorFromConnection(con));
+                    Settings.consumeErrDataBudget(context, bytesTransacted);
+                    RkpdException ex =
+                            RkpdException.createFromHttpError(con.getResponseCode());
+                    if (ex.getErrorCode() == RkpdException.Status.DEVICE_NOT_REGISTERED) {
+                        metrics.setStatus(
+                                ProvisionerMetrics.Status.SIGN_CERTS_DEVICE_NOT_REGISTERED);
+                    } else {
+                        metrics.setStatus(failureStatus);
+                    }
+                    throw ex;
+                }
+                serverWaitTimer.stop();
+                Settings.clearFailureCounter(context);
+                BufferedInputStream inputStream = new BufferedInputStream(con.getInputStream());
+                byte[] buffer = new byte[1024];
+                int read;
+                serverWaitTimer.start();
+                while ((read = inputStream.read(buffer, 0, buffer.length)) != -1) {
+                    cborBytes.write(buffer, 0, read);
+                    bytesTransacted += read;
+                }
+                inputStream.close();
+                serverWaitTimer.stop();
+            }
+            return cborBytes.toByteArray();
+        } catch (SocketTimeoutException e) {
+            Log.e(TAG, "Server timed out", e);
+            metrics.setStatus(serverTimeOutStatus);
+        } catch (IOException e) {
+            Log.e(TAG, "Failed to complete request from the server", e);
+            metrics.setStatus(serverIoExceptionStatus);
+        }
+        Settings.incrementFailureCounter(context);
+        Settings.consumeErrDataBudget(context, bytesTransacted);
+        throw makeNetworkError(context, "Error connecting to network.", metrics);
     }
 }
