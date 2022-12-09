@@ -27,7 +27,7 @@ import java.time.Instant;
  */
 public class InstantConverter {
     /**
-     * Converts from epoch time in nanoseconds to an Instant object.
+     * Converts from epoch time in milliseconds to an Instant object.
      */
     @TypeConverter
     public static Instant fromTimestamp(Long value) {

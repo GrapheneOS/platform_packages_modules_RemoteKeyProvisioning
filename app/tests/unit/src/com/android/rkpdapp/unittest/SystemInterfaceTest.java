@@ -14,101 +14,217 @@
  * limitations under the License.
  */
 
-package com.android.remoteprovisioner.unittest;
+package com.android.rkpdapp.unittest;
 
-import static android.security.keystore.KeyProperties.KEY_ALGORITHM_EC;
-import static android.security.keystore.KeyProperties.PURPOSE_SIGN;
+import static com.android.rkpdapp.unittest.Utils.generateEcdsaKeyPair;
 
-import static com.android.remoteprovisioner.unittest.Utils.CURVE_ED25519;
-import static com.android.remoteprovisioner.unittest.Utils.CURVE_P256;
-import static com.android.remoteprovisioner.unittest.Utils.generateEcdsaKeyPair;
-import static com.android.remoteprovisioner.unittest.Utils.getP256PubKeyFromBytes;
-import static com.android.remoteprovisioner.unittest.Utils.signPublicKey;
+import static com.google.common.truth.Truth.assertThat;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import android.hardware.security.keymint.DeviceInfo;
+import android.hardware.security.keymint.IRemotelyProvisionedComponent;
+import android.hardware.security.keymint.MacedPublicKey;
 import android.hardware.security.keymint.ProtectedData;
-import android.hardware.security.keymint.SecurityLevel;
+import android.hardware.security.keymint.RpcHardwareInfo;
+import android.os.RemoteException;
 import android.os.ServiceManager;
-import android.platform.test.annotations.Presubmit;
-import android.security.keystore.KeyGenParameterSpec;
-import android.security.remoteprovisioning.IRemoteProvisioning;
-import android.security.remoteprovisioning.ImplInfo;
+import android.os.ServiceSpecificException;
+import android.util.Base64;
 
 import androidx.test.core.app.ApplicationProvider;
-import androidx.test.runner.AndroidJUnit4;
+import androidx.test.ext.junit.runners.AndroidJUnit4;
 
-import com.android.remoteprovisioner.CborUtils;
-import com.android.remoteprovisioner.ProvisionerMetrics;
-import com.android.remoteprovisioner.SystemInterface;
-import com.android.remoteprovisioner.X509Utils;
+import com.android.rkpdapp.GeekResponse;
+import com.android.rkpdapp.ProvisionerMetrics;
+import com.android.rkpdapp.RkpdException;
+import com.android.rkpdapp.database.ProvisionedKey;
+import com.android.rkpdapp.database.RkpKey;
+import com.android.rkpdapp.interfaces.ServiceManagerInterface;
+import com.android.rkpdapp.interfaces.SystemInterface;
+import com.android.rkpdapp.utils.CborUtils;
 
-import com.google.crypto.tink.subtle.EllipticCurves;
-import com.google.crypto.tink.subtle.Hkdf;
-import com.google.crypto.tink.subtle.X25519;
-
-import org.junit.After;
 import org.junit.Assert;
+import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.math.BigInteger;
 import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.security.KeyStore;
-import java.security.PublicKey;
-import java.security.cert.Certificate;
-import java.security.cert.X509Certificate;
 import java.security.interfaces.ECPrivateKey;
 import java.security.interfaces.ECPublicKey;
-import java.time.Duration;
 import java.time.Instant;
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-import javax.crypto.Cipher;
-import javax.crypto.spec.GCMParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
-
 import co.nstant.in.cbor.CborBuilder;
-import co.nstant.in.cbor.CborDecoder;
 import co.nstant.in.cbor.CborEncoder;
-import co.nstant.in.cbor.model.Array;
-import co.nstant.in.cbor.model.ByteString;
-import co.nstant.in.cbor.model.DataItem;
-import co.nstant.in.cbor.model.MajorType;
-import co.nstant.in.cbor.model.Map;
-import co.nstant.in.cbor.model.NegativeInteger;
-import co.nstant.in.cbor.model.UnsignedInteger;
+import co.nstant.in.cbor.CborException;
 
 @RunWith(AndroidJUnit4.class)
 public class SystemInterfaceTest {
-
-    private static final String SERVICE = "android.security.remoteprovisioning";
-
-    private IRemoteProvisioning mBinder;
-    private ImplInfo[] mInfo;
+    private static final String SERVICE = IRemotelyProvisionedComponent.DESCRIPTOR + "/default";
+    private static final int INTERFACE_VERSION_V3 = 3;
+    private static final int INTERFACE_VERSION_V2 = 2;
+    private static final byte[] FAKE_PROTECTED_DATA = new byte[] { (byte) 0x84, 0x43, (byte) 0xA1,
+            0x01, 0x03, (byte) 0xA1, 0x05, 0x4C, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
+            (byte) 0x88, (byte) 0x99, 0x00, (byte) 0xAA, (byte) 0xBB, 0x46, 0x12, 0x34,
+            0x12, 0x34, 0x12, 0x34, (byte) 0x80 };
 
     @Before
-    public void setUp() throws Exception {
-        mBinder =
-              IRemoteProvisioning.Stub.asInterface(ServiceManager.getService(SERVICE));
-        assertNotNull(mBinder);
-        mInfo = mBinder.getImplementationInfo();
-        mBinder.deleteAllKeys();
+    public void preCheck() {
+        Assume.assumeTrue(ServiceManager.isDeclared(SERVICE));
     }
 
-    @After
-    public void tearDown() throws Exception {
-        mBinder.deleteAllKeys();
+    @Test
+    public void testGetDeclaredInstances() {
+        String[] instances = ServiceManagerInterface.getDeclaredInstances();
+        assertThat(instances).asList().isNotEmpty();
+        assertThat(instances).asList().contains(SERVICE);
+    }
+
+    @Test
+    public void testSearchFailForOtherServices() {
+        try {
+            new ServiceManagerInterface("default");
+            fail("Getting the declared service 'default' should fail due to SEPolicy.");
+        } catch (RuntimeException e) {
+            assertThat(e).isInstanceOf(SecurityException.class);
+        }
+    }
+
+    @Test
+    public void testGenerateKey() throws CborException, RkpdException, RemoteException {
+        IRemotelyProvisionedComponent mockedComponent = mock(IRemotelyProvisionedComponent.class);
+        ServiceManagerInterface mockedServiceManager = mockServiceManager(CborUtils.EC_CURVE_25519,
+                INTERFACE_VERSION_V3, mockedComponent);
+        SystemInterface systemInterface = new SystemInterface(mockedServiceManager);
+        ProvisionerMetrics metrics = ProvisionerMetrics.createScheduledAttemptMetrics(
+                ApplicationProvider.getApplicationContext());
+        List<RkpKey> keys = systemInterface.generateKeys(metrics, 1);
+        assertThat(keys).hasSize(1);
+        ProvisionedKey key = keys.get(0).generateProvisionedKey(new byte[0], Instant.now());
+        assertThat(key.irpcHal).isEqualTo(SERVICE);
+    }
+
+    @Test
+    public void testGenerateKeyFailureRemoteException()
+            throws RemoteException, CborException, RkpdException {
+        ServiceManagerInterface mockedServiceManager = mockServiceManagerFailure(
+                new RemoteException());
+        ProvisionerMetrics metrics = ProvisionerMetrics.createScheduledAttemptMetrics(
+                ApplicationProvider.getApplicationContext());
+
+        SystemInterface systemInterface = new SystemInterface(mockedServiceManager);
+        try {
+            systemInterface.generateKeys(metrics, 1);
+            fail("GenerateKey should throw RemoteException.");
+        } catch (RuntimeException e) {
+            assertThat(e).hasCauseThat().isInstanceOf(RemoteException.class);
+        }
+    }
+
+    @Test
+    public void testGenerateKeyFailureServiceSpecificException()
+            throws RemoteException, CborException, RkpdException {
+        ServiceManagerInterface mockedServiceManager = mockServiceManagerFailure(
+                new ServiceSpecificException(2));
+        ProvisionerMetrics metrics = ProvisionerMetrics.createScheduledAttemptMetrics(
+                ApplicationProvider.getApplicationContext());
+
+        SystemInterface systemInterface = new SystemInterface(mockedServiceManager);
+        try {
+            systemInterface.generateKeys(metrics, 1);
+            fail("GenerateKey should throw ServiceSpecificException.");
+        } catch (ServiceSpecificException e) {
+            assertThat(e.errorCode).isEqualTo(2);
+        }
+    }
+
+    @Test
+    public void testGenerateCSRPreV3P256() throws Exception {
+        IRemotelyProvisionedComponent mockedComponent = mock(IRemotelyProvisionedComponent.class);
+        ServiceManagerInterface mockedServiceManager = mockServiceManager(CborUtils.EC_CURVE_P256,
+                INTERFACE_VERSION_V2, mockedComponent);
+        SystemInterface systemInterface = new SystemInterface(mockedServiceManager);
+
+        ProvisionerMetrics metrics = ProvisionerMetrics.createOutOfKeysAttemptMetrics(
+                ApplicationProvider.getApplicationContext(), SERVICE);
+        KeyPair eekEcdsaKeyPair = generateEcdsaKeyPair();
+        ECPublicKey eekPubKey = (ECPublicKey) eekEcdsaKeyPair.getPublic();
+        byte[] eekPub = Utils.getBytesFromP256PublicKey(eekPubKey);
+        byte[] eekChain = generateEekChain(Utils.CURVE_P256, eekPub);
+        assertThat(eekChain).isNotNull();
+        GeekResponse geekResponse = new GeekResponse();
+        geekResponse.addGeek(CborUtils.EC_CURVE_P256, eekChain);
+        geekResponse.setChallenge(new byte[]{0x02});
+
+        byte[] csrTag = systemInterface.generateCsr(metrics, geekResponse, new ArrayList<>());
+        assertThat(csrTag).isNotEmpty();
+        verify(mockedComponent, times(1)).generateCertificateRequest(anyBoolean(),
+                any(MacedPublicKey[].class), any(byte[].class), any(byte[].class),
+                any(DeviceInfo.class), any(ProtectedData.class));
+        verify(mockedComponent, never()).generateCertificateRequestV2(any(MacedPublicKey[].class),
+                any(byte[].class));
+    }
+
+    @Test
+    public void testGenerateCSRPreV3Ed25519() throws Exception {
+        IRemotelyProvisionedComponent mockedComponent = mock(IRemotelyProvisionedComponent.class);
+        ServiceManagerInterface mockedServiceManager = mockServiceManager(CborUtils.EC_CURVE_25519,
+                INTERFACE_VERSION_V2, mockedComponent);
+
+        ProvisionerMetrics metrics = ProvisionerMetrics.createOutOfKeysAttemptMetrics(
+                ApplicationProvider.getApplicationContext(), SERVICE);
+        SystemInterface systemInterface = new SystemInterface(mockedServiceManager);
+        GeekResponse geekResponse = new GeekResponse();
+        byte[] eekPub = new byte[32];
+        new Random().nextBytes(eekPub);
+        byte[] eekChain = generateEekChain(Utils.CURVE_ED25519, eekPub);
+        assertThat(eekChain).isNotNull();
+        geekResponse.addGeek(CborUtils.EC_CURVE_25519, eekChain);
+        geekResponse.setChallenge(new byte[]{0x02});
+
+        byte[] csrTag = systemInterface.generateCsr(metrics, geekResponse, new ArrayList<>());
+        assertThat(csrTag).isNotEmpty();
+        verify(mockedComponent, times(1)).generateCertificateRequest(anyBoolean(),
+                any(MacedPublicKey[].class), any(byte[].class), any(byte[].class),
+                any(DeviceInfo.class), any(ProtectedData.class));
+        verify(mockedComponent, never()).generateCertificateRequestV2(any(MacedPublicKey[].class),
+                any(byte[].class));
+    }
+
+    @Test
+    public void testGenerateCSRv3() throws Exception {
+        IRemotelyProvisionedComponent mockedComponent = mock(IRemotelyProvisionedComponent.class);
+        ServiceManagerInterface mockedServiceManager = mockServiceManager(CborUtils.EC_CURVE_25519,
+                INTERFACE_VERSION_V3, mockedComponent);
+
+        ProvisionerMetrics metrics = ProvisionerMetrics.createOutOfKeysAttemptMetrics(
+                ApplicationProvider.getApplicationContext(), SERVICE);
+        SystemInterface systemInterface = new SystemInterface(mockedServiceManager);
+        GeekResponse geekResponse = new GeekResponse();
+        geekResponse.setChallenge(new byte[]{0x02});
+
+        byte[] csrTag = systemInterface.generateCsr(metrics, geekResponse, new ArrayList<>());
+        assertThat(csrTag).isNotEmpty();
+        verify(mockedComponent, never()).generateCertificateRequest(anyBoolean(),
+                any(MacedPublicKey[].class), any(byte[].class), any(byte[].class),
+                any(DeviceInfo.class), any(ProtectedData.class));
+        verify(mockedComponent, times(1)).generateCertificateRequestV2(any(MacedPublicKey[].class),
+                any(byte[].class));
     }
 
     private byte[] generateEekChain(int curve, byte[] eek) throws Exception {
@@ -166,321 +282,53 @@ public class SystemInterfaceTest {
         } else {
             Assert.fail("Unsupported curve: " + curve);
         }
-        return null;
+        throw new RkpdException(RkpdException.Status.INTERNAL_ERROR,
+                "Could not generate eek chain");
     }
 
-    @Presubmit
-    @Test
-    public void testGenerateCSR() throws Exception {
-        for (int i = 0; i < mInfo.length; i++) {
-            if (mInfo[i].supportedCurve == 0) {
-                continue;
-            }
-            ProvisionerMetrics metrics = ProvisionerMetrics.createOutOfKeysAttemptMetrics(
-                    ApplicationProvider.getApplicationContext(), mInfo[i].secLevel);
-            DeviceInfo deviceInfo = new DeviceInfo();
-            ProtectedData encryptedBundle = new ProtectedData();
-            byte[] eekChain = null;
-            byte[] eekPub;
-            if (mInfo[i].supportedCurve == CborUtils.EC_CURVE_P256) {
-                KeyPair eekEcdsaKeyPair = generateEcdsaKeyPair();
-                ECPublicKey eekPubKey = (ECPublicKey) eekEcdsaKeyPair.getPublic();
-                eekPub = Utils.getBytesFromP256PublicKey(eekPubKey);
-                eekChain = generateEekChain(CURVE_P256, eekPub);
-            } else if (mInfo[i].supportedCurve == CborUtils.EC_CURVE_25519) {
-                eekPub = new byte[32];
-                new Random().nextBytes(eekPub);
-                eekChain = generateEekChain(CURVE_ED25519, eekPub);
-            } else {
-                Assert.fail("Unsupported curve: " + mInfo[i].supportedCurve);
-            }
-            assertNotNull(eekChain);
-            byte[] bundle =
-                    SystemInterface.generateCsr(true /* testMode */, 0 /* numKeys */,
-                            mInfo[i].secLevel,
-                            eekChain,
-                            new byte[]{0x02}, encryptedBundle,
-                            deviceInfo, mBinder, metrics);
-            // encryptedBundle should contain a COSE_Encrypt message
-            ByteArrayInputStream bais = new ByteArrayInputStream(encryptedBundle.protectedData);
-            List<DataItem> dataItems = new CborDecoder(bais).decode();
-            assertEquals(1, dataItems.size());
-            assertEquals(MajorType.ARRAY, dataItems.get(0).getMajorType());
-            Array encMsg = (Array) dataItems.get(0);
-            assertEquals(4, encMsg.getDataItems().size());
+    private ServiceManagerInterface mockServiceManagerFailure(Exception exception)
+            throws RemoteException {
+        IRemotelyProvisionedComponent mockedComponent = mock(IRemotelyProvisionedComponent.class);
+        RpcHardwareInfo mockedHardwareInfo = mock(RpcHardwareInfo.class);
+        mockedHardwareInfo.supportedEekCurve = CborUtils.EC_CURVE_25519;
+        when(mockedComponent.getHardwareInfo()).thenReturn(mockedHardwareInfo);
+        when(mockedComponent.generateEcdsaP256KeyPair(eq(false), any())).thenThrow(exception);
+        ServiceManagerInterface mockedServiceManager = mock(ServiceManagerInterface.class);
+        when(mockedServiceManager.getBinder()).thenReturn(mockedComponent);
+        when(mockedServiceManager.getServiceName()).thenReturn(SERVICE);
+        return mockedServiceManager;
+    }
+
+    private ServiceManagerInterface mockServiceManager(int supportedCurve, int interfaceVersion,
+            IRemotelyProvisionedComponent mockedComponent) throws RemoteException {
+        RpcHardwareInfo mockedHardwareInfo = mock(RpcHardwareInfo.class);
+        mockedHardwareInfo.supportedEekCurve = supportedCurve;
+        when(mockedComponent.getHardwareInfo()).thenReturn(mockedHardwareInfo);
+        when(mockedComponent.getInterfaceVersion()).thenReturn(interfaceVersion);
+        doAnswer(invocation -> {
+            Object[] args = invocation.getArguments();
+            ((MacedPublicKey) args[1]).macedKey = Base64.decode("g0BAWE2lAQIDJiABIVggUYCsz4+WjOwPU"
+                    + "OGpG7eQhjSL48OsZQJNtPYxDghGMjkiWCBU65Sd/ra05HM6JU4vH52dvfpmwRGL6ZaMQ+Qw9tp2"
+                    + "qw==", Base64.DEFAULT);
+            return new byte[] { 0x01 };
+        }).when(mockedComponent).generateEcdsaP256KeyPair(eq(false), any());
+        if (interfaceVersion == INTERFACE_VERSION_V2) {
+            doAnswer(invocation -> {
+                Object[] args = invocation.getArguments();
+                ((DeviceInfo) args[4]).deviceInfo = new byte[] { (byte) 0xA0 };
+                ((ProtectedData) args[5]).protectedData = FAKE_PROTECTED_DATA;
+                return new byte[0];
+            }).when(mockedComponent).generateCertificateRequest(anyBoolean(),
+                    any(MacedPublicKey[].class), any(byte[].class), any(byte[].class),
+                    any(DeviceInfo.class), any(ProtectedData.class));
+        } else {
+            when(mockedComponent.generateCertificateRequestV2(any(MacedPublicKey[].class),
+                    any(byte[].class))).thenReturn(new byte[] { (byte) 0x80 });
         }
-    }
 
-    private static Certificate[] generateKeyStoreKey(String alias, int securityLevel)
-            throws Exception {
-        final boolean isStrongboxBacked = (securityLevel == SecurityLevel.STRONGBOX) ? true : false;
-        KeyStore keyStore = KeyStore.getInstance("AndroidKeyStore");
-        keyStore.load(null);
-        KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance(KEY_ALGORITHM_EC,
-                "AndroidKeyStore");
-        KeyGenParameterSpec spec = new KeyGenParameterSpec.Builder(alias, PURPOSE_SIGN)
-                .setAttestationChallenge("challenge".getBytes())
-                .setIsStrongBoxBacked(isStrongboxBacked)
-                .build();
-        keyPairGenerator.initialize(spec);
-        keyPairGenerator.generateKeyPair();
-        Certificate[] certs = keyStore.getCertificateChain(spec.getKeystoreAlias());
-        keyStore.deleteEntry(alias);
-        return certs;
-    }
-
-    @Presubmit
-    @Test
-    public void testGenerateCSRProvisionAndUseKey() throws Exception {
-        int numKeys = 10;
-        int securityLevel;
-        for (int k = 0; k < mInfo.length; k++) {
-            if (mInfo[k].supportedCurve == 0) {
-                continue;
-            }
-            ProvisionerMetrics metrics = ProvisionerMetrics.createOutOfKeysAttemptMetrics(
-                    ApplicationProvider.getApplicationContext(), mInfo[k].secLevel);
-            securityLevel = mInfo[k].secLevel;
-            DeviceInfo deviceInfo = new DeviceInfo();
-            ProtectedData encryptedBundle = new ProtectedData();
-            byte[] eekChain = null;
-            byte[] eekPub;
-            if (mInfo[k].supportedCurve == CborUtils.EC_CURVE_P256) {
-                KeyPair eekEcdsaKeyPair = generateEcdsaKeyPair();
-                ECPublicKey eekPubKey = (ECPublicKey) eekEcdsaKeyPair.getPublic();
-                eekPub = Utils.getBytesFromP256PublicKey(eekPubKey);
-                eekChain = generateEekChain(CURVE_P256, eekPub);
-            } else if (mInfo[k].supportedCurve == CborUtils.EC_CURVE_25519) {
-                eekPub = new byte[32];
-                new Random().nextBytes(eekPub);
-                eekChain = generateEekChain(CURVE_ED25519, eekPub);
-            } else {
-                Assert.fail("Unsupported curve: " + mInfo[k].supportedCurve);
-            }
-            assertNotNull(eekChain);
-            for (int i = 0; i < numKeys; i++) {
-                mBinder.generateKeyPair(true /* testMode */, securityLevel);
-            }
-            byte[] bundle =
-                    SystemInterface.generateCsr(true /* testMode */, numKeys,
-                            securityLevel,
-                            eekChain,
-                            new byte[]{0x02}, encryptedBundle,
-                            deviceInfo, mBinder, metrics);
-            assertNotNull(bundle);
-            // The return value of generateCsr should be a COSE_Mac0 message
-            ByteArrayInputStream bais = new ByteArrayInputStream(bundle);
-            List<DataItem> dataItems = new CborDecoder(bais).decode();
-            assertEquals(1, dataItems.size());
-            assertEquals(MajorType.ARRAY, dataItems.get(0).getMajorType());
-            Array macMsg = (Array) dataItems.get(0);
-            assertEquals(4, macMsg.getDataItems().size());
-
-            // The payload for the COSE_Mac0 should contain the array of public keys
-            bais = new ByteArrayInputStream(((ByteString) macMsg.getDataItems().get(2)).getBytes());
-            List<DataItem> publicKeysArr = new CborDecoder(bais).decode();
-            assertEquals(1, publicKeysArr.size());
-            assertEquals(MajorType.ARRAY, publicKeysArr.get(0).getMajorType());
-            Array publicKeys = (Array) publicKeysArr.get(0);
-            assertEquals(numKeys, publicKeys.getDataItems().size());
-            KeyPair rootKeyPair = generateEcdsaKeyPair();
-            KeyPair intermediateKeyPair = generateEcdsaKeyPair();
-            X509Certificate[][] certChain = new X509Certificate[numKeys][3];
-            for (int i = 0; i < numKeys; i++) {
-                Map publicKey = (Map) publicKeys.getDataItems().get(i);
-                byte[] xPub = ((ByteString) publicKey.get(new NegativeInteger(-2))).getBytes();
-                byte[] yPub = ((ByteString) publicKey.get(new NegativeInteger(-3))).getBytes();
-                assertEquals(xPub.length, 32);
-                assertEquals(yPub.length, 32);
-                PublicKey leafKeyToSign = getP256PubKeyFromBytes(xPub, yPub);
-                certChain[i][0] = signPublicKey(intermediateKeyPair, leafKeyToSign);
-                certChain[i][1] = signPublicKey(rootKeyPair, intermediateKeyPair.getPublic());
-                certChain[i][2] = signPublicKey(rootKeyPair, rootKeyPair.getPublic());
-                ByteArrayOutputStream os = new ByteArrayOutputStream();
-                for (int j = 0; j < certChain[i].length; j++) {
-                    os.write(certChain[i][j].getEncoded());
-                }
-                Instant expiringBy = Instant.now().plusMillis(Duration.ofDays(4).toMillis());
-                SystemInterface.provisionCertChain(
-                        X509Utils.getAndFormatRawPublicKey(certChain[i][0]),
-                        certChain[i][0].getEncoded() /* leafCert */,
-                        os.toByteArray() /* certChain */,
-                        expiringBy.toEpochMilli() /* validity */,
-                        securityLevel,
-                        mBinder, metrics);
-            }
-            // getPoolStatus will clean the key pool before we go to assign a new provisioned key
-            mBinder.getPoolStatus(0, securityLevel);
-            Certificate[] provisionedCerts1 = generateKeyStoreKey("alias", securityLevel);
-            Certificate[] provisionedCerts2 = generateKeyStoreKey("alias2", securityLevel);
-            assertEquals(4, provisionedCerts1.length);
-            assertEquals(4, provisionedCerts2.length);
-            boolean matched = false;
-            for (int i = 0; i < certChain.length; i++) {
-                if (Arrays.equals(provisionedCerts1[1].getEncoded(),
-                        certChain[i][0].getEncoded())) {
-                    matched = true;
-                    assertArrayEquals("Second key: j = 0",
-                            provisionedCerts2[1].getEncoded(), certChain[i][0].getEncoded());
-                    for (int j = 1; j < certChain[i].length; j++) {
-                        assertArrayEquals("First key: j = " + j,
-                                provisionedCerts1[j + 1].getEncoded(),
-                                certChain[i][j].getEncoded());
-                        assertArrayEquals("Second key: j = " + j,
-                                provisionedCerts2[j + 1].getEncoded(),
-                                certChain[i][j].getEncoded());
-                    }
-                }
-            }
-            assertTrue(matched);
-        }
-    }
-
-    private static byte[] extractRecipientKey(Array recipients) {
-        // Recipients is an Array of recipient Arrays
-        Map recipientUnprotectedHeaders = (Map) ((Array) recipients.getDataItems().get(0))
-                                                                   .getDataItems().get(1);
-        Map recipientKeyMap = (Map) recipientUnprotectedHeaders.get(new NegativeInteger(-1));
-        byte[] pubx = ((ByteString) recipientKeyMap.get(new NegativeInteger(-2))).getBytes();
-        DataItem di = recipientKeyMap.get(new NegativeInteger(-3));
-        if (di != null) {
-            byte[] puby = ((ByteString) di).getBytes();
-            assertNotNull(puby);
-            assertEquals(puby.length, 32);
-            byte[] ret = new byte[64];
-            System.arraycopy(pubx, 0, ret, 0, 32);
-            System.arraycopy(puby, 0, ret, 32, 32);
-            return ret;
-        }
-        return pubx;
-    }
-
-    private static byte[] buildKdfContext(byte[] serverPub, byte[] ephemeralPub) throws Exception {
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        new CborEncoder(baos).encode(new CborBuilder()
-                .addArray()
-                    .add(3) // AlgorithmID: AES-GCM 256
-                    .addArray()
-                        .add("client".getBytes("UTF8"))
-                        .add(new byte[0])
-                        .add(ephemeralPub)
-                        .end()
-                    .addArray()
-                        .add("server".getBytes("UTF8"))
-                        .add(new byte[0])
-                        .add(serverPub)
-                        .end()
-                    .addArray()
-                        .add(256) // key length
-                        .add(new byte[0])
-                        .end()
-                    .end()
-                .build());
-        return baos.toByteArray();
-    }
-
-    private static byte[] buildEncStructure(byte[] protectedHeaders, byte[] externalAad)
-            throws Exception {
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        new CborEncoder(baos).encode(new CborBuilder()
-                .addArray()
-                    .add("Encrypt")
-                    .add(protectedHeaders)
-                    .add(externalAad)
-                    .end()
-                .build());
-        return baos.toByteArray();
-    }
-
-    @Presubmit
-    @Test
-    public void testDecryptProtectedPayload() throws Exception {
-        int securityLevel;
-        for (int i = 0; i < mInfo.length; i++) {
-            if (mInfo[i].supportedCurve == 0) {
-                continue;
-            }
-            ProvisionerMetrics metrics = ProvisionerMetrics.createOutOfKeysAttemptMetrics(
-                    ApplicationProvider.getApplicationContext(), mInfo[i].secLevel);
-            securityLevel = mInfo[i].secLevel;
-            DeviceInfo deviceInfo = new DeviceInfo();
-            ProtectedData encryptedBundle = new ProtectedData();
-            byte[] eekPriv = null;
-            byte[] eekPub = null;
-            byte[] eekChain = null;
-            int numKeys = 1;
-            if (mInfo[i].supportedCurve == CborUtils.EC_CURVE_P256) {
-                KeyPair eekEcdsaKeyPair = generateEcdsaKeyPair();
-                ECPublicKey eekPubKey = (ECPublicKey) eekEcdsaKeyPair.getPublic();
-                ECPrivateKey eekPrivKey = (ECPrivateKey) eekEcdsaKeyPair.getPrivate();
-                eekPub = Utils.getBytesFromP256PublicKey(eekPubKey);
-                eekPriv = eekPrivKey.getS().toByteArray();
-                eekChain = generateEekChain(CURVE_P256, eekPub);
-            } else if (mInfo[i].supportedCurve == CborUtils.EC_CURVE_25519) {
-                eekPriv = X25519.generatePrivateKey();
-                eekPub = X25519.publicFromPrivate(eekPriv);
-                eekChain = generateEekChain(CURVE_ED25519, eekPub);
-            } else {
-                Assert.fail("Unsupported curve: " + mInfo[i].supportedCurve);
-            }
-            assertNotNull(eekChain);
-            assertNotNull(eekPriv);
-            assertNotNull(eekPub);
-            mBinder.generateKeyPair(true /* testMode */, securityLevel);
-            byte[] bundle =
-                    SystemInterface.generateCsr(true /* testMode */, numKeys,
-                            securityLevel,
-                            eekChain,
-                            new byte[]{0x02}, encryptedBundle,
-                            deviceInfo, mBinder, metrics);
-            ByteArrayInputStream bais = new ByteArrayInputStream(encryptedBundle.protectedData);
-            List<DataItem> dataItems = new CborDecoder(bais).decode();
-            // Parse encMsg into components: protected and unprotected headers, payload,
-            // and recipient
-            List<DataItem> encMsg = ((Array) dataItems.get(0)).getDataItems();
-            byte[] protectedHeaders = ((ByteString) encMsg.get(0)).getBytes();
-            Map unprotectedHeaders = (Map) encMsg.get(1);
-            byte[] encryptedContent = ((ByteString) encMsg.get(2)).getBytes();
-            Array recipients = (Array) encMsg.get(3);
-
-            byte[] iv = ((ByteString) unprotectedHeaders.get(
-                    new UnsignedInteger(5))).getBytes();
-            byte[] ephemeralPub = extractRecipientKey(recipients);
-            byte[] sharedSecret;
-            if (mInfo[i].supportedCurve == CborUtils.EC_CURVE_P256) {
-                assertEquals(64, ephemeralPub.length);
-                ECPrivateKey privKey = EllipticCurves.getEcPrivateKey(
-                        EllipticCurves.CurveType.NIST_P256, eekPriv);
-                byte[] pubx = new byte[32];
-                byte[] puby = new byte[32];
-                System.arraycopy(ephemeralPub, 0, pubx, 0, 32);
-                System.arraycopy(ephemeralPub, 32, puby, 0, 32);
-                ECPublicKey pubKey = EllipticCurves.getEcPublicKey(
-                        EllipticCurves.CurveType.NIST_P256, pubx, puby);
-                sharedSecret = EllipticCurves.computeSharedSecret(privKey, pubKey);
-            } else { // CborUtils.EC_CURVE_25519
-                assertEquals(32, ephemeralPub.length);
-                sharedSecret = X25519.computeSharedSecret(eekPriv, ephemeralPub);
-            }
-            byte[] context = buildKdfContext(eekPub, ephemeralPub);
-            byte[] decryptionKey = Hkdf.computeHkdf("HMACSHA256", sharedSecret,
-                    null /* salt */, context, 32);
-
-            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-            cipher.init(
-                    Cipher.DECRYPT_MODE,
-                    new SecretKeySpec(decryptionKey, "AES"),
-                    new GCMParameterSpec(128 /* iv length */, iv));
-            cipher.updateAAD(buildEncStructure(protectedHeaders, new byte[0]));
-
-            byte[] protectedData = cipher.doFinal(encryptedContent);
-            bais = new ByteArrayInputStream(protectedData);
-            List<DataItem> protectedDataArray = new CborDecoder(bais).decode();
-            assertEquals(1, protectedDataArray.size());
-            assertEquals(MajorType.ARRAY, protectedDataArray.get(0).getMajorType());
-            List<DataItem> protectedDataPayload = ((Array) protectedDataArray.get(
-                    0)).getDataItems();
-            assertTrue(protectedDataPayload.size() == 2 || protectedDataPayload.size() == 3);
-        }
+        ServiceManagerInterface mockedServiceManager = mock(ServiceManagerInterface.class);
+        when(mockedServiceManager.getBinder()).thenReturn(mockedComponent);
+        when(mockedServiceManager.getServiceName()).thenReturn(SERVICE);
+        return mockedServiceManager;
     }
 }

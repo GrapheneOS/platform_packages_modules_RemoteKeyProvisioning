@@ -26,8 +26,17 @@ import android.platform.test.annotations.Presubmit;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 
-import com.android.rkpdapp.utils.CborUtils;
 import com.android.rkpdapp.GeekResponse;
+import com.android.rkpdapp.utils.CborUtils;
+
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.util.ArrayList;
+import java.util.List;
 
 import co.nstant.in.cbor.CborBuilder;
 import co.nstant.in.cbor.CborDecoder;
@@ -39,15 +48,6 @@ import co.nstant.in.cbor.model.MajorType;
 import co.nstant.in.cbor.model.Map;
 import co.nstant.in.cbor.model.UnicodeString;
 import co.nstant.in.cbor.model.UnsignedInteger;
-
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.util.ArrayList;
-import java.util.List;
 
 @RunWith(AndroidJUnit4.class)
 public class CborUtilsTest {
@@ -111,7 +111,7 @@ public class CborUtilsTest {
                 .build());
         byte[] encodedBytes = mBaos.toByteArray();
         ArrayList<byte[]> certChains =
-                new ArrayList<byte[]>(CborUtils.parseSignedCertificates(encodedBytes));
+                new ArrayList<>(CborUtils.parseSignedCertificates(encodedBytes));
         assertArrayEquals(new byte[] {0x04, 0x05, 0x06, 0x01, 0x02, 0x03}, certChains.get(0));
         assertArrayEquals(new byte[] {0x07, 0x08, 0x09, 0x01, 0x02, 0x03}, certChains.get(1));
     }
@@ -236,8 +236,8 @@ public class CborUtilsTest {
         assertArrayEquals(mEncodedGeekChain2, resp.getGeekChain(CborUtils.EC_CURVE_P256));
         assertArrayEquals(CHALLENGE, resp.getChallenge());
         assertEquals(GeekResponse.NO_EXTRA_KEY_UPDATE, resp.numExtraAttestationKeys);
-        assertEquals(null, resp.timeToRefresh);
-        assertEquals(null, resp.provisioningUrl);
+        assertNull(resp.timeToRefresh);
+        assertNull(resp.provisioningUrl);
     }
 
     @Test
@@ -265,7 +265,7 @@ public class CborUtilsTest {
         assertArrayEquals(mEncodedGeekChain2, resp.getGeekChain(CborUtils.EC_CURVE_P256));
         assertArrayEquals(CHALLENGE, resp.getChallenge());
         assertEquals(TEST_EXTRA_KEYS, resp.numExtraAttestationKeys);
-        assertEquals(null, resp.timeToRefresh);
+        assertNull(resp.timeToRefresh);
         assertEquals(TEST_URL, resp.provisioningUrl);
     }
 
@@ -402,7 +402,7 @@ public class CborUtilsTest {
     }
 
     @Test
-    public void testBuildUnverifiedDeviceInfo() throws Exception {
+    public void testBuildUnverifiedDeviceInfo() {
         Map devInfo = CborUtils.buildUnverifiedDeviceInfo();
         assertEquals("Unverified device info only has one entry.", 1, devInfo.getKeys().size());
         DataItem fingerprint = devInfo.get(new UnicodeString("fingerprint"));
