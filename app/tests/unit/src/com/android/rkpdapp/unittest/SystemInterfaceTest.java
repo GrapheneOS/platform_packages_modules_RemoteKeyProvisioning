@@ -64,7 +64,6 @@ import java.security.interfaces.ECPrivateKey;
 import java.security.interfaces.ECPublicKey;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.Random;
 
 import co.nstant.in.cbor.CborBuilder;
@@ -74,7 +73,8 @@ import co.nstant.in.cbor.CborException;
 @RunWith(AndroidJUnit4.class)
 public class SystemInterfaceTest {
     private static final String SERVICE = "totally fake service name";
-    private static final int INTERFACE_VERSION_V3 = 3;
+    // TODO: Change this to V3 once Server starts accepting CSR v2.
+    private static final int INTERFACE_VERSION_V3 = 4;
     private static final int INTERFACE_VERSION_V2 = 2;
     private static final byte[] FAKE_PROTECTED_DATA = new byte[] { (byte) 0x84, 0x43, (byte) 0xA1,
             0x01, 0x03, (byte) 0xA1, 0x05, 0x4C, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
@@ -95,15 +95,14 @@ public class SystemInterfaceTest {
         SystemInterface systemInterface = new SystemInterface(mockedServiceManager);
         ProvisionerMetrics metrics = ProvisionerMetrics.createScheduledAttemptMetrics(
                 ApplicationProvider.getApplicationContext());
-        List<RkpKey> keys = systemInterface.generateKeys(metrics, 1);
-        assertThat(keys).hasSize(1);
-        ProvisionedKey key = keys.get(0).generateProvisionedKey(new byte[0], Instant.now());
+        RkpKey rkpKey = systemInterface.generateKey(metrics);
+        ProvisionedKey key = rkpKey.generateProvisionedKey(new byte[0], Instant.now());
         assertThat(key.irpcHal).isEqualTo(SERVICE);
     }
 
     @Test
-    public void testGenerateKeyFailureRemoteException()
-            throws RemoteException, CborException, RkpdException {
+    public void testGenerateKeyFailureRemoteException() throws RemoteException, CborException,
+            RkpdException {
         ServiceManagerInterface mockedServiceManager = mockServiceManagerFailure(
                 new RemoteException());
         ProvisionerMetrics metrics = ProvisionerMetrics.createScheduledAttemptMetrics(
@@ -111,7 +110,7 @@ public class SystemInterfaceTest {
 
         SystemInterface systemInterface = new SystemInterface(mockedServiceManager);
         try {
-            systemInterface.generateKeys(metrics, 1);
+            systemInterface.generateKey(metrics);
             fail("GenerateKey should throw RemoteException.");
         } catch (RuntimeException e) {
             assertThat(e).hasCauseThat().isInstanceOf(RemoteException.class);
@@ -119,8 +118,8 @@ public class SystemInterfaceTest {
     }
 
     @Test
-    public void testGenerateKeyFailureServiceSpecificException()
-            throws RemoteException, CborException, RkpdException {
+    public void testGenerateKeyFailureServiceSpecificException() throws RemoteException,
+            CborException, RkpdException {
         ServiceManagerInterface mockedServiceManager = mockServiceManagerFailure(
                 new ServiceSpecificException(2));
         ProvisionerMetrics metrics = ProvisionerMetrics.createScheduledAttemptMetrics(
@@ -128,7 +127,7 @@ public class SystemInterfaceTest {
 
         SystemInterface systemInterface = new SystemInterface(mockedServiceManager);
         try {
-            systemInterface.generateKeys(metrics, 1);
+            systemInterface.generateKey(metrics);
             fail("GenerateKey should throw ServiceSpecificException.");
         } catch (ServiceSpecificException e) {
             assertThat(e.errorCode).isEqualTo(2);
