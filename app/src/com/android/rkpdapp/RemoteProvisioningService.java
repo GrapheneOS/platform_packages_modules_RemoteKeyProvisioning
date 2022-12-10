@@ -39,10 +39,13 @@ public class RemoteProvisioningService extends Service {
     }
 
     final class RegistrationBinder extends IRegistration.Stub {
-        RegistrationBinder(String irpcName) {
+        final int mCallerUid;
+
+        RegistrationBinder(int callerUid, String irpcName) {
+            mCallerUid = callerUid;
             if (!ServiceManager.isDeclared(irpcName)) {
                 throw new IllegalArgumentException(
-                    "The given IRemotelyProvisionedComponent is not declared: " + irpcName);
+                        "The given IRemotelyProvisionedComponent is not declared: " + irpcName);
             }
             IBinder binder = ServiceManager.waitForDeclaredService(irpcName);
         }
@@ -58,15 +61,16 @@ public class RemoteProvisioningService extends Service {
         }
 
         @Override
-        public void storeUpgradedKey(int keyId, byte[] newKeyBlob) throws RemoteException {
+        public void storeUpgradedKey(byte[] oldKeyBlob, byte[] newKeyBlob) throws RemoteException {
             Log.i(TAG, "storeUpgradedKey");
         }
     }
 
     final class RemoteProvisioningBinder extends IRemoteProvisioning.Stub {
         @Override
-        public void getRegistration(String irpcName, IGetRegistrationCallback callback) {
-            IRegistration.Stub registration = new RegistrationBinder(irpcName);
+        public void getRegistration(int callerUid, String irpcName,
+                IGetRegistrationCallback callback) {
+            IRegistration.Stub registration = new RegistrationBinder(callerUid, irpcName);
             try {
                 callback.onSuccess(registration);
             } catch (RemoteException e) {

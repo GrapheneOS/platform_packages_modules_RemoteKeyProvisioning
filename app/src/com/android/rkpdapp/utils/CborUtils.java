@@ -17,8 +17,13 @@
 package com.android.rkpdapp.utils;
 
 import android.content.Context;
+import android.hardware.security.keymint.MacedPublicKey;
 import android.os.Build;
 import android.util.Log;
+
+import com.android.rkpdapp.GeekResponse;
+import com.android.rkpdapp.RkpdException;
+import com.android.rkpdapp.database.RkpKey;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -26,8 +31,6 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-
-import com.android.rkpdapp.GeekResponse;
 
 import co.nstant.in.cbor.CborBuilder;
 import co.nstant.in.cbor.CborDecoder;
@@ -38,6 +41,7 @@ import co.nstant.in.cbor.model.ByteString;
 import co.nstant.in.cbor.model.DataItem;
 import co.nstant.in.cbor.model.MajorType;
 import co.nstant.in.cbor.model.Map;
+import co.nstant.in.cbor.model.NegativeInteger;
 import co.nstant.in.cbor.model.UnicodeString;
 import co.nstant.in.cbor.model.UnsignedInteger;
 
@@ -66,8 +70,12 @@ public class CborUtils {
 
     private static final int EEK_ARRAY_ENTRIES_NO_CONFIG = 2;
     private static final int EEK_ARRAY_ENTRIES_WITH_CONFIG = 3;
-    private static final String TAG = "RemoteProvisioningService";
+    private static final String TAG = "RkpdCborUtils";
     private static final byte[] EMPTY_MAP = new byte[] {(byte) 0xA0};
+    private static final int KEY_PARAMETER_X = -2;
+    private static final int KEY_PARAMETER_Y = -3;
+    private static final int COSE_HEADER_ALGORITHM = 1;
+    private static final int COSE_ALGORITHM_HMAC_256 = 5;
 
     /**
      * Parses the signed certificate chains returned by the server. In order to reduce data use over
@@ -107,7 +115,7 @@ public class CborUtils {
             byte[] sharedCertificates =
                     ((ByteString) dataItems.get(SHARED_CERTIFICATES_INDEX)).getBytes();
             Array uniqueCertificates = (Array) dataItems.get(UNIQUE_CERTIFICATES_INDEX);
-            List<byte[]> uniqueCertificateChains = new ArrayList<byte[]>();
+            List<byte[]> uniqueCertificateChains = new ArrayList<>();
             for (DataItem entry : uniqueCertificates.getDataItems()) {
                 if (!checkType(entry, MajorType.BYTE_STRING, "UniqueCertificate")) {
                     return null;
@@ -266,43 +274,23 @@ public class CborUtils {
      * IRemotelyProvisionedComponent HAL AIDL files.
      */
     public static byte[] buildCertificateRequest(byte[] deviceInfo, byte[] challenge,
-                                                 byte[] protectedData, byte[] macedKeysToSign,
-                                                 Map unverifiedDeviceInfo) {
+            byte[] protectedData, byte[] macedKeysToSign, Map unverifiedDeviceInfo)
+            throws RkpdException {
         // This CBOR library doesn't support adding already serialized CBOR structures into a
         // CBOR builder. Because of this, we have to first deserialize the provided parameters
         // back into the library's CBOR object types, and then reserialize them into the
         // desired structure.
         try {
-            // Deserialize the protectedData blob
-            ByteArrayInputStream bais = new ByteArrayInputStream(protectedData);
-            List<DataItem> dataItems = new CborDecoder(bais).decode();
-            if (dataItems.size() != 1
-                    || !checkType(dataItems.get(0), MajorType.ARRAY, "ProtectedData")) {
-                return null;
-            }
-            Array protectedDataArray = (Array) dataItems.get(0);
-
-            // Deserialize macedKeysToSign
-            bais = new ByteArrayInputStream(macedKeysToSign);
-            dataItems = new CborDecoder(bais).decode();
-            if (dataItems.size() != 1
-                    || !checkType(dataItems.get(0), MajorType.ARRAY, "MacedKeysToSign")) {
-                return null;
-            }
-            Array macedKeysToSignArray = (Array) dataItems.get(0);
-
-            // Deserialize deviceInfo
-            bais = new ByteArrayInputStream(deviceInfo);
-            dataItems = new CborDecoder(bais).decode();
-            if (dataItems.size() != 1
-                    || !checkType(dataItems.get(0), MajorType.MAP, "DeviceInfo")) {
-                return null;
-            }
-            Map verifiedDeviceInfoMap = (Map) dataItems.get(0);
+            Array protectedDataArray = (Array) decodeCbor(protectedData, "ProtectedData",
+                    MajorType.ARRAY);
+            Array macedKeysToSignArray = (Array) decodeCbor(macedKeysToSign, "MacedKeysToSign",
+                    MajorType.ARRAY);
+            Map verifiedDeviceInfoMap = (Map) decodeCbor(deviceInfo, "DeviceInfo", MajorType.MAP);
 
             if (unverifiedDeviceInfo.get(new UnicodeString("fingerprint")) == null) {
                 Log.e(TAG, "UnverifiedDeviceInfo is missing a fingerprint entry");
-                return null;
+                throw new RkpdException(RkpdException.Status.INTERNAL_ERROR,
+                        "UnverifiedDeviceInfo missing fingerprint entry.");
             }
             // Serialize the actual CertificateSigningRequest structure
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -320,7 +308,7 @@ public class CborUtils {
             return baos.toByteArray();
         } catch (CborException e) {
             Log.e(TAG, "Malformed CBOR", e);
-            return null;
+            throw new RkpdException(RkpdException.Status.INTERNAL_ERROR, "Malformed CBOR", e);
         }
     }
 
@@ -335,5 +323,78 @@ public class CborUtils {
         unverifiedDeviceInfo.put(new UnicodeString("fingerprint"),
                                     new UnicodeString(Build.FINGERPRINT));
         return unverifiedDeviceInfo;
+    }
+
+    /**
+     * Extracts provisioned key for storage from Maced key pair received from underlying binder
+     * service.
+     */
+    public static RkpKey extractRkpKeyFromMacedKey(byte[] privKey, String serviceName,
+            MacedPublicKey macedPublicKey) throws CborException, RkpdException {
+        Array cborMessage = (Array) decodeCbor(macedPublicKey.macedKey, "MacedPublicKeys",
+                MajorType.ARRAY);
+        List<DataItem> messageArray = cborMessage.getDataItems();
+        byte[] macedMessage = getBytesFromBstr(messageArray.get(2));
+        Map keyMap = (Map) decodeCbor(macedMessage, "byte stream", MajorType.MAP);
+        byte[] xCor = ((ByteString) keyMap.get(new NegativeInteger(KEY_PARAMETER_X))).getBytes();
+        if (xCor.length != 32) {
+            throw new IllegalStateException("COSE_Key x-coordinate is not correct.");
+        }
+        byte[] yCor = ((ByteString) keyMap.get(new NegativeInteger(KEY_PARAMETER_Y))).getBytes();
+        if (yCor.length != 32) {
+            throw new IllegalStateException("COSE_Key y-coordinate is not correct.");
+        }
+        byte[] rawKey = concatenateByteArrays(xCor, yCor);
+        return new RkpKey(privKey, macedPublicKey.macedKey, keyMap, serviceName, rawKey);
+    }
+
+    /**
+     * Decodes and returns the CBOR encoded DataItem in encodedBytes. Also verifies that the
+     * majorType actually matches what is being assumed.
+     */
+    public static DataItem decodeCbor(byte[] encodedBytes, String debugName,
+            MajorType majorType) throws CborException, RkpdException {
+        ByteArrayInputStream bais = new ByteArrayInputStream(encodedBytes);
+        List<DataItem> dataItems = new CborDecoder(bais).decode();
+        if (dataItems.size() != RESPONSE_ARRAY_SIZE
+                || !checkType(dataItems.get(RESPONSE_CERT_ARRAY_INDEX), majorType, debugName)) {
+            throw new RkpdException(RkpdException.Status.INTERNAL_ERROR, debugName
+                    + " not in proper Cbor format. Expected size 1. Actual: " + dataItems.size());
+        }
+        return dataItems.get(0);
+    }
+
+    private static byte[] concatenateByteArrays(byte[] a, byte[] b) {
+        byte[] result = new byte[a.length + b.length];
+        System.arraycopy(a, 0, result, 0, a.length);
+        System.arraycopy(b, 0, result, a.length, b.length);
+        return result;
+    }
+
+    private static byte[] getBytesFromBstr(DataItem item) throws CborException {
+        if (item.getMajorType() == MajorType.BYTE_STRING) {
+            return ((ByteString) item).getBytes();
+        }
+        throw new CborException("Error while decoding CBOR. Expected bstr value.");
+    }
+
+    /**
+     * Make protected headers for certificate request.
+     */
+    public static Map makeProtectedHeaders() throws CborException {
+        Map protectedHeaders = new Map();
+        protectedHeaders.put(new UnsignedInteger(COSE_HEADER_ALGORITHM),
+                new UnsignedInteger(COSE_ALGORITHM_HMAC_256));
+        return protectedHeaders;
+    }
+
+    /**
+     * Encodes CBOR to byte array.
+     */
+    public static byte[] encodeCbor(final DataItem dataItem) throws CborException {
+        final ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        CborEncoder encoder = new CborEncoder(baos);
+        encoder.encode(dataItem);
+        return baos.toByteArray();
     }
 }
