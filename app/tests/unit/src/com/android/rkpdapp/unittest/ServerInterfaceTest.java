@@ -27,7 +27,6 @@ import android.content.pm.PackageManager;
 import android.net.ConnectivityManager;
 import android.net.EthernetManager;
 import android.net.NetworkInfo;
-import android.security.NetworkSecurityPolicy;
 import android.util.Base64;
 import android.util.Log;
 
@@ -104,7 +103,6 @@ public class ServerInterfaceTest {
             Base64.DEFAULT);
 
     private static Context sContext;
-    private boolean mCleartextPolicy;
 
     @BeforeClass
     public static void init() {
@@ -114,15 +112,11 @@ public class ServerInterfaceTest {
     @Before
     public void setUp() {
         Settings.clearPreferences(sContext);
-        mCleartextPolicy =
-                NetworkSecurityPolicy.getInstance().isCleartextTrafficPermitted();
-        NetworkSecurityPolicy.getInstance().setCleartextTrafficPermitted(true);
     }
 
     @After
     public void tearDown() {
         Settings.clearPreferences(sContext);
-        NetworkSecurityPolicy.getInstance().setCleartextTrafficPermitted(mCleartextPolicy);
     }
 
     @Test

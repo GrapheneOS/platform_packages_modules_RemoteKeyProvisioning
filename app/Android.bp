@@ -51,12 +51,10 @@ aidl_interface {
     },
 }
 
-android_app {
-    name: "rkpdapp",
+java_defaults {
+    name: "RkpdAppDefaults",
     sdk_version: "module_current",
     min_sdk_version: "Tiramisu",
-    updatable: false,
-    privileged: true,
     libs: [
         "framework-annotations-lib",
         "framework-connectivity",
@@ -73,7 +71,6 @@ android_app {
         "cbor-java",
         "com.android.rkpdapp-aidl-java",
     ],
-    resource_dirs: ["res"],
     srcs: [
         ":statslog-rkpd-java-gen",
         "src/**/*.java",
@@ -81,7 +78,28 @@ android_app {
     plugins: [
         "androidx.room_room-compiler-plugin",
     ],
+}
+
+android_app {
+    name: "rkpdapp",
+    defaults: ["RkpdAppDefaults"],
+    resource_dirs: ["res"],
+    privileged: true,
+    updatable: false,
     apex_available: [
         "com.android.rkpd",
     ],
+}
+
+// Rebuild all the app code into a library so we can link it into our unit tests.
+// If we tried to target the com.android.rkpdapp package, the tests would fail on
+// systems that have the google-signed version of the app installed because:
+// 1. The tests would also have to be signed with the same key
+// 2. The tests would have to target the signed package name (which is different)
+//
+// By rebuilding all the app source code into a library, permissions (especially note
+// sepolicy) are not automatically granted to the unit tests.
+android_library {
+    name: "RkpdAppTestLibrary",
+    defaults: ["RkpdAppDefaults"],
 }

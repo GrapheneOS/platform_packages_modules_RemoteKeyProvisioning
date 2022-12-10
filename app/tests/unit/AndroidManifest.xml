@@ -17,14 +17,16 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.android.rkpdapp.unittest">
 
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
 
-    <application>
+    <!-- The tests use a local HTTP server, let the framework know this is ok. -->
+    <application android:usesCleartextTraffic="true">
         <uses-library android:name="android.test.runner" />
     </application>
 
     <instrumentation
             android:name="androidx.test.runner.AndroidJUnitRunner"
-            android:targetPackage="com.android.rkpdapp"
+            android:targetPackage="com.android.rkpdapp.unittest"
             android:label="rkpd app unit tests" />
 </manifest>
