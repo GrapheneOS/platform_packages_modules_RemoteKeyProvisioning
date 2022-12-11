@@ -60,6 +60,7 @@ android_app {
     libs: [
         "framework-annotations-lib",
         "framework-connectivity",
+        "framework-connectivity-t",
         "framework-statsd",
     ],
     optimize: {
