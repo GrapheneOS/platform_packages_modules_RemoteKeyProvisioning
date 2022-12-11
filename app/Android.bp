@@ -54,7 +54,7 @@ aidl_interface {
 java_defaults {
     name: "RkpdAppDefaults",
     sdk_version: "module_current",
-    min_sdk_version: "Tiramisu",
+    min_sdk_version: "UpsideDownCake",
     libs: [
         "framework-annotations-lib",
         "framework-connectivity",
