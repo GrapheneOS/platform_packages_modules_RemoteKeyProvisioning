@@ -42,7 +42,7 @@ android_test {
         "bouncycastle-unbundled",
     ],
     sdk_version: "module_current",
-    min_sdk_version: "Tiramisu",
+    min_sdk_version: "UpsideDownCake",
     test_suites: [
         "device-tests",
         "mts-rkpd",
