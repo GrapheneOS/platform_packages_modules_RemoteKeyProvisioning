@@ -20,6 +20,7 @@ import static com.android.rkpdapp.unittest.Utils.generateEcdsaKeyPair;
 
 import static com.google.common.truth.Truth.assertThat;
 
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -37,7 +38,6 @@ import android.hardware.security.keymint.MacedPublicKey;
 import android.hardware.security.keymint.ProtectedData;
 import android.hardware.security.keymint.RpcHardwareInfo;
 import android.os.RemoteException;
-import android.os.ServiceManager;
 import android.os.ServiceSpecificException;
 import android.util.Base64;
 
@@ -54,8 +54,6 @@ import com.android.rkpdapp.interfaces.SystemInterface;
 import com.android.rkpdapp.utils.CborUtils;
 
 import org.junit.Assert;
-import org.junit.Assume;
-import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -75,7 +73,7 @@ import co.nstant.in.cbor.CborException;
 
 @RunWith(AndroidJUnit4.class)
 public class SystemInterfaceTest {
-    private static final String SERVICE = IRemotelyProvisionedComponent.DESCRIPTOR + "/default";
+    private static final String SERVICE = "totally fake service name";
     private static final int INTERFACE_VERSION_V3 = 3;
     private static final int INTERFACE_VERSION_V2 = 2;
     private static final byte[] FAKE_PROTECTED_DATA = new byte[] { (byte) 0x84, 0x43, (byte) 0xA1,
@@ -83,26 +81,10 @@ public class SystemInterfaceTest {
             (byte) 0x88, (byte) 0x99, 0x00, (byte) 0xAA, (byte) 0xBB, 0x46, 0x12, 0x34,
             0x12, 0x34, 0x12, 0x34, (byte) 0x80 };
 
-    @Before
-    public void preCheck() {
-        Assume.assumeTrue(ServiceManager.isDeclared(SERVICE));
-    }
-
     @Test
-    public void testGetDeclaredInstances() {
-        String[] instances = ServiceManagerInterface.getDeclaredInstances();
-        assertThat(instances).asList().isNotEmpty();
-        assertThat(instances).asList().contains(SERVICE);
-    }
-
-    @Test
-    public void testSearchFailForOtherServices() {
-        try {
-            new ServiceManagerInterface("default");
-            fail("Getting the declared service 'default' should fail due to SEPolicy.");
-        } catch (RuntimeException e) {
-            assertThat(e).isInstanceOf(SecurityException.class);
-        }
+    public void testSearchFailForInvalidService() {
+        assertThrows(RuntimeException.class,
+                () -> new ServiceManagerInterface("not a real service"));
     }
 
     @Test

@@ -19,8 +19,14 @@ android_test {
     name: "RkpdAppUnitTests",
     srcs: ["src/**/*.java"],
     exclude_srcs: ["src/**/KeyRegisteredTest.java"],
+    libs: [
+        "framework-connectivity",
+        "framework-connectivity-t",
+        "framework-statsd",
+    ],
     static_libs: [
         "Nene",
+        "RkpdAppTestLibrary",
         "androidx.test.ext.junit",
         "androidx.test.core",
         "androidx.test.rules",
@@ -35,13 +41,13 @@ android_test {
         "rkpdapp-tink-prebuilt",
         "bouncycastle-unbundled",
     ],
-    platform_apis: true,
-    test_config: "RkpdAppUnitTests.xml",
+    sdk_version: "module_current",
+    min_sdk_version: "UpsideDownCake",
     test_suites: [
         "device-tests",
         "mts-rkpd",
     ],
-    instrumentation_for: "rkpdapp",
+    test_config: "RkpdAppUnitTests.xml",
 }
 
 // Specifically tests to see if the key is registered for the given device under test.
