@@ -103,6 +103,7 @@ public class ServerInterfaceTest {
             Base64.DEFAULT);
 
     private static Context sContext;
+    private ServerInterface mServerInterface;
 
     @BeforeClass
     public static void init() {
@@ -112,6 +113,7 @@ public class ServerInterfaceTest {
     @Before
     public void setUp() {
         Settings.clearPreferences(sContext);
+        mServerInterface = new ServerInterface(sContext);
     }
 
     @After
@@ -125,7 +127,7 @@ public class ServerInterfaceTest {
                 HttpResponse.HTTP_OK_VALID_CBOR);
         Settings.setDeviceConfig(sContext, 1 /* extraKeys */,
                 TIME_TO_REFRESH_HOURS /* expiringBy */, url);
-        GeekResponse response = ServerInterface.fetchGeek(sContext,
+        GeekResponse response = mServerInterface.fetchGeek(
                 ProvisionerMetrics.createScheduledAttemptMetrics(sContext));
 
         assertThat(response.numExtraAttestationKeys).isEqualTo(0);
@@ -139,7 +141,7 @@ public class ServerInterfaceTest {
                 HttpResponse.HTTP_OK_VALID_CBOR);
         Settings.setDeviceConfig(sContext, 1 /* extraKeys */,
                 TIME_TO_REFRESH_HOURS /* expiringBy */, url);
-        GeekResponse response = ServerInterface.fetchGeek(sContext,
+        GeekResponse response = mServerInterface.fetchGeek(
                 ProvisionerMetrics.createScheduledAttemptMetrics(sContext));
 
         assertThat(response.numExtraAttestationKeys).isEqualTo(20);
@@ -175,7 +177,7 @@ public class ServerInterfaceTest {
                 HttpResponse.HTTP_OK_VALID_CBOR);
         Settings.setDeviceConfig(sContext, 2 /* extraKeys */,
                 TIME_TO_REFRESH_HOURS /* expiringBy */, url);
-        ServerInterface.fetchGeekAndUpdate(sContext,
+        mServerInterface.fetchGeekAndUpdate(
                 ProvisionerMetrics.createScheduledAttemptMetrics(sContext));
 
         assertThat(Settings.getExtraSignedKeysAvailable(sContext)).isEqualTo(20);
@@ -190,7 +192,7 @@ public class ServerInterfaceTest {
                 TIME_TO_REFRESH_HOURS /* expiringBy */, url);
         ProvisionerMetrics metrics = ProvisionerMetrics.createScheduledAttemptMetrics(sContext);
         try {
-            ServerInterface.requestSignedCertificates(sContext, new byte[0], new byte[0], metrics);
+            mServerInterface.requestSignedCertificates(new byte[0], new byte[0], metrics);
             fail("Should fail due to unregistered device.");
         } catch (RkpdException e) {
             assertThat(e.getErrorCode()).isEqualTo(RkpdException.Status.DEVICE_NOT_REGISTERED);
@@ -205,7 +207,7 @@ public class ServerInterfaceTest {
                 TIME_TO_REFRESH_HOURS /* expiringBy */, url);
         ProvisionerMetrics metrics = ProvisionerMetrics.createScheduledAttemptMetrics(sContext);
         try {
-            ServerInterface.requestSignedCertificates(sContext, new byte[0], new byte[0], metrics);
+            mServerInterface.requestSignedCertificates(new byte[0], new byte[0], metrics);
             fail("Should fail due to client error.");
         } catch (RkpdException e) {
             assertThat(e.getErrorCode()).isEqualTo(RkpdException.Status.HTTP_CLIENT_ERROR);
@@ -220,7 +222,7 @@ public class ServerInterfaceTest {
                 TIME_TO_REFRESH_HOURS /* expiringBy */, url);
         ProvisionerMetrics metrics = ProvisionerMetrics.createScheduledAttemptMetrics(sContext);
         try {
-            ServerInterface.requestSignedCertificates(sContext, new byte[0], new byte[0], metrics);
+            mServerInterface.requestSignedCertificates(new byte[0], new byte[0], metrics);
             fail("Should fail due to invalid cbor.");
         } catch (RkpdException e) {
             assertThat(e.getErrorCode()).isEqualTo(RkpdException.Status.INTERNAL_ERROR);
@@ -235,7 +237,7 @@ public class ServerInterfaceTest {
         Settings.setDeviceConfig(sContext, 2 /* extraKeys */,
                 TIME_TO_REFRESH_HOURS /* expiringBy */, url);
         ProvisionerMetrics metrics = ProvisionerMetrics.createScheduledAttemptMetrics(sContext);
-        List<byte[]> certChains = ServerInterface.requestSignedCertificates(sContext, new byte[0],
+        List<byte[]> certChains = mServerInterface.requestSignedCertificates(new byte[0],
                 new byte[0], metrics);
         assertThat(certChains).isEmpty();
         assertThat(certChains).isNotNull();
@@ -248,7 +250,7 @@ public class ServerInterfaceTest {
         Settings.consumeErrDataBudget(sContext, Settings.FAILURE_DATA_USAGE_MAX);
         ProvisionerMetrics metrics = ProvisionerMetrics.createScheduledAttemptMetrics(sContext);
         try {
-            ServerInterface.fetchGeek(sContext, metrics);
+            mServerInterface.fetchGeek(metrics);
             fail("Network transaction should not have proceeded.");
         } catch (RkpdException e) {
             assertThat(e).hasMessageThat().contains("Out of data budget due to repeated errors");
@@ -266,7 +268,7 @@ public class ServerInterfaceTest {
         Settings.consumeErrDataBudget(sContext, Settings.FAILURE_DATA_USAGE_MAX);
         ProvisionerMetrics metrics = ProvisionerMetrics.createScheduledAttemptMetrics(sContext);
         try {
-            ServerInterface.fetchGeek(sContext, metrics);
+            mServerInterface.fetchGeek(metrics);
             fail("Network transaction should not have proceeded.");
         } catch (RkpdException e) {
             assertThat(e).hasMessageThat().contains("Out of data budget due to repeated errors");
@@ -431,20 +433,22 @@ public class ServerInterfaceTest {
 
     private void setEthernetEnabled(boolean enable) throws Exception {
         // Whether the device running these tests supports ethernet.
-        EthernetManager mEthernetManager = sContext.getSystemService(EthernetManager.class);
-        boolean mHasEthernet = sContext.getPackageManager()
+        EthernetManager ethernetManager = sContext.getSystemService(EthernetManager.class);
+        assertThat(ethernetManager).isNotNull();
+        boolean hasEthernet = sContext.getPackageManager()
                 .hasSystemFeature(PackageManager.FEATURE_ETHERNET);
-        if (mHasEthernet) {
+        if (hasEthernet) {
             try (PermissionContext c = TestApis.permissions().withPermission(
                     Manifest.permission.NETWORK_SETTINGS)) {
                 // Enable/Disable the ethernet as it can not be controlled by airplane mode.
-                mEthernetManager.setEthernetEnabled(enable);
+                ethernetManager.setEthernetEnabled(enable);
             }
         }
     }
 
     private void setAirplaneMode(boolean enable) throws Exception {
         ConnectivityManager cm = sContext.getSystemService(ConnectivityManager.class);
+        assertThat(cm).isNotNull();
         try (PermissionContext ignored = TestApis.permissions().withPermission(
                 Manifest.permission.NETWORK_SETTINGS)) {
             cm.setAirplaneMode(enable);
