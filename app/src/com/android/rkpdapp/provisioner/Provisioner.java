@@ -78,10 +78,15 @@ public class Provisioner {
             return;
         }
 
-        List<RkpKey> keysGenerated = generateKeys(metrics, keysRequired, systemInterface,
-                serviceName);
+        List<RkpKey> keysGenerated = generateKeys(metrics, keysRequired, systemInterface);
+        if (Thread.interrupted()) {
+            throw new InterruptedException();
+        }
         List<byte[]> certChains = fetchCertificates(metrics, keysGenerated, systemInterface,
                 geekResponse);
+        if (Thread.interrupted()) {
+            throw new InterruptedException();
+        }
         List<ProvisionedKey> keys = associateCertsWithKeys(certChains, keysGenerated);
 
         mKeyDao.insertKeys(keys);
@@ -89,14 +94,14 @@ public class Provisioner {
     }
 
     private List<RkpKey> generateKeys(ProvisionerMetrics metrics, int numKeysRequired,
-            SystemInterface systemInterface, String serviceName)
+            SystemInterface systemInterface)
             throws CborException, RkpdException, InterruptedException {
         List<RkpKey> keyArray = new ArrayList<>(numKeysRequired);
+        if (Thread.interrupted()) {
+            throw new InterruptedException();
+        }
         for (long i = 0; i < numKeysRequired; i++) {
             keyArray.add(systemInterface.generateKey(metrics));
-            if (mKeyDao.getTotalKeysForIrpc(serviceName) != 0) {
-                Thread.sleep(KEY_GENERATION_PAUSE.toMillis());
-            }
         }
         return keyArray;
     }
