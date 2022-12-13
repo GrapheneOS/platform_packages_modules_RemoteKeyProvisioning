@@ -51,13 +51,17 @@ public class ServerInterface {
     private static final String TAG = "RkpdServerInterface";
     private static final String GEEK_URL = ":fetchEekChain";
     private static final String CERTIFICATE_SIGNING_URL = ":signCertificates?challenge=";
+    private final Context mContext;
+
+    public ServerInterface(Context context) {
+        this.mContext = context;
+    }
 
     /**
      * Ferries the CBOR blobs returned by KeyMint to the provisioning server. The data sent to the
      * provisioning server contains the MAC'ed CSRs and encrypted bundle containing the MAC key and
      * the hardware unique public key.
      *
-     * @param context The application context which is required to use SettingsManager.
      * @param csr The CBOR encoded data containing the relevant pieces needed for the server to
      *                    sign the CSRs. The data encoded within comes from Keystore / KeyMint.
      * @param challenge The challenge that was sent from the server. It is included here even though
@@ -66,11 +70,11 @@ public class ServerInterface {
      * @return A List of byte arrays, where each array contains an entire DER-encoded certificate
      *                    chain for one attestation key pair.
      */
-    public static List<byte[]> requestSignedCertificates(Context context, byte[] csr,
-            byte[] challenge, ProvisionerMetrics metrics) throws RkpdException {
+    public List<byte[]> requestSignedCertificates(byte[] csr, byte[] challenge,
+            ProvisionerMetrics metrics) throws RkpdException {
         String connectionEndpoint = CERTIFICATE_SIGNING_URL
                 + Base64.encodeToString(challenge, Base64.URL_SAFE);
-        byte[] cborBytes = connectAndGetData(context, metrics, connectionEndpoint, csr,
+        byte[] cborBytes = connectAndGetData(metrics, connectionEndpoint, csr,
                 ProvisionerMetrics.Status.SIGN_CERTS_HTTP_ERROR,
                 ProvisionerMetrics.Status.SIGN_CERTS_TIMED_OUT,
                 ProvisionerMetrics.Status.SIGN_CERTS_IO_EXCEPTION);
@@ -96,10 +100,9 @@ public class ServerInterface {
      * @param context The application context which is required to use SettingsManager.
      * @return A GeekResponse object which optionally contains configuration data.
      */
-    public static GeekResponse fetchGeek(Context context,
-            ProvisionerMetrics metrics) throws RkpdException {
-        byte[] input = CborUtils.buildProvisioningInfo(context);
-        byte[] cborBytes = connectAndGetData(context, metrics, GEEK_URL, input,
+    public GeekResponse fetchGeek(ProvisionerMetrics metrics) throws RkpdException {
+        byte[] input = CborUtils.buildProvisioningInfo(mContext);
+        byte[] cborBytes = connectAndGetData(metrics, GEEK_URL, input,
                 ProvisionerMetrics.Status.FETCH_GEEK_HTTP_ERROR,
                 ProvisionerMetrics.Status.FETCH_GEEK_TIMED_OUT,
                 ProvisionerMetrics.Status.FETCH_GEEK_IO_EXCEPTION);
@@ -113,20 +116,19 @@ public class ServerInterface {
         return resp;
     }
 
-    private static void checkDataBudget(Context context, ProvisionerMetrics metrics)
+    private void checkDataBudget(ProvisionerMetrics metrics)
             throws RkpdException {
-        if (!Settings.hasErrDataBudget(context, null /* curTime */)) {
+        if (!Settings.hasErrDataBudget(mContext, null /* curTime */)) {
             metrics.setStatus(ProvisionerMetrics.Status.OUT_OF_ERROR_BUDGET);
-            int bytesConsumed = Settings.getErrDataBudgetConsumed(context);
-            throw makeNetworkError(context,
-                    "Out of data budget due to repeated errors. Consumed "
+            int bytesConsumed = Settings.getErrDataBudgetConsumed(mContext);
+            throw makeNetworkError("Out of data budget due to repeated errors. Consumed "
                     + bytesConsumed + " bytes.", metrics);
         }
     }
 
-    private static RkpdException makeNetworkError(Context context, String message,
+    private RkpdException makeNetworkError(String message,
             ProvisionerMetrics metrics) {
-        ConnectivityManager cm = context.getSystemService(ConnectivityManager.class);
+        ConnectivityManager cm = mContext.getSystemService(ConnectivityManager.class);
         NetworkInfo networkInfo = cm.getActiveNetworkInfo();
         if (networkInfo != null && networkInfo.isConnected()) {
             return new RkpdException(
@@ -142,11 +144,11 @@ public class ServerInterface {
      * values. This will also delete all keys in the attestation key pool if the server has
      * indicated that RKP should be turned off.
      */
-    public static GeekResponse fetchGeekAndUpdate(Context context, ProvisionerMetrics metrics)
+    public GeekResponse fetchGeekAndUpdate(ProvisionerMetrics metrics)
             throws RkpdException {
-        GeekResponse resp = ServerInterface.fetchGeek(context, metrics);
+        GeekResponse resp = fetchGeek(metrics);
 
-        Settings.setDeviceConfig(context,
+        Settings.setDeviceConfig(mContext,
                 resp.numExtraAttestationKeys,
                 resp.timeToRefresh,
                 resp.provisioningUrl);
@@ -213,15 +215,15 @@ public class ServerInterface {
         }
     }
 
-    private static byte[] connectAndGetData(Context context, ProvisionerMetrics metrics,
-            String connectionEndpoint, byte[] input, ProvisionerMetrics.Status failureStatus,
+    private byte[] connectAndGetData(ProvisionerMetrics metrics, String connectionEndpoint,
+            byte[] input, ProvisionerMetrics.Status failureStatus,
             ProvisionerMetrics.Status serverTimeOutStatus,
             ProvisionerMetrics.Status serverIoExceptionStatus) throws RkpdException {
         TrafficStats.setThreadStatsTag(0);
-        checkDataBudget(context, metrics);
+        checkDataBudget(metrics);
         int bytesTransacted = 0;
         try {
-            URL url = new URL(Settings.getUrl(context) + connectionEndpoint);
+            URL url = new URL(Settings.getUrl(mContext) + connectionEndpoint);
             ByteArrayOutputStream cborBytes = new ByteArrayOutputStream();
             try (ProvisionerMetrics.StopWatch serverWaitTimer = metrics.startServerWait()) {
                 HttpURLConnection con = (HttpURLConnection) url.openConnection();
@@ -240,11 +242,11 @@ public class ServerInterface {
                 metrics.setHttpStatusError(con.getResponseCode());
                 if (con.getResponseCode() != HttpURLConnection.HTTP_OK) {
                     serverWaitTimer.stop();
-                    int failures = Settings.incrementFailureCounter(context);
+                    int failures = Settings.incrementFailureCounter(mContext);
                     Log.e(TAG, "Server connection failed to " + url + ", response code: "
                             + con.getResponseCode() + "\nRepeated failure count: " + failures);
                     Log.e(TAG, readErrorFromConnection(con));
-                    Settings.consumeErrDataBudget(context, bytesTransacted);
+                    Settings.consumeErrDataBudget(mContext, bytesTransacted);
                     RkpdException ex =
                             RkpdException.createFromHttpError(con.getResponseCode());
                     if (ex.getErrorCode() == RkpdException.Status.DEVICE_NOT_REGISTERED) {
@@ -256,7 +258,7 @@ public class ServerInterface {
                     throw ex;
                 }
                 serverWaitTimer.stop();
-                Settings.clearFailureCounter(context);
+                Settings.clearFailureCounter(mContext);
                 BufferedInputStream inputStream = new BufferedInputStream(con.getInputStream());
                 byte[] buffer = new byte[1024];
                 int read;
@@ -276,8 +278,8 @@ public class ServerInterface {
             Log.e(TAG, "Failed to complete request from the server", e);
             metrics.setStatus(serverIoExceptionStatus);
         }
-        Settings.incrementFailureCounter(context);
-        Settings.consumeErrDataBudget(context, bytesTransacted);
-        throw makeNetworkError(context, "Error connecting to network.", metrics);
+        Settings.incrementFailureCounter(mContext);
+        Settings.consumeErrDataBudget(mContext, bytesTransacted);
+        throw makeNetworkError("Error connecting to network.", metrics);
     }
 }
