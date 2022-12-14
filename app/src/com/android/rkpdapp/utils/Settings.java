@@ -52,7 +52,7 @@ public class Settings {
     private static final String KEY_FAILURE_BYTES = "failure_data";
     private static final String KEY_URL = "url";
     private static final String PREFERENCES_NAME = "com.android.rkpdapp.utils.preferences";
-    private static final String TAG = "RemoteProvisionerSettings";
+    private static final String TAG = "RkpdSettings";
 
     /**
      * Determines whether or not there is enough data budget remaining to attempt provisioning.

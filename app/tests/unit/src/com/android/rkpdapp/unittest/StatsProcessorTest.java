@@ -16,327 +16,247 @@
 
 package com.android.rkpdapp.unittest;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static com.google.common.truth.Truth.assertThat;
 
-import android.platform.test.annotations.Presubmit;
-import android.security.remoteprovisioning.AttestationPoolStatus;
+import static org.junit.Assert.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 
-import com.android.remoteprovisioner.StatsProcessor;
+import com.android.rkpdapp.database.ProvisionedKey;
+import com.android.rkpdapp.database.ProvisionedKeyDao;
+import com.android.rkpdapp.utils.StatsProcessor;
 
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+
 @RunWith(AndroidJUnit4.class)
 public class StatsProcessorTest {
+    private static final String SERVICE_NAME = "not a service name";
 
-    private AttestationPoolStatus mPool = new AttestationPoolStatus();
-    private int mNumExtraKeys;
+    private ProvisionedKeyDao mKeyDao;
 
     @Before
     public void setUp() {
-        mNumExtraKeys = 0;
-        mPool.expiring = 0;
-        mPool.unassigned = 0;
-        mPool.attested = 0;
-        mPool.total = 0;
+        mKeyDao = mock(ProvisionedKeyDao.class);
     }
 
-    @Presubmit
     @Test
-    public void testMinUnassignedBoundary() throws Exception {
-        mNumExtraKeys = 5;
-        mPool.total = 10;
-        mPool.attested = 10;
-        mPool.unassigned = StatsProcessor.calcMinUnassignedToTriggerProvisioning(mNumExtraKeys);
-        assertEquals(2, mPool.unassigned);
+    public void testMinUnassignedBoundary() {
+        int total = 10;
+        int expiring = 0;
+        int extra = 5;
+        int unassigned = StatsProcessor.calcMinUnassignedToTriggerProvisioning(extra);
+        assertThat(unassigned).isEqualTo(2);
         // Add an unassigned key to avoid the threshold for triggering reprovisioning.
-        mPool.unassigned += 1;
-        mPool.expiring = 0;
-        StatsProcessor.PoolStats stats = StatsProcessor.processPool(mPool, mNumExtraKeys);
-        assertFalse(stats.provisioningNeeded);
-        assertEquals(0, stats.unattestedKeys);
+        unassigned += 1;
+        StatsProcessor.PoolStats stats = prepareStats(total, unassigned, expiring, extra);
         assertEquals(7, stats.keysInUse);
         assertEquals(12, stats.idealTotalSignedKeys);
         assertEquals(0, stats.keysToGenerate);
         // Now test provisioning needed boundary
-        mPool.unassigned = StatsProcessor.calcMinUnassignedToTriggerProvisioning(mNumExtraKeys);
-        assertEquals(2, mPool.unassigned);
-        mPool.expiring = 0;
-        stats = StatsProcessor.processPool(mPool, mNumExtraKeys);
-        assertTrue(stats.provisioningNeeded);
-        assertEquals(0, stats.unattestedKeys);
+        unassigned = StatsProcessor.calcMinUnassignedToTriggerProvisioning(extra);
+
+        assertEquals(2, unassigned);
+        when(mKeyDao.getTotalUnassignedKeysForIrpc(anyString())).thenReturn(unassigned);
+        stats = prepareStats(total, unassigned, expiring, extra);
         assertEquals(8, stats.keysInUse);
         assertEquals(13, stats.idealTotalSignedKeys);
         assertEquals(13, stats.keysToGenerate);
     }
 
-    @Presubmit
     @Test
-    public void testStatsNoProvisioning() throws Exception {
-        mNumExtraKeys = 4;
-        mPool.total = 10;
-        mPool.attested = 10;
-        mPool.unassigned = StatsProcessor.calcMinUnassignedToTriggerProvisioning(mNumExtraKeys);
-        assertEquals(2, mPool.unassigned);
+    public void testStatsNoProvisioning() {
+        int total = 10;
+        int expiring = 0;
+        int extra = 4;
+        int unassigned = StatsProcessor.calcMinUnassignedToTriggerProvisioning(extra);
+        assertEquals(2, unassigned);
         // Add an unassigned key to avoid the threshold for triggering reprovisioning.
-        mPool.unassigned += 1;
-        mPool.expiring = 0;
-        StatsProcessor.PoolStats stats = StatsProcessor.processPool(mPool, mNumExtraKeys);
-        assertFalse(stats.provisioningNeeded);
-        assertEquals(0, stats.unattestedKeys);
+        unassigned += 1;
+        StatsProcessor.PoolStats stats = prepareStats(total, unassigned, expiring, extra);
         assertEquals(7, stats.keysInUse);
         assertEquals(11, stats.idealTotalSignedKeys);
         assertEquals(0, stats.keysToGenerate);
     }
 
-    @Presubmit
     @Test
-    public void testStatsProvisioning1() throws Exception {
-        mNumExtraKeys = 4;
-        mPool.total = 10;
-        mPool.attested = 10;
-        mPool.unassigned = StatsProcessor.calcMinUnassignedToTriggerProvisioning(mNumExtraKeys);
-        assertEquals(2, mPool.unassigned);
-        mPool.expiring = 0;
-        StatsProcessor.PoolStats stats = StatsProcessor.processPool(mPool, mNumExtraKeys);
-        assertTrue(stats.provisioningNeeded);
-        assertEquals(0, stats.unattestedKeys);
+    public void testStatsProvisioning1() {
+        int total = 10;
+        int expiring = 0;
+        int extra = 4;
+        int unassigned = StatsProcessor.calcMinUnassignedToTriggerProvisioning(extra);
+        assertEquals(2, unassigned);
+        StatsProcessor.PoolStats stats = prepareStats(total, unassigned, expiring, extra);
         assertEquals(8, stats.keysInUse);
         assertEquals(12, stats.idealTotalSignedKeys);
         assertEquals(12, stats.keysToGenerate);
     }
 
-    @Presubmit
     @Test
-    public void testStatsProvisioning2() throws Exception {
-        mNumExtraKeys = 4;
-        mPool.total = 10;
-        mPool.attested = 10;
-        mPool.unassigned = StatsProcessor.calcMinUnassignedToTriggerProvisioning(mNumExtraKeys);
-        assertEquals(2, mPool.unassigned);
-        mPool.unassigned -= 1;
-        mPool.expiring = 0;
-        StatsProcessor.PoolStats stats = StatsProcessor.processPool(mPool, mNumExtraKeys);
-        assertTrue(stats.provisioningNeeded);
-        assertEquals(0, stats.unattestedKeys);
+    public void testStatsProvisioning2() {
+        int total = 10;
+        int expiring = 0;
+        int extra = 4;
+        int unassigned = StatsProcessor.calcMinUnassignedToTriggerProvisioning(extra);
+        assertEquals(2, unassigned);
+        unassigned -= 1;
+        StatsProcessor.PoolStats stats = prepareStats(total, unassigned, expiring, extra);
         assertEquals(9, stats.keysInUse);
         assertEquals(13, stats.idealTotalSignedKeys);
         assertEquals(13, stats.keysToGenerate);
     }
 
-    @Presubmit
     @Test
-    public void testStatsProvisioningSomePreGenerated() throws Exception {
-        mNumExtraKeys = 4;
-        mPool.total = 15;
-        mPool.attested = 10;
-        mPool.unassigned = StatsProcessor.calcMinUnassignedToTriggerProvisioning(mNumExtraKeys);
-        assertEquals(2, mPool.unassigned);
-        mPool.expiring = 0;
-        StatsProcessor.PoolStats stats = StatsProcessor.processPool(mPool, mNumExtraKeys);
-        assertTrue(stats.provisioningNeeded);
-        assertEquals(5, stats.unattestedKeys);
-        assertEquals(8, stats.keysInUse);
-        assertEquals(12, stats.idealTotalSignedKeys);
-        assertEquals(7, stats.keysToGenerate);
+    public void testStatsProvisioning3() {
+        int total = 15;
+        int expiring = 0;
+        int extra = 4;
+        int unassigned = StatsProcessor.calcMinUnassignedToTriggerProvisioning(extra);
+        assertEquals(2, unassigned);
+        StatsProcessor.PoolStats stats = prepareStats(total, unassigned, expiring, extra);
+        assertEquals(13, stats.keysInUse);
+        assertEquals(17, stats.idealTotalSignedKeys);
+        assertEquals(17, stats.keysToGenerate);
     }
 
-    @Presubmit
     @Test
-    public void testStatsProvisioningAllPreGenerated() throws Exception {
-        mNumExtraKeys = 4;
-        mPool.total = 22;
-        mPool.attested = 10;
-        mPool.unassigned = StatsProcessor.calcMinUnassignedToTriggerProvisioning(mNumExtraKeys);
-        assertEquals(2, mPool.unassigned);
-        mPool.expiring = 0;
-        StatsProcessor.PoolStats stats = StatsProcessor.processPool(mPool, mNumExtraKeys);
-        assertTrue(stats.provisioningNeeded);
-        assertEquals(12, stats.unattestedKeys);
-        assertEquals(8, stats.keysInUse);
-        assertEquals(12, stats.idealTotalSignedKeys);
-        assertEquals(0, stats.keysToGenerate);
-    }
-
-    @Presubmit
-    @Test
-    public void testStatsProvisioningTonsPreGenerated() throws Exception {
-        mNumExtraKeys = 4;
-        mPool.total = 33;
-        mPool.attested = 10;
-        mPool.unassigned = StatsProcessor.calcMinUnassignedToTriggerProvisioning(mNumExtraKeys);
-        assertEquals(2, mPool.unassigned);
-        mPool.expiring = 0;
-        StatsProcessor.PoolStats stats = StatsProcessor.processPool(mPool, mNumExtraKeys);
-        assertTrue(stats.provisioningNeeded);
-        assertEquals(23, stats.unattestedKeys);
-        assertEquals(8, stats.keysInUse);
-        assertEquals(12, stats.idealTotalSignedKeys);
-        assertEquals(0, stats.keysToGenerate);
-    }
-
-    @Presubmit
-    @Test
-    public void testExpiringProvisioningNeeded1() throws Exception {
-        mNumExtraKeys = 4;
-        mPool.total = 10;
-        mPool.attested = 10;
-        mPool.unassigned = 5;
-        mPool.expiring = 6;
-        StatsProcessor.PoolStats stats = StatsProcessor.processPool(mPool, mNumExtraKeys);
-        assertTrue(stats.provisioningNeeded);
-        assertEquals(0, stats.unattestedKeys);
+    public void testExpiringProvisioningNeeded1() {
+        int total = 10;
+        int unassigned = 5;
+        int expiring = 6;
+        int extra = 4;
+        StatsProcessor.PoolStats stats = prepareStats(total, unassigned, expiring, extra);
         assertEquals(5, stats.keysInUse);
         assertEquals(9, stats.idealTotalSignedKeys);
         assertEquals(9, stats.keysToGenerate);
     }
 
-    @Presubmit
     @Test
-    public void testExpiringProvisioningNeeded2() throws Exception {
-        mNumExtraKeys = 4;
-        mPool.total = 10;
-        mPool.attested = 10;
-        mPool.unassigned = 5;
-        mPool.expiring = 10;
-        StatsProcessor.PoolStats stats = StatsProcessor.processPool(mPool, mNumExtraKeys);
-        assertTrue(stats.provisioningNeeded);
-        assertEquals(0, stats.unattestedKeys);
+    public void testExpiringProvisioningNeeded2() {
+        int total = 10;
+        int unassigned = 5;
+        int expiring = 10;
+        int extra = 4;
+        StatsProcessor.PoolStats stats = prepareStats(total, unassigned, expiring, extra);
         assertEquals(5, stats.keysInUse);
         assertEquals(9, stats.idealTotalSignedKeys);
         assertEquals(9, stats.keysToGenerate);
     }
 
-    @Presubmit
     @Test
-    public void testExpiringProvisioningNeeded3() throws Exception {
-        mNumExtraKeys = 4;
-        mPool.total = 10;
-        mPool.attested = 10;
-        mPool.unassigned = 5;
-        mPool.expiring = 5;
-        StatsProcessor.PoolStats stats = StatsProcessor.processPool(mPool, mNumExtraKeys);
-        assertTrue(stats.provisioningNeeded);
-        assertEquals(0, stats.unattestedKeys);
+    public void testExpiringProvisioningNeeded3() {
+        int total = 10;
+        int unassigned = 5;
+        int expiring = 5;
+        int extra = 4;
+        StatsProcessor.PoolStats stats = prepareStats(total, unassigned, expiring, extra);
         assertEquals(5, stats.keysInUse);
         assertEquals(9, stats.idealTotalSignedKeys);
         assertEquals(9, stats.keysToGenerate);
     }
 
-    @Presubmit
     @Test
-    public void testExpiringProvisioningNeeded4() throws Exception {
-        mNumExtraKeys = 4;
-        mPool.total = 10;
-        mPool.attested = 10;
-        mPool.unassigned = 10;
-        mPool.expiring = 10;
-        StatsProcessor.PoolStats stats = StatsProcessor.processPool(mPool, mNumExtraKeys);
-        assertTrue(stats.provisioningNeeded);
-        assertEquals(0, stats.unattestedKeys);
+    public void testExpiringProvisioningNeeded4() {
+        int total = 10;
+        int unassigned = 10;
+        int expiring = 10;
+        int extra = 4;
+        StatsProcessor.PoolStats stats = prepareStats(total, unassigned, expiring, extra);
         assertEquals(0, stats.keysInUse);
         assertEquals(4, stats.idealTotalSignedKeys);
         assertEquals(4, stats.keysToGenerate);
     }
 
-    @Presubmit
     @Test
-    public void testExpiringProvisioningNeeded5() throws Exception {
-        mNumExtraKeys = 4;
-        mPool.total = 10;
-        mPool.attested = 10;
-        mPool.unassigned = 5;
-        mPool.expiring = 3;
-        StatsProcessor.PoolStats stats = StatsProcessor.processPool(mPool, mNumExtraKeys);
-        assertTrue(stats.provisioningNeeded);
-        assertEquals(0, stats.unattestedKeys);
+    public void testExpiringProvisioningNeeded5() {
+        int total = 10;
+        int unassigned = 5;
+        int expiring = 3;
+        int extra = 4;
+        StatsProcessor.PoolStats stats = prepareStats(total, unassigned, expiring, extra);
         assertEquals(5, stats.keysInUse);
         assertEquals(9, stats.idealTotalSignedKeys);
         assertEquals(9, stats.keysToGenerate);
     }
 
-    @Presubmit
     @Test
-    public void testExpiringProvisioningNotNeeded1() throws Exception {
-        mNumExtraKeys = 4;
-        mPool.total = 10;
-        mPool.attested = 10;
-        mPool.unassigned = 5;
-        mPool.expiring = 0;
-        StatsProcessor.PoolStats stats = StatsProcessor.processPool(mPool, mNumExtraKeys);
-        assertFalse(stats.provisioningNeeded);
-        assertEquals(0, stats.unattestedKeys);
+    public void testExpiringProvisioningNotNeeded1() {
+        int total = 10;
+        int unassigned = 5;
+        int expiring = 0;
+        int extra = 4;
+        StatsProcessor.PoolStats stats = prepareStats(total, unassigned, expiring, extra);
         assertEquals(5, stats.keysInUse);
         assertEquals(9, stats.idealTotalSignedKeys);
         assertEquals(0, stats.keysToGenerate);
     }
 
-    @Presubmit
     @Test
-    public void testExpiringProvisioningNotNeeded2() throws Exception {
-        mNumExtraKeys = 4;
-        mPool.total = 10;
-        mPool.attested = 10;
-        mPool.unassigned = 5;
-        mPool.expiring = 2;
-        StatsProcessor.PoolStats stats = StatsProcessor.processPool(mPool, mNumExtraKeys);
-        assertFalse(stats.provisioningNeeded);
-        assertEquals(0, stats.unattestedKeys);
+    public void testExpiringProvisioningNotNeeded2() {
+        int extra = 4;
+        int total = 10;
+        int unassigned = 5;
+        int expiring = 2;
+        StatsProcessor.PoolStats stats = prepareStats(total, unassigned, expiring, extra);
         assertEquals(5, stats.keysInUse);
         assertEquals(9, stats.idealTotalSignedKeys);
         assertEquals(0, stats.keysToGenerate);
     }
 
-    @Presubmit
     @Test
-    public void testExpiringProvisioningNeededSomeKeysPregenerated() throws Exception {
-        mNumExtraKeys = 4;
-        mPool.total = 12;
-        mPool.attested = 10;
-        mPool.unassigned = 5;
-        mPool.expiring = 6;
-        StatsProcessor.PoolStats stats = StatsProcessor.processPool(mPool, mNumExtraKeys);
-        assertTrue(stats.provisioningNeeded);
-        assertEquals(2, stats.unattestedKeys);
-        assertEquals(5, stats.keysInUse);
-        assertEquals(9, stats.idealTotalSignedKeys);
-        assertEquals(7, stats.keysToGenerate);
+    public void testExpiringProvisioningNeededSomeKeysPregenerated() {
+        int total = 12;
+        int unassigned = 5;
+        int expiring = 6;
+        int extra = 4;
+        StatsProcessor.PoolStats stats = prepareStats(total, unassigned, expiring, extra);
+        assertEquals(7, stats.keysInUse);
+        assertEquals(11, stats.idealTotalSignedKeys);
+        assertEquals(11, stats.keysToGenerate);
     }
 
-    @Presubmit
     @Test
-    public void testBothExpiringAndBelowMinimumExtraKeysAvailable() throws Exception {
-        mNumExtraKeys = 5;
-        mPool.total = 10;
-        mPool.attested = 10;
-        mPool.unassigned = 1;
-        mPool.expiring = 6;
-        StatsProcessor.PoolStats stats = StatsProcessor.processPool(mPool, mNumExtraKeys);
-        assertTrue(stats.provisioningNeeded);
-        assertEquals(0, stats.unattestedKeys);
+    public void testBothExpiringAndBelowMinimumExtraKeysAvailable() {
+        int total = 10;
+        int unassigned = 1;
+        int expiring = 6;
+        int extra = 5;
+        StatsProcessor.PoolStats stats = prepareStats(total, unassigned, expiring, extra);
         assertEquals(9, stats.keysInUse);
         assertEquals(14, stats.idealTotalSignedKeys);
         assertEquals(14, stats.keysToGenerate);
     }
 
-    @Presubmit
     @Test
-    public void testBothExpiringAndBelowMinimumExtraKeysAvailableWithPreGenKeys() throws Exception {
-        mNumExtraKeys = 5;
-        mPool.total = 14;
-        mPool.attested = 10;
-        mPool.unassigned = 1;
-        mPool.expiring = 6;
-        StatsProcessor.PoolStats stats = StatsProcessor.processPool(mPool, mNumExtraKeys);
-        assertTrue(stats.provisioningNeeded);
-        assertEquals(4, stats.unattestedKeys);
-        assertEquals(9, stats.keysInUse);
-        assertEquals(14, stats.idealTotalSignedKeys);
-        assertEquals(10, stats.keysToGenerate);
+    public void testBothExpiringAndBelowMinimumExtraKeysAvailableWithPreGenKeys() {
+        int total = 14;
+        int unassigned = 1;
+        int expiring = 6;
+        int extra = 5;
+        StatsProcessor.PoolStats stats = prepareStats(total, unassigned, expiring, extra);
+        assertEquals(13, stats.keysInUse);
+        assertEquals(18, stats.idealTotalSignedKeys);
+        assertEquals(18, stats.keysToGenerate);
+    }
+
+    private StatsProcessor.PoolStats prepareStats(int totalKeys, int unassignedKeys,
+            int expiringKeys, int numExtraKeys) {
+        when(mKeyDao.getTotalKeysForIrpc(anyString())).thenReturn(totalKeys);
+        when(mKeyDao.getTotalUnassignedKeysForIrpc(anyString())).thenReturn(unassignedKeys);
+        List<ProvisionedKey> expiringKeyList = new ArrayList<>(expiringKeys);
+        for (int i = 0; i < expiringKeys; i++) {
+            expiringKeyList.add(mock(ProvisionedKey.class));
+        }
+        when(mKeyDao.getExpiringKeysForIrpc(any(), anyString())).thenReturn(expiringKeyList);
+        return StatsProcessor.processPool(mKeyDao, SERVICE_NAME, numExtraKeys, Instant.now());
     }
 }
