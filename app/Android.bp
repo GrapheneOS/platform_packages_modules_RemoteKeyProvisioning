@@ -51,6 +51,11 @@ aidl_interface {
     },
 }
 
+sdk {
+    name: "rkpd-sdk",
+    apexes: ["com.android.rkpd"],
+}
+
 java_defaults {
     name: "RkpdAppDefaults",
     sdk_version: "module_current",
@@ -89,6 +94,9 @@ android_app {
     apex_available: [
         "com.android.rkpd",
     ],
+    lint: {
+        strict_updatability_linting: true,
+    },
 }
 
 // Rebuild all the app code into a library so we can link it into our unit tests.
