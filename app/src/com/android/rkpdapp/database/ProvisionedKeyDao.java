@@ -69,9 +69,21 @@ public abstract class ProvisionedKeyDao {
      * Get provisioned keys that can be assigned to clients.
      */
     @Query("SELECT * FROM provisioned_keys"
-            + " WHERE client_uid IS NULL AND irpc_hal = :irpcHal AND expiration_time IS NOT NULL"
+            + " WHERE client_uid IS NULL AND irpc_hal = :irpcHal"
             + " LIMIT 1")
     abstract ProvisionedKey getUnassignedKeyForIrpc(String irpcHal);
+
+    /**
+     * Gets total number of keys that can be assigned for a specific IRPC.
+     */
+    @Query("SELECT COUNT(*) FROM provisioned_keys WHERE client_uid IS NULL AND irpc_hal = :irpcHal")
+    public abstract int getTotalUnassignedKeysForIrpc(String irpcHal);
+
+    /**
+     * Gets total keys attested for a specific IRPC.
+     */
+    @Query("SELECT COUNT(*) FROM provisioned_keys WHERE irpc_hal = :irpcHal")
+    public abstract int getTotalKeysForIrpc(String irpcHal);
 
     /**
      * Get key for given client and IRPC.
