@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (C) 2022 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.remoteprovisioner;
+package com.android.rkpdapp.provisioner;
 
 import android.content.Context;
 import android.media.DeniedByServerException;
@@ -49,11 +49,11 @@ public class WidevineProvisioner extends Worker {
     private static final int MAX_RETRIES = 3;
     private static final int TIMEOUT_MS = 20000;
 
-    private static final String TAG = "RemoteProvisioningWV";
+    private static final String TAG = "RkpdWidevine";
 
     private static final byte[] EMPTY_BODY = new byte[0];
 
-    private static final Map<String, String> REQ_PROPERTIES = new HashMap<String, String>();
+    private static final Map<String, String> REQ_PROPERTIES = new HashMap<>();
     static {
         REQ_PROPERTIES.put("Accept", "*/*");
         REQ_PROPERTIES.put("User-Agent", buildUserAgentString());
@@ -68,7 +68,7 @@ public class WidevineProvisioner extends Worker {
     }
 
     private static String buildUserAgentString() {
-        ArrayList<String> parts = new ArrayList();
+        ArrayList<String> parts = new ArrayList<>();
         parts.add("AndroidRemoteProvisioner");
         parts.add(Build.BRAND);
         parts.add(Build.MODEL);
@@ -190,7 +190,7 @@ public class WidevineProvisioner extends Worker {
         BufferedInputStream inputStream = new BufferedInputStream(con.getInputStream());
         ByteArrayOutputStream respBytes = new ByteArrayOutputStream();
         byte[] buffer = new byte[1024];
-        int read = 0;
+        int read;
         while ((read = inputStream.read(buffer, 0, buffer.length)) != -1) {
             respBytes.write(buffer, 0, read);
         }
