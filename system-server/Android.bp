@@ -32,6 +32,7 @@ java_sdk_library {
         "com.android.rkpdapp",
     ],
     impl_library_visibility: [
+        "//frameworks/base/services/tests/servicestests",
         "//packages/modules/RemoteKeyProvisioning/system-server/tests/unit",
     ],
     static_libs: [
