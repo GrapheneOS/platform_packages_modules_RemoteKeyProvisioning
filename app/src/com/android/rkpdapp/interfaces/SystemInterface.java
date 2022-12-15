@@ -30,7 +30,6 @@ import com.android.rkpdapp.RkpdException;
 import com.android.rkpdapp.database.RkpKey;
 import com.android.rkpdapp.utils.CborUtils;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import co.nstant.in.cbor.CborException;
@@ -62,19 +61,10 @@ public class SystemInterface {
     }
 
     /**
-     * Generates attestation keys pairs through binder service.
-     * Returns list of keys in {@link RkpKey} format.
+     * Generates attestation keys pair through binder service.
+     * Returns generated key in {@link RkpKey} format.
      */
-    public List<RkpKey> generateKeys(ProvisionerMetrics metrics, int numKeys)
-            throws CborException, RkpdException {
-        List<RkpKey> keyArray = new ArrayList<>(numKeys);
-        for (long i = 0; i < numKeys; i++) {
-            keyArray.add(generateKey(metrics));
-        }
-        return keyArray;
-    }
-
-    private RkpKey generateKey(ProvisionerMetrics metrics) throws CborException, RkpdException {
+    public RkpKey generateKey(ProvisionerMetrics metrics) throws CborException, RkpdException {
         MacedPublicKey macedPublicKey = new MacedPublicKey();
         try (ProvisionerMetrics.StopWatch ignored = metrics.startBinderWait()) {
             byte[] privKey = mBinder.generateEcdsaP256KeyPair(false, macedPublicKey);
@@ -108,7 +98,8 @@ public class SystemInterface {
                     return key;
                 }).toArray(MacedPublicKey[]::new);
         try (ProvisionerMetrics.StopWatch ignored = metrics.startBinderWait()) {
-            if (mBinder.getInterfaceVersion() < 3) {
+            // TODO: Change this back to version 3 once RKP server starts handling CSR v2.
+            if (mBinder.getInterfaceVersion() < 4) {
                 DeviceInfo deviceInfo = new DeviceInfo();
                 ProtectedData protectedData = new ProtectedData();
                 byte[] geekChain = geekResponse.getGeekChain(mSupportedCurve);

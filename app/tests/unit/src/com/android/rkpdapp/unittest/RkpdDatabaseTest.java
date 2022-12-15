@@ -202,6 +202,14 @@ public class RkpdDatabaseTest {
     }
 
     @Test
+    public void testCountUnassignedKeys() {
+        mKeyDao.insertKeys(List.of(mProvisionedKey1, mProvisionedKey2));
+        assertThat(mKeyDao.getTotalUnassignedKeysForIrpc(TEST_HAL_1)).isEqualTo(1);
+        assertThat(mKeyDao.getTotalUnassignedKeysForIrpc(TEST_HAL_2)).isEqualTo(1);
+        assertThat(mKeyDao.getTotalUnassignedKeysForIrpc("fakeHal")).isEqualTo(0);
+    }
+
+    @Test
     public void testAssignKey() throws RkpdException {
         mProvisionedKey2.irpcHal = TEST_HAL_1;
         mKeyDao.insertKeys(List.of(mProvisionedKey1, mProvisionedKey2));
