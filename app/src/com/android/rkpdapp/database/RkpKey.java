@@ -47,6 +47,10 @@ public final class RkpKey {
         return mCoseKey;
     }
 
+    public byte[] getPublicKey() {
+        return mPublicKey;
+    }
+
     /**
      * Creates the provisioned key with the information present in this data object as well as the
      * provided expiration time and certificate chain.

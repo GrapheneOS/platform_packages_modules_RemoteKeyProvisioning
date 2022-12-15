@@ -33,7 +33,7 @@ import java.util.ArrayList;
  */
 public class X509Utils {
 
-    private static final String TAG = "RemoteProvisionerX509Utils";
+    private static final String TAG = "RkpdX509Utils";
 
     /**
      * Takes a byte array composed of DER encoded certificates and returns the X.509 certificates
