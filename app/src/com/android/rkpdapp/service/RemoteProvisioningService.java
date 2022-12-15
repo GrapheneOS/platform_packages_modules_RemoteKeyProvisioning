@@ -14,18 +14,26 @@
  * limitations under the License.
  */
 
-package com.android.rkpdapp;
+package com.android.rkpdapp.service;
 
 import android.app.Service;
+import android.content.Context;
 import android.content.Intent;
 import android.os.IBinder;
 import android.os.RemoteException;
-import android.os.ServiceManager;
 import android.util.Log;
+
+import com.android.rkpdapp.IGetRegistrationCallback;
+import com.android.rkpdapp.IRegistration;
+import com.android.rkpdapp.IRemoteProvisioning;
+import com.android.rkpdapp.database.ProvisionedKeyDao;
+import com.android.rkpdapp.database.RkpdDatabase;
+import com.android.rkpdapp.interfaces.ServerInterface;
+import com.android.rkpdapp.provisioner.Provisioner;
 
 /** Provides the implementation for IRemoteProvisioning.aidl */
 public class RemoteProvisioningService extends Service {
-    static final String TAG = "com.android.rkpdapp";
+    public static final String TAG = "com.android.rkpdapp";
     private final IRemoteProvisioning.Stub mBinder = new RemoteProvisioningBinder();
 
     @Override
@@ -38,39 +46,17 @@ public class RemoteProvisioningService extends Service {
         return mBinder;
     }
 
-    final class RegistrationBinder extends IRegistration.Stub {
-        final int mCallerUid;
-
-        RegistrationBinder(int callerUid, String irpcName) {
-            mCallerUid = callerUid;
-            if (!ServiceManager.isDeclared(irpcName)) {
-                throw new IllegalArgumentException(
-                        "The given IRemotelyProvisionedComponent is not declared: " + irpcName);
-            }
-            IBinder binder = ServiceManager.waitForDeclaredService(irpcName);
-        }
-
-        @Override
-        public void getKey(int keyId, IGetKeyCallback callback) throws RemoteException {
-            Log.i(TAG, "getKey");
-        }
-
-        @Override
-        public void cancelGetKey(IGetKeyCallback callback) throws RemoteException {
-            Log.i(TAG, "cancelGetKey");
-        }
-
-        @Override
-        public void storeUpgradedKey(byte[] oldKeyBlob, byte[] newKeyBlob) throws RemoteException {
-            Log.i(TAG, "storeUpgradedKey");
-        }
-    }
-
     final class RemoteProvisioningBinder extends IRemoteProvisioning.Stub {
+
         @Override
         public void getRegistration(int callerUid, String irpcName,
                 IGetRegistrationCallback callback) {
-            IRegistration.Stub registration = new RegistrationBinder(callerUid, irpcName);
+            ProvisionedKeyDao dao = RkpdDatabase.getDatabase(
+                    getApplicationContext()).provisionedKeyDao();
+            Context context = getApplicationContext();
+            Provisioner provisioner = new Provisioner(context, dao);
+            IRegistration.Stub registration = new RegistrationBinder(context, callerUid, irpcName,
+                    dao, new ServerInterface(context), provisioner);
             try {
                 callback.onSuccess(registration);
             } catch (RemoteException e) {
