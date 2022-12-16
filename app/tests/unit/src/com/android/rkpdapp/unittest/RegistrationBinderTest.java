@@ -23,6 +23,7 @@ import static org.mockito.AdditionalAnswers.answer;
 import static org.mockito.AdditionalAnswers.answerVoid;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.argThat;
+import static org.mockito.Mockito.contains;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
@@ -39,6 +40,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4;
 
 import com.android.rkpdapp.GeekResponse;
 import com.android.rkpdapp.IGetKeyCallback;
+import com.android.rkpdapp.IStoreUpgradedKeyCallback;
 import com.android.rkpdapp.RemotelyProvisionedKey;
 import com.android.rkpdapp.database.ProvisionedKey;
 import com.android.rkpdapp.database.ProvisionedKeyDao;
@@ -321,5 +323,65 @@ public class RegistrationBinderTest {
 
         verify(cancelMe, timeout(MAX_TIMEOUT.toMillis())).onCancel();
         verifyNoMoreInteractions(cancelMe);
+    }
+
+    @Test
+    public void storeUpgradedKeySuccess() throws Exception {
+        final byte[] oldKeyBlob = { 8, 6, 7, 5, 3, 0, 9};
+        final byte[] newKeyBlob = { 3, 1, 4, 1, 5, 9};
+
+        doReturn(1)
+                .when(mMockDao)
+                .upgradeKeyBlob(oldKeyBlob, newKeyBlob);
+
+        IStoreUpgradedKeyCallback callback = mock(IStoreUpgradedKeyCallback.class);
+        mRegistration.storeUpgradedKey(oldKeyBlob, newKeyBlob, callback);
+        verify(callback, timeout(MAX_TIMEOUT.toMillis())).onSuccess();
+        verifyNoMoreInteractions(callback);
+    }
+
+    @Test
+    public void storeUpgradedKeyKeyNotFound() throws Exception {
+        final byte[] oldKeyBlob = { 42 };
+        final byte[] newKeyBlob = { 123 };
+
+        doReturn(0)
+                .when(mMockDao)
+                .upgradeKeyBlob(oldKeyBlob, newKeyBlob);
+
+        IStoreUpgradedKeyCallback callback = mock(IStoreUpgradedKeyCallback.class);
+        mRegistration.storeUpgradedKey(oldKeyBlob, newKeyBlob, callback);
+        verify(callback, timeout(MAX_TIMEOUT.toMillis())).onError(contains("No keys"));
+        verifyNoMoreInteractions(callback);
+    }
+
+    @Test
+    public void storeUpgradedKeyInternalError() throws Exception {
+        final byte[] oldKeyBlob = { 1, 2, 3, 4 };
+        final byte[] newKeyBlob = { 4, 3, 2, 1 };
+
+        doReturn(2)
+                .when(mMockDao)
+                .upgradeKeyBlob(oldKeyBlob, newKeyBlob);
+
+        IStoreUpgradedKeyCallback callback = mock(IStoreUpgradedKeyCallback.class);
+        mRegistration.storeUpgradedKey(oldKeyBlob, newKeyBlob, callback);
+        verify(callback, timeout(MAX_TIMEOUT.toMillis())).onError(contains("Internal error"));
+        verifyNoMoreInteractions(callback);
+    }
+
+    @Test
+    public void storeUpgradedKeyDatabaseException() throws Exception {
+        final byte[] oldKeyBlob = { 101 };
+        final byte[] newKeyBlob = { 5, 5, 5 };
+
+        doThrow(new IllegalArgumentException("nope!!!"))
+                .when(mMockDao)
+                .upgradeKeyBlob(oldKeyBlob, newKeyBlob);
+
+        IStoreUpgradedKeyCallback callback = mock(IStoreUpgradedKeyCallback.class);
+        mRegistration.storeUpgradedKey(oldKeyBlob, newKeyBlob, callback);
+        verify(callback, timeout(MAX_TIMEOUT.toMillis())).onError(contains("nope!!!"));
+        verifyNoMoreInteractions(callback);
     }
 }
