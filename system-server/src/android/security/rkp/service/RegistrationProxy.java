@@ -44,6 +44,7 @@ import com.android.rkpdapp.IGetKeyCallback;
 import com.android.rkpdapp.IGetRegistrationCallback;
 import com.android.rkpdapp.IRegistration;
 import com.android.rkpdapp.IRemoteProvisioning;
+import com.android.rkpdapp.IStoreUpgradedKeyCallback;
 
 import java.time.Duration;
 import java.util.List;
@@ -62,7 +63,7 @@ import java.util.stream.Collectors;
  * @hide
  */
 @SystemApi(client = SYSTEM_SERVER)
-public final class RegistrationProxy {
+public class RegistrationProxy {
     static final String TAG = "RegistrationProxy";
     IRegistration mBinder;
 
@@ -274,10 +275,11 @@ public final class RegistrationProxy {
 
         cancellationSignal.setOnCancelListener(() -> {
             if (operationComplete.get()) {
-                Log.w(TAG, "Ignoring cancel call after operation complete for " + callback);
+                Log.w(TAG,
+                        "Ignoring cancel call after operation complete for " + callback.hashCode());
             } else {
                 try {
-                    Log.i(TAG, "Attempting to cancel getKeyAsync for " + callback);
+                    Log.i(TAG, "Attempting to cancel getKeyAsync for " + callback.hashCode());
                     mBinder.cancelGetKey(callback);
                 } catch (RemoteException e) {
                     Log.e(TAG, "Error cancelling getKey operation", e);
@@ -286,8 +288,50 @@ public final class RegistrationProxy {
         });
 
         try {
-            Log.i(TAG, "getKeyAsync operation started with callback " + callback);
+            Log.i(TAG, "getKeyAsync operation started with callback " + callback.hashCode());
             mBinder.getKey(keyId, callback);
+        } catch (RemoteException e) {
+            throw e.rethrowAsRuntimeException();
+        }
+    }
+
+    /**
+     * Begins an async operation to store an upgraded key blob in the rkpd database. This is part
+     * of the anti-rollback protections for keys. If a system has a security patch applied, then
+     * key blobs may need to be upgraded so that the keys cannot be used if the system is rolled
+     * back to the vulnerable version of code.
+     *
+     * The anti-rollback mechanism requires the consumer of the key blob (e.g. KeyMint) to return
+     * an error indicating that the key needs to be upgraded. The client (e.g. keystore2) is then
+     * responsible for calling the upgrade method, then asking rkpd to store the upgraded blob.
+     * This way, if the system is ever downgraded, the key blobs can no longer be used.
+     *
+     * @param oldKeyBlob The key to be upgraded.
+     * @param newKeyBlob The new key, replacing oldKeyBlob in the database.
+     * @param executor The executor on which to call receiver.
+     * @param receiver Asynchronously receives success callback, else an exception is received.
+     */
+    public void storeUpgradedKeyAsync(@NonNull byte[] oldKeyBlob, @NonNull byte[] newKeyBlob,
+            @NonNull @CallbackExecutor Executor executor,
+            @NonNull OutcomeReceiver<Void, Exception> receiver) {
+        final var callback = new IStoreUpgradedKeyCallback.Stub() {
+            @Override
+            public void onSuccess() {
+                Log.e(TAG, "upgrade key succeeded for callback " + hashCode());
+                executor.execute(() -> receiver.onResult(null));
+            }
+
+            @Override
+            public void onError(String error) {
+                Log.e(TAG, "upgrade key failed: " + error + ", callback: " + hashCode());
+                executor.execute(() -> receiver.onError(new RemoteException(error)));
+            }
+        };
+
+        try {
+            Log.i(TAG, "storeUpgradedKeyAsync operation started with callback "
+                    + callback.hashCode());
+            mBinder.storeUpgradedKeyAsync(oldKeyBlob, newKeyBlob, callback);
         } catch (RemoteException e) {
             throw e.rethrowAsRuntimeException();
         }
