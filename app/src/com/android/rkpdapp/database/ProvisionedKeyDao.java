@@ -94,7 +94,7 @@ public abstract class ProvisionedKeyDao {
      * Stores the upgraded key blob.
      */
     @Query("UPDATE provisioned_keys SET key_blob = :newKeyBlob WHERE key_blob = :oldKeyBlob")
-    public abstract void upgradeKeyBlob(byte[] oldKeyBlob, byte[] newKeyBlob);
+    public abstract int upgradeKeyBlob(byte[] oldKeyBlob, byte[] newKeyBlob);
 
     /**
      * This transaction directly tries to assign an unassigned provisioned key to the given keyId
