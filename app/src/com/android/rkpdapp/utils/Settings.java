@@ -71,8 +71,7 @@ public class Settings {
         if (curTime == null) {
             curTime = Instant.now();
         }
-        SharedPreferences sharedPref =
-                context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
+        SharedPreferences sharedPref = getSharedPreferences(context);
         Instant logged =
                 Instant.ofEpochMilli(sharedPref.getLong(KEY_FAILURE_DATA_WINDOW_START_TIME, 0));
         if (Duration.between(logged, curTime).compareTo(FAILURE_DATA_USAGE_WINDOW) > 0) {
@@ -93,8 +92,7 @@ public class Settings {
      * @return the amount of data consumed.
      */
     public static int getErrDataBudgetConsumed(Context context) {
-        SharedPreferences sharedPref =
-                context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
+        SharedPreferences sharedPref = getSharedPreferences(context);
         return sharedPref.getInt(KEY_FAILURE_BYTES, 0);
     }
 
@@ -109,8 +107,7 @@ public class Settings {
      */
     public static void consumeErrDataBudget(Context context, int bytesTransacted) {
         if (bytesTransacted < 1) return;
-        SharedPreferences sharedPref =
-                context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
+        SharedPreferences sharedPref = getSharedPreferences(context);
         SharedPreferences.Editor editor = sharedPref.edit();
         int budgetUsed = 0;
         try {
@@ -127,8 +124,7 @@ public class Settings {
      * Generates a random ID for the use of gradual ramp up of remote provisioning.
      */
     public static void generateAndSetId(Context context) {
-        SharedPreferences sharedPref =
-                context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
+        SharedPreferences sharedPref = getSharedPreferences(context);
         if (sharedPref.contains(KEY_ID)) {
             // ID is already set, don't rotate it.
             return;
@@ -144,8 +140,7 @@ public class Settings {
      * Fetches the generated ID.
      */
     public static int getId(Context context) {
-        SharedPreferences sharedPref =
-                context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
+        SharedPreferences sharedPref = getSharedPreferences(context);
         Random rand = new Random();
         return sharedPref.getInt(KEY_ID, rand.nextInt(ID_UPPER_BOUND) /* defaultValue */);
     }
@@ -172,8 +167,7 @@ public class Settings {
      */
     public static boolean setDeviceConfig(Context context, int extraKeys,
                                           Duration expiringBy, String url) {
-        SharedPreferences sharedPref =
-                context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
+        SharedPreferences sharedPref = getSharedPreferences(context);
         SharedPreferences.Editor editor = sharedPref.edit();
         boolean wereUpdatesMade = false;
         if (extraKeys != GeekResponse.NO_EXTRA_KEY_UPDATE
@@ -200,8 +194,7 @@ public class Settings {
      * Gets the setting for how many extra keys should be kept signed and available in KeyStore.
      */
     public static int getExtraSignedKeysAvailable(Context context) {
-        SharedPreferences sharedPref =
-                context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
+        SharedPreferences sharedPref = getSharedPreferences(context);
         return sharedPref.getInt(KEY_EXTRA_KEYS, EXTRA_SIGNED_KEYS_AVAILABLE_DEFAULT);
     }
 
@@ -209,8 +202,7 @@ public class Settings {
      * Gets the setting for how far into the future the provisioner should check for expiring keys.
      */
     public static Duration getExpiringBy(Context context) {
-        SharedPreferences sharedPref =
-                context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
+        SharedPreferences sharedPref = getSharedPreferences(context);
         return Duration.ofMillis(sharedPref.getLong(KEY_EXPIRING_BY, EXPIRING_BY_MS_DEFAULT));
     }
 
@@ -227,8 +219,7 @@ public class Settings {
      * servers.
      */
     public static String getUrl(Context context) {
-        SharedPreferences sharedPref =
-                context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
+        SharedPreferences sharedPref = getSharedPreferences(context);
         return sharedPref.getString(KEY_URL, URL_DEFAULT);
     }
 
@@ -240,8 +231,7 @@ public class Settings {
      * @return the current failure counter after incrementing.
      */
     public static int incrementFailureCounter(Context context) {
-        SharedPreferences sharedPref =
-                context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
+        SharedPreferences sharedPref = getSharedPreferences(context);
         SharedPreferences.Editor editor = sharedPref.edit();
         int failures = sharedPref.getInt(KEY_FAILURE_COUNTER, 0 /* defaultValue */);
         editor.putInt(KEY_FAILURE_COUNTER, ++failures);
@@ -253,8 +243,7 @@ public class Settings {
      * Gets the current failure counter.
      */
     public static int getFailureCounter(Context context) {
-        SharedPreferences sharedPref =
-                context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
+        SharedPreferences sharedPref = getSharedPreferences(context);
         return sharedPref.getInt(KEY_FAILURE_COUNTER, 0 /* defaultValue */);
     }
 
@@ -262,8 +251,7 @@ public class Settings {
      * Resets the failure counter to {@code 0}.
      */
     public static void clearFailureCounter(Context context) {
-        SharedPreferences sharedPref =
-                context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
+        SharedPreferences sharedPref = getSharedPreferences(context);
         if (sharedPref.getInt(KEY_FAILURE_COUNTER, 0) != 0) {
             SharedPreferences.Editor editor = sharedPref.edit();
             editor.putInt(KEY_FAILURE_COUNTER, 0);
@@ -275,8 +263,7 @@ public class Settings {
      * Clears all preferences, thus restoring the defaults.
      */
     public static void clearPreferences(Context context) {
-        SharedPreferences sharedPref =
-                context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
+        SharedPreferences sharedPref = getSharedPreferences(context);
         SharedPreferences.Editor editor = sharedPref.edit();
         editor.clear();
         editor.apply();
@@ -288,5 +275,12 @@ public class Settings {
      */
     public static boolean isTestMode() {
         return IS_TEST_MODE;
+    }
+
+    private static SharedPreferences getSharedPreferences(Context context) {
+        if (!context.isDeviceProtectedStorage()) {
+            context = context.createDeviceProtectedStorageContext();
+        }
+        return context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
     }
 }

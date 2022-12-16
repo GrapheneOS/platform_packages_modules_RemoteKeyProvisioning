@@ -37,7 +37,6 @@ import com.android.rkpdapp.utils.X509Utils;
 
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -53,7 +52,6 @@ import co.nstant.in.cbor.CborException;
 public class Provisioner {
     private static final String TAG = "RkpdProvisioner";
     private static final int SAFE_CSR_BATCH_SIZE = 20;
-    private static final Duration KEY_GENERATION_PAUSE = Duration.ofMillis(1000);
 
     private final Context mContext;
     private final ProvisionedKeyDao mKeyDao;
