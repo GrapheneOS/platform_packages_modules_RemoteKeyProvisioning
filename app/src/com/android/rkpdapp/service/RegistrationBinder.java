@@ -184,7 +184,7 @@ public final class RegistrationBinder extends IRegistration.Stub {
     public void storeUpgradedKey(byte[] oldKeyBlob, byte[] newKeyBlob,
             IStoreUpgradedKeyCallback callback) throws RemoteException {
         Log.i(TAG, "storeUpgradedKey");
-        mThreadPool.submit(() -> {
+        mThreadPool.execute(() -> {
             try {
                 int keysUpgraded = mProvisionedKeyDao.upgradeKeyBlob(oldKeyBlob, newKeyBlob);
                 if (keysUpgraded == 1) {
