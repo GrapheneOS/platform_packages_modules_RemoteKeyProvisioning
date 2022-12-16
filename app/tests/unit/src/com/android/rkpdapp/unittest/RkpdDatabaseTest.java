@@ -235,13 +235,7 @@ public class RkpdDatabaseTest {
 
     @Test
     public void testNoUnassignedKeyRemaining() {
-        try {
-            mKeyDao.assignKey(TEST_HAL_1, FAKE_CLIENT_UID, FAKE_KEY_ID);
-            fail("Able to assign key even when there is no key.");
-        } catch (RkpdException ex) {
-            assertThat(ex).hasMessageThat().contains("Out of keys");
-            assertThat(ex.getErrorCode()).isEqualTo(RkpdException.Status.OUT_OF_KEYS);
-        }
+        assertThat(mKeyDao.assignKey(TEST_HAL_1, FAKE_CLIENT_UID, FAKE_KEY_ID)).isNull();
     }
 
     @Test

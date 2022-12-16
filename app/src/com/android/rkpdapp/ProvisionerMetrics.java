@@ -24,6 +24,8 @@ import android.os.SystemClock;
 import android.os.SystemProperties;
 import android.util.Log;
 
+import com.android.rkpdapp.service.RemoteProvisioningService;
+
 import java.time.Duration;
 
 /**
