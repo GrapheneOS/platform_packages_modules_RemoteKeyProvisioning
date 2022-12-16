@@ -196,9 +196,15 @@ public class RkpdDatabaseTest {
         ProvisionedKey databaseKey = getAllKeys().get(0);
         assertThat(databaseKey.keyBlob).isEqualTo(TEST_KEY_BLOB_1);
 
-        mKeyDao.upgradeKeyBlob(TEST_KEY_BLOB_1, TEST_KEY_BLOB_2);
+        assertThat(mKeyDao.upgradeKeyBlob(TEST_KEY_BLOB_1, TEST_KEY_BLOB_2)).isEqualTo(1);
         databaseKey = getAllKeys().get(0);
         assertThat(databaseKey.keyBlob).isEqualTo(TEST_KEY_BLOB_2);
+    }
+
+    @Test
+    public void testUpgradeNonExistentKeyBlob() {
+        mKeyDao.insertKeys(List.of(mProvisionedKey1));
+        assertThat(mKeyDao.upgradeKeyBlob(TEST_KEY_BLOB_2, TEST_KEY_BLOB_3)).isEqualTo(0);
     }
 
     @Test
@@ -247,6 +253,18 @@ public class RkpdDatabaseTest {
             fail("UpgradeKeyBlob should fail for null keyblob.");
         } catch (SQLiteConstraintException ex) {
             assertThat(ex).hasMessageThat().contains("NOT NULL constraint failed");
+        }
+    }
+
+    @Test
+    public void testUpgradeWithDuplicateKeyBlob() {
+        mKeyDao.insertKeys(List.of(mProvisionedKey1, mProvisionedKey2));
+
+        try {
+            mKeyDao.upgradeKeyBlob(TEST_KEY_BLOB_1, TEST_KEY_BLOB_2);
+            fail("UpgradeKeyBlob should fail for duplicate keyblob.");
+        } catch (SQLiteConstraintException ex) {
+            assertThat(ex).hasMessageThat().contains("UNIQUE constraint failed");
         }
     }
 
