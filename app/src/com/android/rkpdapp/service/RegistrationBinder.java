@@ -23,6 +23,7 @@ import android.util.Log;
 import com.android.rkpdapp.GeekResponse;
 import com.android.rkpdapp.IGetKeyCallback;
 import com.android.rkpdapp.IRegistration;
+import com.android.rkpdapp.IStoreUpgradedKeyCallback;
 import com.android.rkpdapp.ProvisionerMetrics;
 import com.android.rkpdapp.RemotelyProvisionedKey;
 import com.android.rkpdapp.RkpdException;
@@ -180,8 +181,24 @@ public final class RegistrationBinder extends IRegistration.Stub {
     }
 
     @Override
-    public void storeUpgradedKey(byte[] oldKeyBlob, byte[] newKeyBlob) {
+    public void storeUpgradedKey(byte[] oldKeyBlob, byte[] newKeyBlob,
+            IStoreUpgradedKeyCallback callback) throws RemoteException {
         Log.i(TAG, "storeUpgradedKey");
-        mProvisionedKeyDao.upgradeKeyBlob(oldKeyBlob, newKeyBlob);
+        mThreadPool.execute(() -> {
+            try {
+                int keysUpgraded = mProvisionedKeyDao.upgradeKeyBlob(oldKeyBlob, newKeyBlob);
+                if (keysUpgraded == 1) {
+                    checkedCallback(callback::onSuccess);
+                } else if (keysUpgraded == 0) {
+                    checkedCallback(() -> callback.onError("No keys matching oldKeyBlob found"));
+                } else {
+                    Log.e(TAG, "Multiple keys matched the upgrade (" + keysUpgraded
+                            + "). This should be impossible!");
+                    checkedCallback(() -> callback.onError("Internal error"));
+                }
+            } catch (Exception e) {
+                checkedCallback(() -> callback.onError(e.getMessage()));
+            }
+        });
     }
 }
