@@ -326,7 +326,7 @@ public class RegistrationBinderTest {
     }
 
     @Test
-    public void storeUpgradedKeySuccess() throws Exception {
+    public void storeUpgradedKeyAsyncSuccess() throws Exception {
         final byte[] oldKeyBlob = { 8, 6, 7, 5, 3, 0, 9};
         final byte[] newKeyBlob = { 3, 1, 4, 1, 5, 9};
 
@@ -335,13 +335,13 @@ public class RegistrationBinderTest {
                 .upgradeKeyBlob(oldKeyBlob, newKeyBlob);
 
         IStoreUpgradedKeyCallback callback = mock(IStoreUpgradedKeyCallback.class);
-        mRegistration.storeUpgradedKey(oldKeyBlob, newKeyBlob, callback);
+        mRegistration.storeUpgradedKeyAsync(oldKeyBlob, newKeyBlob, callback);
         verify(callback, timeout(MAX_TIMEOUT.toMillis())).onSuccess();
         verifyNoMoreInteractions(callback);
     }
 
     @Test
-    public void storeUpgradedKeyKeyNotFound() throws Exception {
+    public void storeUpgradedKeyAsyncKeyNotFound() throws Exception {
         final byte[] oldKeyBlob = { 42 };
         final byte[] newKeyBlob = { 123 };
 
@@ -350,13 +350,13 @@ public class RegistrationBinderTest {
                 .upgradeKeyBlob(oldKeyBlob, newKeyBlob);
 
         IStoreUpgradedKeyCallback callback = mock(IStoreUpgradedKeyCallback.class);
-        mRegistration.storeUpgradedKey(oldKeyBlob, newKeyBlob, callback);
+        mRegistration.storeUpgradedKeyAsync(oldKeyBlob, newKeyBlob, callback);
         verify(callback, timeout(MAX_TIMEOUT.toMillis())).onError(contains("No keys"));
         verifyNoMoreInteractions(callback);
     }
 
     @Test
-    public void storeUpgradedKeyInternalError() throws Exception {
+    public void storeUpgradedKeyAsyncInternalError() throws Exception {
         final byte[] oldKeyBlob = { 1, 2, 3, 4 };
         final byte[] newKeyBlob = { 4, 3, 2, 1 };
 
@@ -365,13 +365,13 @@ public class RegistrationBinderTest {
                 .upgradeKeyBlob(oldKeyBlob, newKeyBlob);
 
         IStoreUpgradedKeyCallback callback = mock(IStoreUpgradedKeyCallback.class);
-        mRegistration.storeUpgradedKey(oldKeyBlob, newKeyBlob, callback);
+        mRegistration.storeUpgradedKeyAsync(oldKeyBlob, newKeyBlob, callback);
         verify(callback, timeout(MAX_TIMEOUT.toMillis())).onError(contains("Internal error"));
         verifyNoMoreInteractions(callback);
     }
 
     @Test
-    public void storeUpgradedKeyDatabaseException() throws Exception {
+    public void storeUpgradedKeyAsyncDatabaseException() throws Exception {
         final byte[] oldKeyBlob = { 101 };
         final byte[] newKeyBlob = { 5, 5, 5 };
 
@@ -380,7 +380,7 @@ public class RegistrationBinderTest {
                 .upgradeKeyBlob(oldKeyBlob, newKeyBlob);
 
         IStoreUpgradedKeyCallback callback = mock(IStoreUpgradedKeyCallback.class);
-        mRegistration.storeUpgradedKey(oldKeyBlob, newKeyBlob, callback);
+        mRegistration.storeUpgradedKeyAsync(oldKeyBlob, newKeyBlob, callback);
         verify(callback, timeout(MAX_TIMEOUT.toMillis())).onError(contains("nope!!!"));
         verifyNoMoreInteractions(callback);
     }
