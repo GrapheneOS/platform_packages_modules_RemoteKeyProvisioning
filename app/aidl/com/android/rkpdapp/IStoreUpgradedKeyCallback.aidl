@@ -24,7 +24,7 @@ package com.android.rkpdapp;
  */
 oneway interface IStoreUpgradedKeyCallback {
     /**
-     * Called in response to {@link IRegistration.storeUpgradedKey}, indicating
+     * Called in response to {@link IRegistration.storeUpgradedKeyAsync}, indicating
      * a remotely-provisioned key is available.
      */
     void onSuccess();
