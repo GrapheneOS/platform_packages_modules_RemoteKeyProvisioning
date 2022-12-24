@@ -109,7 +109,7 @@ public class Settings {
         if (bytesTransacted < 1) return;
         SharedPreferences sharedPref = getSharedPreferences(context);
         SharedPreferences.Editor editor = sharedPref.edit();
-        int budgetUsed = 0;
+        int budgetUsed;
         try {
             budgetUsed = Math.addExact(sharedPref.getInt(KEY_FAILURE_BYTES, 0), bytesTransacted);
         } catch (Exception e) {
