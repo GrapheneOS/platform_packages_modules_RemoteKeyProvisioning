@@ -97,7 +97,6 @@ public class ServerInterface {
      * A challenge is also returned from the server so that it can check freshness of the follow-up
      * request to get keys signed.
      *
-     * @param context The application context which is required to use SettingsManager.
      * @return A GeekResponse object which optionally contains configuration data.
      */
     public GeekResponse fetchGeek(ProvisionerMetrics metrics) throws RkpdException {
