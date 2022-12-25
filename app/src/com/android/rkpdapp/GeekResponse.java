@@ -45,7 +45,7 @@ import java.util.Map;
 public class GeekResponse {
     public static final int NO_EXTRA_KEY_UPDATE = -1;
     private byte[] mChallenge;
-    private Map<Integer, byte[]> mCurveToGeek;
+    private final Map<Integer, byte[]> mCurveToGeek;
     public int numExtraAttestationKeys;
     public Duration timeToRefresh;
     public String provisioningUrl;
@@ -54,7 +54,7 @@ public class GeekResponse {
      * Default initializer.
      */
     public GeekResponse() {
-        mCurveToGeek = new HashMap();
+        mCurveToGeek = new HashMap<>();
         numExtraAttestationKeys = NO_EXTRA_KEY_UPDATE;
     }
 
