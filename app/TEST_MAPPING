@@ -9,7 +9,7 @@
   ],
   "mainline-presubmit": [
     {
-      "name": "RkpdAppGoogleUnitTest[com.google.android.rkpd.apex]"
+      "name": "RkpdAppGoogleUnitTests[com.google.android.rkpd.apex]"
     }
   ]
 }
