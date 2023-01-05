@@ -20,6 +20,8 @@ import android.content.Context;
 import android.os.RemoteException;
 import android.util.Log;
 
+import androidx.annotation.GuardedBy;
+
 import com.android.rkpdapp.GeekResponse;
 import com.android.rkpdapp.IGetKeyCallback;
 import com.android.rkpdapp.IRegistration;
@@ -32,7 +34,7 @@ import com.android.rkpdapp.database.ProvisionedKeyDao;
 import com.android.rkpdapp.interfaces.ServerInterface;
 import com.android.rkpdapp.provisioner.Provisioner;
 
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.HashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -53,12 +55,9 @@ public final class RegistrationBinder extends IRegistration.Stub {
     private final ServerInterface mRkpServer;
     private final Provisioner mProvisioner;
     private final ExecutorService mThreadPool = Executors.newCachedThreadPool();
-    private final ConcurrentHashMap<IGetKeyCallback, TaskHolder> mTasks =
-            new ConcurrentHashMap<>();
-
-    private static final class TaskHolder {
-        public Future<?> task;
-    }
+    private final Object mTasksLock = new Object();
+    @GuardedBy("mTasksLock")
+    private final HashMap<IGetKeyCallback, Future<?>> mTasks = new HashMap<>();
 
     public RegistrationBinder(Context context, int clientUid, String irpcName,
             ProvisionedKeyDao provisionedKeyDao, ServerInterface rkpServer,
@@ -139,44 +138,48 @@ public final class RegistrationBinder extends IRegistration.Stub {
 
     @Override
     public void getKey(int keyId, IGetKeyCallback callback) {
-        TaskHolder newTask = new TaskHolder();
-        TaskHolder existingTask = mTasks.putIfAbsent(callback, newTask);
-        if (existingTask != null) {
-            throw new IllegalArgumentException("Callback " + callback.hashCode()
-                    + " is already associated with a getKey operation that is in-progress");
-        }
-
-        newTask.task = mThreadPool.submit(() -> {
-            try {
-                getKeyWorker(keyId, callback);
-            } catch (InterruptedException e) {
-                Log.i(TAG, "getKey was interrupted");
-                checkedCallback(callback::onCancel);
-            } catch (Exception e) {
-                // Do our best to inform the callback when even the unexpected happens. Otherwise,
-                // the caller is going to wait until they timeout without knowing something like a
-                // RuntimeException occurred.
-                Log.e(TAG, "Error provisioning keys", e);
-                checkedCallback(() -> callback.onError(e.getMessage()));
-            } finally {
-                mTasks.remove(callback);
+        synchronized (mTasksLock) {
+            if (mTasks.containsKey(callback)) {
+                throw new IllegalArgumentException("Callback " + callback.hashCode()
+                        + " is already associated with a getKey operation that is in-progress");
             }
-        });
+
+            mTasks.put(callback, mThreadPool.submit(() -> {
+                try {
+                    getKeyWorker(keyId, callback);
+                } catch (InterruptedException e) {
+                    Log.i(TAG, "getKey was interrupted");
+                    checkedCallback(callback::onCancel);
+                } catch (Exception e) {
+                    // Do our best to inform the callback when the unexpected happens. Otherwise,
+                    // the caller is going to wait until they timeout without knowing something like
+                    // a RuntimeException occurred.
+                    Log.e(TAG, "Error provisioning keys", e);
+                    checkedCallback(() -> callback.onError(e.getMessage()));
+                } finally {
+                    synchronized (mTasksLock) {
+                        mTasks.remove(callback);
+                    }
+                }
+            }));
+        }
     }
 
     @Override
     public void cancelGetKey(IGetKeyCallback callback) throws RemoteException {
         Log.i(TAG, "cancelGetKey(" + callback.hashCode() + ")");
-        TaskHolder holder = mTasks.get(callback);
+        synchronized (mTasksLock) {
+            Future<?> task = mTasks.get(callback);
 
-        if (holder == null) {
-            Log.w(TAG, "callback not found, task may have already completed");
-        } else if (holder.task.isDone()) {
-            Log.w(TAG, "task already completed, not cancelling");
-        } else if (holder.task.isCancelled()) {
-            Log.w(TAG, "task already cancelled, cannot cancel it any further");
-        } else {
-            holder.task.cancel(true);
+            if (task == null) {
+                Log.w(TAG, "callback not found, task may have already completed");
+            } else if (task.isDone()) {
+                Log.w(TAG, "task already completed, not cancelling");
+            } else if (task.isCancelled()) {
+                Log.w(TAG, "task already cancelled, cannot cancel it any further");
+            } else {
+                task.cancel(true);
+            }
         }
     }
 
