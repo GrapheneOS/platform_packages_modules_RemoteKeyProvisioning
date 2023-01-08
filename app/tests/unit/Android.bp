@@ -41,6 +41,7 @@ java_defaults {
         "device-tests",
         "mts-rkpd",
     ],
+    min_sdk_version: "UpsideDownCake",
 }
 
 filegroup {
