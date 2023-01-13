@@ -31,6 +31,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.same;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
@@ -187,12 +188,45 @@ public class RegistrationBinderTest {
 
     @Test
     public void getKeyKicksOffBackgroundProvisioningWhenNeeded() throws Exception {
-        // TODO(b/262253838) - Implement this once we have WorkManager integration
+        doReturn(FAKE_KEY)
+                .when(mMockDao)
+                .assignKey(IRPC_HAL, CLIENT_UID, KEY_ID);
+        doReturn(true)
+                .when(mMockProvisioner)
+                .isProvisioningNeeded(IRPC_HAL);
+
+        IGetKeyCallback callback = mock(IGetKeyCallback.class);
+        mRegistration.getKey(KEY_ID, callback);
+
+        // We cannot complete all tasks until after the get key worker task completes, because
+        // that worker in turn schedules the background provisioning job
+        verify(callback, timeout(MAX_TIMEOUT.toMillis())).onSuccess(matches(FAKE_KEY));
+
+        completeAllTasks();
+        verify(mMockProvisioner).isProvisioningNeeded(eq(IRPC_HAL));
+        verify(mMockProvisioner).provisionKeys(any(), eq(IRPC_HAL), any());
+        verifyNoMoreInteractions(mMockProvisioner);
     }
 
     @Test
     public void getKeyDoesNotKickOffBackgroundProvisioningWhenNotNeeded() throws Exception {
-        // TODO(b/262253838) - Implement this once we have WorkManager integration
+        doReturn(FAKE_KEY)
+                .when(mMockDao)
+                .assignKey(IRPC_HAL, CLIENT_UID, KEY_ID);
+        doReturn(false)
+                .when(mMockProvisioner)
+                .isProvisioningNeeded(IRPC_HAL);
+
+        IGetKeyCallback callback = mock(IGetKeyCallback.class);
+        mRegistration.getKey(KEY_ID, callback);
+
+        // We cannot complete all tasks until after the get key worker task completes, because
+        // that worker in turn schedules the background provisioning job
+        verify(callback, timeout(MAX_TIMEOUT.toMillis())).onSuccess(matches(FAKE_KEY));
+
+        completeAllTasks();
+        verify(mMockProvisioner).isProvisioningNeeded(eq(IRPC_HAL));
+        verifyNoMoreInteractions(mMockProvisioner);
     }
 
     @Test

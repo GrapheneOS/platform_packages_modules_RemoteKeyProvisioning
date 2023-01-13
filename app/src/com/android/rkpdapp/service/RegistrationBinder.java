@@ -80,7 +80,9 @@ public final class RegistrationBinder extends IRegistration.Stub {
         if (assignedKey == null) {
             Log.i(TAG, "No key assigned, looking for an available key");
             assignedKey = mProvisionedKeyDao.assignKey(mServiceName, mClientUid, keyId);
-            // TODO(b/262253838): check to see if we should kick off provisioning in the background
+            if (assignedKey != null) {
+                provisionKeysIfNeeded();
+            }
         }
 
         if (assignedKey == null) {
@@ -115,6 +117,22 @@ public final class RegistrationBinder extends IRegistration.Stub {
             key.encodedCertChain = assignedKey.certificateChain;
             checkedCallback(() -> callback.onSuccess(key));
         }
+    }
+
+    private void provisionKeysIfNeeded() {
+        if (!mProvisioner.isProvisioningNeeded(mServiceName)) {
+            return;
+        }
+
+        mThreadPool.execute(() -> {
+            try (ProvisionerMetrics metrics = ProvisionerMetrics.createKeyConsumedAttemptMetrics(
+                    mContext, mServiceName)) {
+                GeekResponse geekResponse = mRkpServer.fetchGeekAndUpdate(metrics);
+                mProvisioner.provisionKeys(metrics, mServiceName, geekResponse);
+            } catch (CborException | RemoteException | RkpdException | InterruptedException e) {
+                Log.e(TAG, "Error provisioning keys", e);
+            }
+        });
     }
 
     private void checkForCancel() throws InterruptedException {

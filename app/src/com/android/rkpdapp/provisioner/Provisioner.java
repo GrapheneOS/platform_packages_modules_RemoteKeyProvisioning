@@ -62,6 +62,17 @@ public class Provisioner {
     }
 
     /**
+     * Check to see if we need to perform provisioning or not for the given
+     * IRemotelyProvisionedComponent.
+     * @param serviceName the name of the remotely provisioned component to be provisioned
+     * @return true if the remotely provisioned component requires more keys, false if the pool
+     *         of available keys is healthy.
+     */
+    public boolean isProvisioningNeeded(String serviceName) {
+        return calculateKeysRequired(serviceName) > 0;
+    }
+
+    /**
      * Generate, sign and store remotely provisioned keys.
      */
     public void provisionKeys(ProvisionerMetrics metrics, String serviceName,
