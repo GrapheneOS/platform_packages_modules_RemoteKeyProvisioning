@@ -62,7 +62,7 @@ public class SettingsTest {
                      Settings.getExtraSignedKeysAvailable(sContext));
         assertEquals(Settings.EXPIRING_BY_MS_DEFAULT,
                      Settings.getExpiringBy(sContext).toMillis());
-        assertEquals(Settings.URL_DEFAULT,
+        assertEquals(Settings.getDefaultUrl(),
                      Settings.getUrl(sContext));
         assertEquals(0, Settings.getFailureCounter(sContext));
     }
@@ -94,7 +94,7 @@ public class SettingsTest {
                      Settings.getExtraSignedKeysAvailable(sContext));
         assertEquals(Settings.EXPIRING_BY_MS_DEFAULT,
                      Settings.getExpiringBy(sContext).toMillis());
-        assertEquals(Settings.URL_DEFAULT,
+        assertEquals(Settings.getDefaultUrl(),
                      Settings.getUrl(sContext));
         assertEquals(0, Settings.getFailureCounter(sContext));
     }
