@@ -17,6 +17,7 @@
 package com.android.rkpdapp.unittest;
 
 import static com.google.common.truth.Truth.assertThat;
+import static com.google.common.truth.Truth.assertWithMessage;
 
 import static org.junit.Assert.assertThrows;
 import static org.mockito.AdditionalAnswers.answer;
@@ -30,7 +31,6 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.same;
-import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
@@ -57,6 +57,8 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.Random;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 @RunWith(AndroidJUnit4.class)
@@ -75,6 +77,7 @@ public class RegistrationBinderTest {
     private ProvisionedKeyDao mMockDao;
     private ServerInterface mRkpServer;
     private Provisioner mMockProvisioner;
+    private ExecutorService mThreadPool;
     private RegistrationBinder mRegistration;
 
     private static byte[] randBytes() {
@@ -90,13 +93,21 @@ public class RegistrationBinderTest {
         );
     }
 
+    private void completeAllTasks() throws InterruptedException {
+        mThreadPool.shutdown();
+        assertWithMessage("Background tasks failed to complete in " + MAX_TIMEOUT)
+                .that(mThreadPool.awaitTermination(MAX_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS))
+                .isTrue();
+    }
+
     @Before
     public void setUp() {
         mMockDao = mock(ProvisionedKeyDao.class);
         mRkpServer = mock(ServerInterface.class);
         mMockProvisioner = mock(Provisioner.class);
+        mThreadPool = Executors.newCachedThreadPool();
         mRegistration = new RegistrationBinder(mock(Context.class),
-                CLIENT_UID, IRPC_HAL, mMockDao, mRkpServer, mMockProvisioner);
+                CLIENT_UID, IRPC_HAL, mMockDao, mRkpServer, mMockProvisioner, mThreadPool);
     }
 
     @Test
@@ -107,7 +118,8 @@ public class RegistrationBinderTest {
 
         IGetKeyCallback callback = mock(IGetKeyCallback.class);
         mRegistration.getKey(KEY_ID, callback);
-        verify(callback, timeout(MAX_TIMEOUT.toMillis())).onSuccess(matches(FAKE_KEY));
+        completeAllTasks();
+        verify(callback).onSuccess(matches(FAKE_KEY));
         verifyNoMoreInteractions(callback);
     }
 
@@ -122,7 +134,8 @@ public class RegistrationBinderTest {
 
         IGetKeyCallback callback = mock(IGetKeyCallback.class);
         mRegistration.getKey(KEY_ID, callback);
-        verify(callback, timeout(MAX_TIMEOUT.toMillis())).onSuccess(matches(FAKE_KEY));
+        completeAllTasks();
+        verify(callback).onSuccess(matches(FAKE_KEY));
         verifyNoMoreInteractions(callback);
     }
 
@@ -144,7 +157,8 @@ public class RegistrationBinderTest {
 
         IGetKeyCallback callback = mock(IGetKeyCallback.class);
         mRegistration.getKey(KEY_ID, callback);
-        verify(callback, timeout(MAX_TIMEOUT.toMillis())).onSuccess(matches(FAKE_KEY));
+        completeAllTasks();
+        verify(callback).onSuccess(matches(FAKE_KEY));
         verify(callback).onProvisioningNeeded();
         verify(mMockProvisioner).provisionKeys(any(), eq(IRPC_HAL), same(fakeGeekResponse));
         verifyNoMoreInteractions(callback);
@@ -164,7 +178,8 @@ public class RegistrationBinderTest {
 
         IGetKeyCallback callback = mock(IGetKeyCallback.class);
         mRegistration.getKey(KEY_ID, callback);
-        verify(callback, timeout(MAX_TIMEOUT.toMillis())).onError("PROVISIONING FAIL");
+        completeAllTasks();
+        verify(callback).onError("PROVISIONING FAIL");
         verify(callback).onProvisioningNeeded();
         verifyNoMoreInteractions(callback);
     }
@@ -182,8 +197,8 @@ public class RegistrationBinderTest {
 
         IGetKeyCallback callback = mock(IGetKeyCallback.class);
         mRegistration.getKey(KEY_ID, callback);
-        verify(callback, timeout(MAX_TIMEOUT.toMillis()))
-                .onError("Provisioning failed, no keys available");
+        completeAllTasks();
+        verify(callback).onError("Provisioning failed, no keys available");
         verify(callback).onProvisioningNeeded();
         verify(mMockProvisioner).provisionKeys(any(), eq(IRPC_HAL), any());
         verifyNoMoreInteractions(callback);
@@ -215,7 +230,8 @@ public class RegistrationBinderTest {
                 .assignKey(IRPC_HAL, CLIENT_UID, KEY_ID);
         mRegistration.getKey(KEY_ID, callback);
 
-        verify(callback, timeout(MAX_TIMEOUT.toMillis())).onCancel();
+        completeAllTasks();
+        verify(callback).onCancel();
         verifyNoMoreInteractions(mMockProvisioner);
         verifyNoMoreInteractions(callback);
     }
@@ -235,7 +251,8 @@ public class RegistrationBinderTest {
                 .provisionKeys(any(), eq(IRPC_HAL), any());
         mRegistration.getKey(KEY_ID, callback);
 
-        verify(callback, timeout(MAX_TIMEOUT.toMillis())).onCancel();
+        completeAllTasks();
+        verify(callback).onCancel();
         verify(callback).onProvisioningNeeded();
         verifyNoMoreInteractions(callback);
     }
@@ -262,7 +279,8 @@ public class RegistrationBinderTest {
                 .provisionKeys(any(), eq(IRPC_HAL), any());
         mRegistration.getKey(KEY_ID, callback);
 
-        verify(callback, timeout(MAX_TIMEOUT.toMillis())).onCancel();
+        completeAllTasks();
+        verify(callback).onCancel();
         verify(callback).onProvisioningNeeded();
         verifyNoMoreInteractions(callback);
     }
@@ -318,10 +336,11 @@ public class RegistrationBinderTest {
         mRegistration.cancelGetKey(cancelMe);
         getKeyBlocker.countDown();
 
-        verify(successfulCallback, timeout(MAX_TIMEOUT.toMillis())).onSuccess(matches(FAKE_KEY));
+        completeAllTasks();
+        verify(successfulCallback).onSuccess(matches(FAKE_KEY));
         verifyNoMoreInteractions(successfulCallback);
 
-        verify(cancelMe, timeout(MAX_TIMEOUT.toMillis())).onCancel();
+        verify(cancelMe).onCancel();
         verifyNoMoreInteractions(cancelMe);
     }
 
@@ -336,7 +355,8 @@ public class RegistrationBinderTest {
 
         IStoreUpgradedKeyCallback callback = mock(IStoreUpgradedKeyCallback.class);
         mRegistration.storeUpgradedKeyAsync(oldKeyBlob, newKeyBlob, callback);
-        verify(callback, timeout(MAX_TIMEOUT.toMillis())).onSuccess();
+        completeAllTasks();
+        verify(callback).onSuccess();
         verifyNoMoreInteractions(callback);
     }
 
@@ -351,7 +371,8 @@ public class RegistrationBinderTest {
 
         IStoreUpgradedKeyCallback callback = mock(IStoreUpgradedKeyCallback.class);
         mRegistration.storeUpgradedKeyAsync(oldKeyBlob, newKeyBlob, callback);
-        verify(callback, timeout(MAX_TIMEOUT.toMillis())).onError(contains("No keys"));
+        completeAllTasks();
+        verify(callback).onError(contains("No keys"));
         verifyNoMoreInteractions(callback);
     }
 
@@ -366,7 +387,8 @@ public class RegistrationBinderTest {
 
         IStoreUpgradedKeyCallback callback = mock(IStoreUpgradedKeyCallback.class);
         mRegistration.storeUpgradedKeyAsync(oldKeyBlob, newKeyBlob, callback);
-        verify(callback, timeout(MAX_TIMEOUT.toMillis())).onError(contains("Internal error"));
+        completeAllTasks();
+        verify(callback).onError(contains("Internal error"));
         verifyNoMoreInteractions(callback);
     }
 
@@ -381,7 +403,8 @@ public class RegistrationBinderTest {
 
         IStoreUpgradedKeyCallback callback = mock(IStoreUpgradedKeyCallback.class);
         mRegistration.storeUpgradedKeyAsync(oldKeyBlob, newKeyBlob, callback);
-        verify(callback, timeout(MAX_TIMEOUT.toMillis())).onError(contains("nope!!!"));
+        completeAllTasks();
+        verify(callback).onError(contains("nope!!!"));
         verifyNoMoreInteractions(callback);
     }
 }
