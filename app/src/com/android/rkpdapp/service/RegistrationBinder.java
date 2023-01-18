@@ -36,7 +36,6 @@ import com.android.rkpdapp.provisioner.Provisioner;
 
 import java.util.HashMap;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 import co.nstant.in.cbor.CborException;
@@ -54,20 +53,21 @@ public final class RegistrationBinder extends IRegistration.Stub {
     private final ProvisionedKeyDao mProvisionedKeyDao;
     private final ServerInterface mRkpServer;
     private final Provisioner mProvisioner;
-    private final ExecutorService mThreadPool = Executors.newCachedThreadPool();
+    private final ExecutorService mThreadPool;
     private final Object mTasksLock = new Object();
     @GuardedBy("mTasksLock")
     private final HashMap<IGetKeyCallback, Future<?>> mTasks = new HashMap<>();
 
     public RegistrationBinder(Context context, int clientUid, String irpcName,
             ProvisionedKeyDao provisionedKeyDao, ServerInterface rkpServer,
-            Provisioner provisioner) {
+            Provisioner provisioner, ExecutorService threadPool) {
         mContext = context;
         mClientUid = clientUid;
         mServiceName = irpcName;
         mProvisionedKeyDao = provisionedKeyDao;
         mRkpServer = rkpServer;
         mProvisioner = provisioner;
+        mThreadPool = threadPool;
     }
 
     private void getKeyWorker(int keyId, IGetKeyCallback callback)
