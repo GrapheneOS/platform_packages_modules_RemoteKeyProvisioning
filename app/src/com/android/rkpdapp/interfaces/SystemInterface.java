@@ -98,8 +98,7 @@ public class SystemInterface {
                     return key;
                 }).toArray(MacedPublicKey[]::new);
         try (ProvisionerMetrics.StopWatch ignored = metrics.startBinderWait()) {
-            // TODO: Change this back to version 3 once RKP server starts handling CSR v2.
-            if (mBinder.getInterfaceVersion() < 4) {
+            if (mBinder.getInterfaceVersion() < 3) {
                 DeviceInfo deviceInfo = new DeviceInfo();
                 ProtectedData protectedData = new ProtectedData();
                 byte[] geekChain = geekResponse.getGeekChain(mSupportedCurve);
