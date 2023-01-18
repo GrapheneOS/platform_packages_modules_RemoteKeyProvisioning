@@ -125,9 +125,6 @@ public class RegistrationBinderTest {
 
     @Test
     public void getKeyAssignsAvailableKey() throws Exception {
-        doReturn(null)
-                .when(mMockDao)
-                .getKeyForClientAndIrpc(IRPC_HAL, CLIENT_UID, KEY_ID);
         doReturn(FAKE_KEY)
                 .when(mMockDao)
                 .assignKey(IRPC_HAL, CLIENT_UID, KEY_ID);
@@ -141,9 +138,6 @@ public class RegistrationBinderTest {
 
     @Test
     public void getKeyProvisionsKeysWhenEmpty() throws Exception {
-        doReturn(null)
-                .when(mMockDao)
-                .getKeyForClientAndIrpc(IRPC_HAL, CLIENT_UID, KEY_ID);
         // The first call to assignKeys returns null, indicating that the provisioner needs to run,
         // then the second call returns a key, which signifies provision success.
         doReturn(null, FAKE_KEY)
@@ -166,12 +160,6 @@ public class RegistrationBinderTest {
 
     @Test
     public void getKeyHandlesProvisioningFailure() throws Exception {
-        doReturn(null)
-                .when(mMockDao)
-                .getKeyForClientAndIrpc(IRPC_HAL, CLIENT_UID, KEY_ID);
-        doReturn(null)
-                .when(mMockDao)
-                .assignKey(IRPC_HAL, CLIENT_UID, KEY_ID);
         doThrow(new RuntimeException("PROVISIONING FAIL"))
                 .when(mMockProvisioner)
                 .provisionKeys(any(), eq(IRPC_HAL), any());
@@ -188,13 +176,6 @@ public class RegistrationBinderTest {
     public void getKeyNoKeysAreProvisioned() throws Exception {
         // This test ensures that getKey will handle the case in which provisioner doesn't error
         // out, but it also does not actually provision any keys. This shouldn't ever happen.
-        doReturn(null)
-                .when(mMockDao)
-                .getKeyForClientAndIrpc(IRPC_HAL, CLIENT_UID, KEY_ID);
-        doReturn(null)
-                .when(mMockDao)
-                .assignKey(IRPC_HAL, CLIENT_UID, KEY_ID);
-
         IGetKeyCallback callback = mock(IGetKeyCallback.class);
         mRegistration.getKey(KEY_ID, callback);
         completeAllTasks();
@@ -216,10 +197,6 @@ public class RegistrationBinderTest {
 
     @Test
     public void getKeyHandlesCancelBeforeProvisioning() throws Exception {
-        doReturn(null)
-                .when(mMockDao)
-                .getKeyForClientAndIrpc(IRPC_HAL, CLIENT_UID, KEY_ID);
-
         IGetKeyCallback callback = mock(IGetKeyCallback.class);
         doAnswer(
                 answer((hal, uid, keyId) -> {
@@ -238,13 +215,6 @@ public class RegistrationBinderTest {
 
     @Test
     public void getKeyHandlesCancelWhileProvisioning() throws Exception {
-        doReturn(null)
-                .when(mMockDao)
-                .getKeyForClientAndIrpc(IRPC_HAL, CLIENT_UID, KEY_ID);
-        doReturn(null)
-                .when(mMockDao)
-                .assignKey(IRPC_HAL, CLIENT_UID, KEY_ID);
-
         IGetKeyCallback callback = mock(IGetKeyCallback.class);
         doAnswer(answerVoid((hal, dao, metrics) -> mRegistration.cancelGetKey(callback)))
                 .when(mMockProvisioner)
@@ -266,13 +236,6 @@ public class RegistrationBinderTest {
 
     @Test
     public void getKeyHandlesInterruptedException() throws Exception {
-        doReturn(null)
-                .when(mMockDao)
-                .getKeyForClientAndIrpc(IRPC_HAL, CLIENT_UID, KEY_ID);
-        doReturn(null)
-                .when(mMockDao)
-                .assignKey(IRPC_HAL, CLIENT_UID, KEY_ID);
-
         IGetKeyCallback callback = mock(IGetKeyCallback.class);
         doThrow(new InterruptedException())
                 .when(mMockProvisioner)
@@ -306,13 +269,6 @@ public class RegistrationBinderTest {
 
     @Test
     public void reentrantGetKeyHandlesMultipleCallbacksSimultaneously() throws Exception {
-        doReturn(null)
-                .when(mMockDao)
-                .getKeyForClientAndIrpc(IRPC_HAL, CLIENT_UID, KEY_ID);
-        doReturn(null)
-                .when(mMockDao)
-                .assignKey(IRPC_HAL, CLIENT_UID, KEY_ID);
-
         CountDownLatch getKeyEnteredTwice = new CountDownLatch(2);
         CountDownLatch getKeyBlocker = new CountDownLatch(1);
         doAnswer(
