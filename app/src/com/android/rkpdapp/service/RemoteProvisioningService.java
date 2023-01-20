@@ -31,6 +31,8 @@ import com.android.rkpdapp.database.RkpdDatabase;
 import com.android.rkpdapp.interfaces.ServerInterface;
 import com.android.rkpdapp.provisioner.Provisioner;
 
+import java.util.concurrent.Executors;
+
 /** Provides the implementation for IRemoteProvisioning.aidl */
 public class RemoteProvisioningService extends Service {
     public static final String TAG = "com.android.rkpdapp";
@@ -56,7 +58,8 @@ public class RemoteProvisioningService extends Service {
             Context context = getApplicationContext();
             Provisioner provisioner = new Provisioner(context, dao);
             IRegistration.Stub registration = new RegistrationBinder(context, callerUid, irpcName,
-                    dao, new ServerInterface(context), provisioner);
+                    dao, new ServerInterface(context), provisioner,
+                    Executors.newCachedThreadPool());
             try {
                 callback.onSuccess(registration);
             } catch (RemoteException e) {
