@@ -40,6 +40,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -49,16 +50,15 @@ import java.util.List;
 public class RkpdDatabaseTest {
     private static final String TEST_HAL_1 = "testIrpc";
     private static final String TEST_HAL_2 = "someOtherIrpc";
-    private static final byte[] TEST_KEY_BLOB_1 = new byte[] {0x01, 0x02, 0x03};
-    private static final byte[] TEST_KEY_BLOB_2 = new byte[] {0x11, 0x12, 0x13};
-    private static final byte[] TEST_KEY_BLOB_3 = new byte[] {0x21, 0x22, 0x23};
+    private static final byte[] TEST_KEY_BLOB_1 = new byte[]{0x01, 0x02, 0x03};
+    private static final byte[] TEST_KEY_BLOB_2 = new byte[]{0x11, 0x12, 0x13};
+    private static final byte[] TEST_KEY_BLOB_3 = new byte[]{0x21, 0x22, 0x23};
+    private static final Instant TEST_KEY_EXPIRY = Instant.now().plus(Duration.ofHours(1));
     private static final int FAKE_CLIENT_UID = 1;
     private static final int FAKE_CLIENT_UID_2 = 2;
     private static final int FAKE_KEY_ID = 1;
     private static final int FAKE_CLIENT_UID_3 = 3;
     private static final int FAKE_KEY_ID_2 = 2;
-    private static final Instant CURRENT_INSTANT = InstantConverter.fromTimestamp(
-            System.currentTimeMillis());
     private ProvisionedKey mProvisionedKey1;
     private ProvisionedKey mProvisionedKey2;
 
@@ -71,9 +71,9 @@ public class RkpdDatabaseTest {
         mDatabase = Room.inMemoryDatabaseBuilder(context, RkpdDatabase.class).build();
         mKeyDao = mDatabase.provisionedKeyDao();
         mProvisionedKey1 = new ProvisionedKey(TEST_KEY_BLOB_1, TEST_HAL_1, TEST_KEY_BLOB_1,
-                TEST_KEY_BLOB_1, CURRENT_INSTANT);
+                TEST_KEY_BLOB_1, TEST_KEY_EXPIRY);
         mProvisionedKey2 = new ProvisionedKey(TEST_KEY_BLOB_2, TEST_HAL_2, TEST_KEY_BLOB_2,
-                TEST_KEY_BLOB_2, CURRENT_INSTANT);
+                TEST_KEY_BLOB_2, TEST_KEY_EXPIRY);
     }
 
     @After
@@ -105,8 +105,8 @@ public class RkpdDatabaseTest {
 
     @Test
     public void testRemovingExpiredKeyFromTable() {
-        mProvisionedKey1.expirationTime = CURRENT_INSTANT.minus(1000, ChronoUnit.MINUTES);
-        mProvisionedKey2.expirationTime = CURRENT_INSTANT.plus(1000, ChronoUnit.MINUTES);
+        mProvisionedKey1.expirationTime = Instant.now().minus(1000, ChronoUnit.MINUTES);
+        mProvisionedKey2.expirationTime = Instant.now().plus(1000, ChronoUnit.MINUTES);
 
         mKeyDao.insertKeys(List.of(mProvisionedKey1, mProvisionedKey2));
 
@@ -120,13 +120,29 @@ public class RkpdDatabaseTest {
     }
 
     @Test
+    public void testAssignedKeysAreAlsoExpired() {
+        mKeyDao.insertKeys(List.of(mProvisionedKey1));
+
+        assertThat(mKeyDao.assignKey(TEST_HAL_1, Instant.now(), FAKE_CLIENT_UID, FAKE_KEY_ID))
+                .isNotNull();
+        assertThat(mKeyDao.getKeyForClientAndIrpc(TEST_HAL_1, FAKE_CLIENT_UID, FAKE_KEY_ID))
+                .isNotNull();
+
+        mKeyDao.deleteExpiringKeys(mProvisionedKey1.expirationTime.plusMillis(1));
+
+        assertThat(mKeyDao.getKeyForClientAndIrpc(TEST_HAL_1, FAKE_CLIENT_UID, FAKE_KEY_ID))
+                .isNull();
+    }
+
+    @Test
     public void testUpdate() {
         mKeyDao.insertKeys(List.of(mProvisionedKey1));
 
         List<ProvisionedKey> keysInDatabase = getAllKeys();
         ProvisionedKey key = keysInDatabase.get(0);
         assertThat(keysInDatabase).hasSize(1);
-        assertThat(key.expirationTime).isEqualTo(CURRENT_INSTANT);
+        assertThat(key.expirationTime).isEqualTo(
+                mProvisionedKey1.expirationTime.truncatedTo(ChronoUnit.MILLIS));
 
         Instant expiredInstant = InstantConverter.fromTimestamp(System.currentTimeMillis())
                 .minus(1000, ChronoUnit.MINUTES);
@@ -157,14 +173,14 @@ public class RkpdDatabaseTest {
 
     @Test
     public void testGetExpiringKeysForIrpc() {
-        mProvisionedKey1.expirationTime = CURRENT_INSTANT.minus(1000, ChronoUnit.MINUTES);
-        mProvisionedKey2.expirationTime = CURRENT_INSTANT.plus(1000, ChronoUnit.MINUTES);
+        mProvisionedKey1.expirationTime = Instant.now().minus(1000, ChronoUnit.MINUTES);
+        mProvisionedKey2.expirationTime = Instant.now().plus(1000, ChronoUnit.MINUTES);
         ProvisionedKey key3 = new ProvisionedKey(TEST_KEY_BLOB_3, TEST_HAL_2, TEST_KEY_BLOB_3,
-                TEST_KEY_BLOB_3, CURRENT_INSTANT.minus(1000, ChronoUnit.MINUTES));
+                TEST_KEY_BLOB_3, Instant.now().minus(1000, ChronoUnit.MINUTES));
         mKeyDao.insertKeys(List.of(mProvisionedKey1, mProvisionedKey2, key3));
 
-        List<ProvisionedKey> expiringKeys = mKeyDao.getExpiringKeysForIrpc(Instant.now(),
-                TEST_HAL_1);
+        List<ProvisionedKey> expiringKeys =
+                mKeyDao.getExpiringKeysForIrpc(TEST_HAL_1, Instant.now());
         assertThat(expiringKeys).containsExactly(mProvisionedKey1);
     }
 
@@ -221,18 +237,19 @@ public class RkpdDatabaseTest {
         mKeyDao.insertKeys(List.of(mProvisionedKey1, mProvisionedKey2));
 
         List<ProvisionedKey> keysPersisted = getAllKeys();
-        for (ProvisionedKey databaseKey: keysPersisted) {
+        for (ProvisionedKey databaseKey : keysPersisted) {
             assertThat(databaseKey.keyId).isNull();
             assertThat(databaseKey.clientUid).isNull();
         }
 
-        ProvisionedKey assignedKey = mKeyDao.assignKey(TEST_HAL_1, FAKE_CLIENT_UID, FAKE_KEY_ID);
+        ProvisionedKey assignedKey = mKeyDao.assignKey(TEST_HAL_1, Instant.now(), FAKE_CLIENT_UID,
+                FAKE_KEY_ID);
 
         assertThat(assignedKey.keyId).isEqualTo(FAKE_KEY_ID);
         assertThat(assignedKey.clientUid).isEqualTo(FAKE_CLIENT_UID);
 
         try {
-            mKeyDao.assignKey(TEST_HAL_1, FAKE_CLIENT_UID, FAKE_KEY_ID);
+            mKeyDao.assignKey(TEST_HAL_1, Instant.now(), FAKE_CLIENT_UID, FAKE_KEY_ID);
             fail("Able to assign key with duplicate IRPC, clientId and keyId.");
         } catch (SQLiteConstraintException ex) {
             assertThat(ex).hasMessageThat().contains("UNIQUE constraint failed");
@@ -240,8 +257,34 @@ public class RkpdDatabaseTest {
     }
 
     @Test
+    public void testAssignKeyChoosesNonExpiredKey() throws RkpdException {
+        mProvisionedKey1.expirationTime = Instant.now().minusMillis(1);
+        mProvisionedKey2.irpcHal = TEST_HAL_1;
+        mKeyDao.insertKeys(List.of(mProvisionedKey1, mProvisionedKey2));
+
+        ProvisionedKey assignedKey = mKeyDao.assignKey(TEST_HAL_1, Instant.now(), FAKE_CLIENT_UID,
+                FAKE_KEY_ID);
+
+        // The first key is expired, so it should not have been assigned
+        assertThat(assignedKey.keyBlob).isNotEqualTo(mProvisionedKey1.publicKey);
+        assertThat(assignedKey.keyBlob).isEqualTo(mProvisionedKey2.publicKey);
+    }
+
+    @Test
+    public void testAssignKeyFailsIfAllKeysAreExpired() throws RkpdException {
+        mProvisionedKey1.expirationTime = Instant.now().minusMillis(1);
+        mProvisionedKey2.irpcHal = TEST_HAL_1;
+        mProvisionedKey2.expirationTime = Instant.now().minusMillis(1);
+        mKeyDao.insertKeys(List.of(mProvisionedKey1, mProvisionedKey2));
+
+        assertThat(mKeyDao.assignKey(TEST_HAL_1, Instant.now(), FAKE_CLIENT_UID,
+                FAKE_KEY_ID)).isNull();
+    }
+
+    @Test
     public void testNoUnassignedKeyRemaining() {
-        assertThat(mKeyDao.assignKey(TEST_HAL_1, FAKE_CLIENT_UID, FAKE_KEY_ID)).isNull();
+        assertThat(mKeyDao.assignKey(TEST_HAL_1, Instant.now(), FAKE_CLIENT_UID,
+                FAKE_KEY_ID)).isNull();
     }
 
     @Test

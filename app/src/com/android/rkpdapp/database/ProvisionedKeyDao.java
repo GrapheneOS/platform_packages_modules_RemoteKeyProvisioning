@@ -61,15 +61,19 @@ public abstract class ProvisionedKeyDao {
      */
     @Query("SELECT * FROM provisioned_keys"
             + " WHERE expiration_time < :expiryTime AND irpc_hal = :irpcHal")
-    public abstract List<ProvisionedKey> getExpiringKeysForIrpc(Instant expiryTime, String irpcHal);
+    public abstract List<ProvisionedKey> getExpiringKeysForIrpc(String irpcHal, Instant expiryTime);
 
     /**
-     * Get provisioned keys that can be assigned to clients.
+     * Get provisioned keys that can be assigned to clients, factoring in an expiration time to
+     * ensure that we do not return stale keys.
+     *
+     * @param minExpiry Any keys that expire previous to this time will not be considered, as they
+     *                  are too stale.
      */
     @Query("SELECT * FROM provisioned_keys"
-            + " WHERE client_uid IS NULL AND irpc_hal = :irpcHal"
+            + " WHERE client_uid IS NULL AND irpc_hal = :irpcHal AND expiration_time >= :minExpiry"
             + " LIMIT 1")
-    abstract ProvisionedKey getUnassignedKeyForIrpc(String irpcHal);
+    abstract ProvisionedKey getUnassignedKeyForIrpc(String irpcHal, Instant minExpiry);
 
     /**
      * Gets total number of keys that can be assigned for a specific IRPC.
@@ -100,16 +104,18 @@ public abstract class ProvisionedKeyDao {
      * This transaction directly tries to assign an unassigned provisioned key to the given keyId
      * and clientId. If the clientId and keyId combination is already on another key with same
      * irpcHal, then this would throw an exception since index on these need to be unique.
-     * @param irpcHal Searches for unassigned keys for this remotely provisioned component.
-     * @param clientUid Uid for RKPD's client that needs to set up the key for its own client.
-     * @param keyId Client provided identifier to set up the key with.
      *
+     * @param irpcHal   Searches for unassigned keys for this remotely provisioned component.
+     * @param minExpiry The minimum expiration time allowed for an assigned key. Any keys that
+     *                  expire before minExpiry will not be assigned.
+     * @param clientUid Uid for RKPD's client that needs to set up the key for its own client.
+     * @param keyId     Client provided identifier to set up the key with.
      * @return the key that has been assigned to the given (irpcHal, clientUid, keyId) tuple,
      * else null if no keys are available to be assigned.
      */
     @Transaction
-    public ProvisionedKey assignKey(String irpcHal, int clientUid, int keyId) {
-        ProvisionedKey availableKey = getUnassignedKeyForIrpc(irpcHal);
+    public ProvisionedKey assignKey(String irpcHal, Instant minExpiry, int clientUid, int keyId) {
+        ProvisionedKey availableKey = getUnassignedKeyForIrpc(irpcHal, minExpiry);
         if (availableKey == null) {
             return null;
         }
