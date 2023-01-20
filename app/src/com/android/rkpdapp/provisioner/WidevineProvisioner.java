@@ -92,8 +92,11 @@ public class WidevineProvisioner extends Worker {
      */
     @Override
     public Result doWork() {
-        Log.i(TAG, "Beginning WV provisioning request. Current attempt: " + getRunAttemptCount());
-        return provisionWidevine();
+        if (isWidevineProvisioningNeeded()) {
+            Log.i(TAG, "Starting WV provisioning. Current attempt: " + getRunAttemptCount());
+            return provisionWidevine();
+        }
+        return Result.success();
     }
 
     /**
@@ -105,7 +108,7 @@ public class WidevineProvisioner extends Worker {
      */
     public static boolean isWidevineProvisioningNeeded() {
         try {
-            final MediaDrm drm = new MediaDrm(WidevineProvisioner.WIDEVINE_UUID);
+            final MediaDrm drm = new MediaDrm(WIDEVINE_UUID);
 
             if (!drm.getPropertyString("provisioningModel").equals("BootCertificateChain")) {
                 // Not a provisioning 4.0 device.

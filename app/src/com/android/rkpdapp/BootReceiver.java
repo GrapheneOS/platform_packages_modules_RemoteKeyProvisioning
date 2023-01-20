@@ -60,13 +60,10 @@ public class BootReceiver extends BroadcastReceiver {
                                        ExistingPeriodicWorkPolicy.UPDATE, // Replace on reboot.
                                        workRequest);
 
-        if (WidevineProvisioner.isWidevineProvisioningNeeded()) {
-            Log.i(TAG, "WV provisioning needed. Queueing a one-time provisioning job.");
-            OneTimeWorkRequest wvRequest =
-                    new OneTimeWorkRequest.Builder(WidevineProvisioner.class)
-                            .setConstraints(constraints)
-                            .build();
-            WorkManager.getInstance(context).enqueue(wvRequest);
-        }
+        Log.i(TAG, "Queueing a one-time provisioning job for widevine provisioning.");
+        OneTimeWorkRequest wvRequest = new OneTimeWorkRequest.Builder(WidevineProvisioner.class)
+                .setConstraints(constraints)
+                .build();
+        WorkManager.getInstance(context).enqueue(wvRequest);
     }
 }
