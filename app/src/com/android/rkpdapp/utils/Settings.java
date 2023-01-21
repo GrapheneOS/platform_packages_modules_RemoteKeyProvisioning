@@ -18,10 +18,13 @@ package com.android.rkpdapp.utils;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.os.SystemProperties;
 import android.util.Log;
 
 import com.android.rkpdapp.GeekResponse;
 
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Random;
@@ -38,7 +41,6 @@ public class Settings {
     public static final int EXTRA_SIGNED_KEYS_AVAILABLE_DEFAULT = 6;
     // Check for expiring certs in the next 3 days
     public static final int EXPIRING_BY_MS_DEFAULT = 1000 * 60 * 60 * 24 * 3;
-    public static final String URL_DEFAULT = "https://remoteprovisioning.googleapis.com/v1";
     public static final boolean IS_TEST_MODE = false;
     // Limit data consumption from failures within a window of time to 1 MB.
     public static final int FAILURE_DATA_USAGE_MAX = 1024 * 1024;
@@ -150,7 +152,7 @@ public class Settings {
                 context,
                 EXTRA_SIGNED_KEYS_AVAILABLE_DEFAULT,
                 Duration.ofMillis(EXPIRING_BY_MS_DEFAULT),
-                URL_DEFAULT);
+                getDefaultUrl());
         clearFailureCounter(context);
     }
 
@@ -220,7 +222,26 @@ public class Settings {
      */
     public static String getUrl(Context context) {
         SharedPreferences sharedPref = getSharedPreferences(context);
-        return sharedPref.getString(KEY_URL, URL_DEFAULT);
+        return sharedPref.getString(KEY_URL, getDefaultUrl());
+    }
+
+    /**
+     * Gets the system default URL for the remote provisioning server. This value is set at
+     * build time by the device maker.
+     * @return the system default, which may be overwritten in settings (see getUrl()).
+     */
+    public static String getDefaultUrl() {
+        String hostname = SystemProperties.get("remote_provisioning.hostname");
+        if (hostname.isEmpty()) {
+            return "";
+        }
+
+        try {
+            return new URL("https", hostname, "v1").toExternalForm();
+        } catch (MalformedURLException e) {
+            Log.e(TAG, "Unable to construct URL for hostname '" + hostname + "'", e);
+            return "";
+        }
     }
 
     /**
