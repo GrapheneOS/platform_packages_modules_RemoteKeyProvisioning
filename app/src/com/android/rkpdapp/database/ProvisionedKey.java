@@ -23,6 +23,7 @@ import androidx.room.Index;
 import androidx.room.PrimaryKey;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.Objects;
 
@@ -79,18 +80,22 @@ public class ProvisionedKey {
                 && Objects.equals(irpcHal, that.irpcHal)
                 && Arrays.equals(publicKey, that.publicKey)
                 && Arrays.equals(certificateChain, that.certificateChain)
-                && Objects.equals(expirationTime, that.expirationTime)
+                && Objects.equals(truncate(expirationTime), truncate(that.expirationTime))
                 && Objects.equals(clientUid, that.clientUid)
                 && Objects.equals(keyId, that.keyId);
     }
 
     @Override
     public int hashCode() {
-        int result = Objects.hash(irpcHal, expirationTime, clientUid, keyId);
+        int result = Objects.hash(irpcHal, truncate(expirationTime), clientUid, keyId);
         result = 31 * result + Arrays.hashCode(keyBlob);
         result = 31 * result + Arrays.hashCode(publicKey);
         result = 31 * result + Arrays.hashCode(certificateChain);
         return result;
+    }
+
+    private static Instant truncate(Instant original) {
+        return original == null ? null : original.truncatedTo(ChronoUnit.MILLIS);
     }
 
     @Override
