@@ -19,8 +19,8 @@ package com.android.rkpdapp.unittest;
 import static com.google.common.truth.Truth.assertThat;
 
 import static org.junit.Assert.assertEquals;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.notNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -256,7 +256,7 @@ public class StatsProcessorTest {
         for (int i = 0; i < expiringKeys; i++) {
             expiringKeyList.add(mock(ProvisionedKey.class));
         }
-        when(mKeyDao.getExpiringKeysForIrpc(any(), anyString())).thenReturn(expiringKeyList);
+        when(mKeyDao.getExpiringKeysForIrpc(anyString(), notNull())).thenReturn(expiringKeyList);
         return StatsProcessor.processPool(mKeyDao, SERVICE_NAME, numExtraKeys, Instant.now());
     }
 }
