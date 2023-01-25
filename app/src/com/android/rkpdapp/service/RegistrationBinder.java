@@ -33,7 +33,12 @@ import com.android.rkpdapp.database.ProvisionedKey;
 import com.android.rkpdapp.database.ProvisionedKeyDao;
 import com.android.rkpdapp.interfaces.ServerInterface;
 import com.android.rkpdapp.provisioner.Provisioner;
+import com.android.rkpdapp.utils.Settings;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
@@ -45,6 +50,10 @@ import co.nstant.in.cbor.CborException;
  * IRemotelyProvisionedComponent) tuple.
  */
 public final class RegistrationBinder extends IRegistration.Stub {
+    // The minimum amount of time that the registration will consider a key valid. If a key expires
+    // before this time elapses, then the key is considered too stale and will not be used.
+    public static final Duration MIN_KEY_LIFETIME = Duration.ofHours(1);
+
     static final String TAG = "RkpdRegistrationBinder";
 
     private final Context mContext;
@@ -74,15 +83,21 @@ public final class RegistrationBinder extends IRegistration.Stub {
             throws CborException, InterruptedException, RkpdException, RemoteException {
         Log.i(TAG, "Key requested for service: " + mServiceName + ", clientUid: " + mClientUid
                 + ", keyId: " + keyId + ", callback: " + callback.hashCode());
+        // Use reduced look-ahead to get rid of soon-to-be expired keys, because the periodic
+        // provisioner should be ensuring that old keys are already expired. However, in the
+        // edge case that periodic provisioning didn't work, we want to allow slightly "more stale"
+        // keys to be used. This reduces window of time in which key attestation is not available
+        // (e.g. if there is a provisioning server outage). Note that we must have some look-ahead,
+        // rather than using "now", else we might return a key that expires so soon that the caller
+        // can never successfully use it.
+        final Instant minExpiry = Instant.now().plus(MIN_KEY_LIFETIME);
+        mProvisionedKeyDao.deleteExpiringKeys(minExpiry);
+
         ProvisionedKey assignedKey = mProvisionedKeyDao.getKeyForClientAndIrpc(
                 mServiceName, mClientUid, keyId);
 
         if (assignedKey == null) {
-            Log.i(TAG, "No key assigned, looking for an available key");
-            assignedKey = mProvisionedKeyDao.assignKey(mServiceName, mClientUid, keyId);
-            if (assignedKey != null) {
-                provisionKeysIfNeeded();
-            }
+            assignedKey = tryToAssignKey(minExpiry, keyId);
         }
 
         if (assignedKey == null) {
@@ -98,7 +113,7 @@ public final class RegistrationBinder extends IRegistration.Stub {
                 GeekResponse geekResponse = mRkpServer.fetchGeek(metrics);
                 mProvisioner.provisionKeys(metrics, mServiceName, geekResponse);
             }
-            assignedKey = mProvisionedKeyDao.assignKey(mServiceName, mClientUid, keyId);
+            assignedKey = mProvisionedKeyDao.assignKey(mServiceName, minExpiry, mClientUid, keyId);
         }
 
         // Now that we've gotten back from our network round-trip, it's possible an interrupt came
@@ -117,6 +132,28 @@ public final class RegistrationBinder extends IRegistration.Stub {
             key.encodedCertChain = assignedKey.certificateChain;
             checkedCallback(() -> callback.onSuccess(key));
         }
+    }
+
+    private ProvisionedKey tryToAssignKey(Instant minExpiry, int keyId) {
+        // Since we're going to be assigning a fresh key to the app, we ideally want a key that's
+        // longer-lived than the minimum. We use the server-configured expiration, which is normally
+        // days, as the preferred lifetime for a key. However, if we cannot find a key that is valid
+        // for that long, we'll settle for a shorter-lived key.
+        Instant[] expirations = new Instant[] {
+                Instant.now().plus(Settings.getExpiringBy(mContext)),
+                minExpiry
+        };
+        Arrays.sort(expirations, Collections.reverseOrder());
+        for (Instant expiry : expirations) {
+            Log.i(TAG, "No key assigned, looking for an available key with expiry of " + expiry);
+            ProvisionedKey key = mProvisionedKeyDao.assignKey(mServiceName, expiry, mClientUid,
+                    keyId);
+            if (key != null) {
+                provisionKeysIfNeeded();
+                return key;
+            }
+        }
+        return null;
     }
 
     private void provisionKeysIfNeeded() {
