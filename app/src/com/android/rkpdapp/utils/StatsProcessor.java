@@ -55,7 +55,7 @@ public class StatsProcessor {
         PoolStats stats = new PoolStats();
         int totalKeys = keyDao.getTotalKeysForIrpc(irpcHal);
         int unassignedKeys = keyDao.getTotalUnassignedKeysForIrpc(irpcHal);
-        int expiringKeys = keyDao.getExpiringKeysForIrpc(expirationTime, irpcHal).size();
+        int expiringKeys = keyDao.getExpiringKeysForIrpc(irpcHal, expirationTime).size();
         stats.keysInUse = totalKeys - unassignedKeys;
         // Need to generate the total number of keys in use along with the "slack" of extra signed
         // keys so that we always have extra keys when other clients decide to call us.
