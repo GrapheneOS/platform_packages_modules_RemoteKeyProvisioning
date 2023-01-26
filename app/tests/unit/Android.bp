@@ -21,6 +21,7 @@ java_defaults {
     exclude_srcs: ["src/**/KeyRegisteredTest.java"],
     static_libs: [
         "Nene",
+        "RkpdAppTestUtil",
         "androidx.test.ext.junit",
         "androidx.test.core",
         "androidx.test.rules",
