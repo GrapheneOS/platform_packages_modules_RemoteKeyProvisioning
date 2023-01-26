@@ -85,7 +85,7 @@ public class ProvisionedKeyTest {
         final ProvisionedKey expected = randomKey();
         final ProvisionedKey actual = randomKey();
 
-        for (Field f: expected.getClass().getDeclaredFields()) {
+        for (Field f: expected.getClass().getFields()) {
             assertThat(actual).isNotEqualTo(expected);
             assertThat(actual.hashCode()).isNotEqualTo(expected.hashCode());
             f.set(actual, clone(f.get(expected)));
@@ -96,7 +96,7 @@ public class ProvisionedKeyTest {
 
     @Test
     public void testEqualityWithNullFields() throws Exception {
-        for (Field f : ProvisionedKey.class.getDeclaredFields()) {
+        for (Field f : ProvisionedKey.class.getFields()) {
             ProvisionedKey expected = randomKey();
             ProvisionedKey actual = clone(expected);
             assertThat(actual).isEqualTo(expected);
