@@ -113,7 +113,8 @@ public final class RegistrationBinder extends IRegistration.Stub {
                 GeekResponse geekResponse = mRkpServer.fetchGeek(metrics);
                 mProvisioner.provisionKeys(metrics, mServiceName, geekResponse);
             }
-            assignedKey = mProvisionedKeyDao.assignKey(mServiceName, minExpiry, mClientUid, keyId);
+            assignedKey = mProvisionedKeyDao.getOrAssignKey(mServiceName, minExpiry, mClientUid,
+                    keyId);
         }
 
         // Now that we've gotten back from our network round-trip, it's possible an interrupt came
@@ -146,7 +147,7 @@ public final class RegistrationBinder extends IRegistration.Stub {
         Arrays.sort(expirations, Collections.reverseOrder());
         for (Instant expiry : expirations) {
             Log.i(TAG, "No key assigned, looking for an available key with expiry of " + expiry);
-            ProvisionedKey key = mProvisionedKeyDao.assignKey(mServiceName, expiry, mClientUid,
+            ProvisionedKey key = mProvisionedKeyDao.getOrAssignKey(mServiceName, expiry, mClientUid,
                     keyId);
             if (key != null) {
                 provisionKeysIfNeeded();
