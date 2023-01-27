@@ -303,8 +303,8 @@ public class SystemInterfaceTest {
             IRemotelyProvisionedComponent mockedComponent) throws RemoteException {
         RpcHardwareInfo mockedHardwareInfo = mock(RpcHardwareInfo.class);
         mockedHardwareInfo.supportedEekCurve = supportedCurve;
+        mockedHardwareInfo.versionNumber = interfaceVersion;
         when(mockedComponent.getHardwareInfo()).thenReturn(mockedHardwareInfo);
-        when(mockedComponent.getInterfaceVersion()).thenReturn(interfaceVersion);
         doAnswer(invocation -> {
             Object[] args = invocation.getArguments();
             ((MacedPublicKey) args[1]).macedKey = Base64.decode("g0BAWE2lAQIDJiABIVggUYCsz4+WjOwPU"
