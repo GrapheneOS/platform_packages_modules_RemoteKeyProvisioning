@@ -149,7 +149,7 @@ public class RegistrationBinderTest {
     public void getKeyAssignsAvailableKey() throws Exception {
         doReturn(FAKE_KEY)
                 .when(mMockDao)
-                .assignKey(eq(IRPC_HAL), notNull(), eq(CLIENT_UID), eq(KEY_ID));
+                .getOrAssignKey(eq(IRPC_HAL), notNull(), eq(CLIENT_UID), eq(KEY_ID));
 
         IGetKeyCallback callback = mock(IGetKeyCallback.class);
         mRegistration.getKey(KEY_ID, callback);
@@ -162,7 +162,7 @@ public class RegistrationBinderTest {
     public void getKeyAssignsLongExpiringKey() throws Exception {
         doReturn(FAKE_KEY)
                 .when(mMockDao)
-                .assignKey(eq(IRPC_HAL), notNull(), eq(CLIENT_UID), eq(KEY_ID));
+                .getOrAssignKey(eq(IRPC_HAL), notNull(), eq(CLIENT_UID), eq(KEY_ID));
 
         Instant minExpiry = Instant.now().plus(Settings.getExpiringBy(mContext));
         mRegistration.getKey(KEY_ID, mock(IGetKeyCallback.class));
@@ -170,14 +170,14 @@ public class RegistrationBinderTest {
         Instant maxExpiry = Instant.now().plus(Settings.getExpiringBy(mContext));
 
         verify(mMockDao)
-                .assignKey(notNull(), isInRange(minExpiry, maxExpiry), anyInt(), anyInt());
+                .getOrAssignKey(notNull(), isInRange(minExpiry, maxExpiry), anyInt(), anyInt());
     }
 
     @Test
     public void getKeyAssignmentFallsBackToShorterLivedKeys() throws Exception {
         doReturn(null, FAKE_KEY)
                 .when(mMockDao)
-                .assignKey(eq(IRPC_HAL), notNull(), eq(CLIENT_UID), eq(KEY_ID));
+                .getOrAssignKey(eq(IRPC_HAL), notNull(), eq(CLIENT_UID), eq(KEY_ID));
 
         Instant minExpiry = Instant.now().plus(Settings.getExpiringBy(mContext));
         Instant minFallbackExpiry = Instant.now().plus(RegistrationBinder.MIN_KEY_LIFETIME);
@@ -187,19 +187,19 @@ public class RegistrationBinderTest {
         Instant maxFallbackExpiry = Instant.now().plus(RegistrationBinder.MIN_KEY_LIFETIME);
 
         verify(mMockDao)
-                .assignKey(notNull(), isInRange(minExpiry, maxExpiry), anyInt(), anyInt());
+                .getOrAssignKey(notNull(), isInRange(minExpiry, maxExpiry), anyInt(), anyInt());
         verify(mMockDao)
-                .assignKey(notNull(), isInRange(minFallbackExpiry, maxFallbackExpiry), anyInt(),
-                        anyInt());
+                .getOrAssignKey(notNull(), isInRange(minFallbackExpiry, maxFallbackExpiry),
+                        anyInt(), anyInt());
     }
 
     @Test
     public void getKeyProvisionsKeysWhenEmpty() throws Exception {
-        // The first two calls to assignKeys returns null, indicating that the provisioner needs
+        // The first two calls to assignKey returns null, indicating that the provisioner needs
         // to run, then the last call returns a key, which signifies provision success.
         doReturn(null, null, FAKE_KEY)
                 .when(mMockDao)
-                .assignKey(eq(IRPC_HAL), notNull(), eq(CLIENT_UID), eq(KEY_ID));
+                .getOrAssignKey(eq(IRPC_HAL), notNull(), eq(CLIENT_UID), eq(KEY_ID));
 
         final GeekResponse fakeGeekResponse = new GeekResponse();
         doReturn(fakeGeekResponse)
@@ -260,7 +260,7 @@ public class RegistrationBinderTest {
     public void getKeyKicksOffBackgroundProvisioningWhenNeeded() throws Exception {
         doReturn(FAKE_KEY)
                 .when(mMockDao)
-                .assignKey(eq(IRPC_HAL), notNull(), eq(CLIENT_UID), eq(KEY_ID));
+                .getOrAssignKey(eq(IRPC_HAL), notNull(), eq(CLIENT_UID), eq(KEY_ID));
         doReturn(true)
                 .when(mMockProvisioner)
                 .isProvisioningNeeded(IRPC_HAL);
@@ -282,7 +282,7 @@ public class RegistrationBinderTest {
     public void getKeyDoesNotKickOffBackgroundProvisioningWhenNotNeeded() throws Exception {
         doReturn(FAKE_KEY)
                 .when(mMockDao)
-                .assignKey(eq(IRPC_HAL), notNull(), eq(CLIENT_UID), eq(KEY_ID));
+                .getOrAssignKey(eq(IRPC_HAL), notNull(), eq(CLIENT_UID), eq(KEY_ID));
         doReturn(false)
                 .when(mMockProvisioner)
                 .isProvisioningNeeded(IRPC_HAL);
@@ -308,7 +308,7 @@ public class RegistrationBinderTest {
                     return null;
                 }))
                 .when(mMockDao)
-                .assignKey(eq(IRPC_HAL), notNull(), eq(CLIENT_UID), eq(KEY_ID));
+                .getOrAssignKey(eq(IRPC_HAL), notNull(), eq(CLIENT_UID), eq(KEY_ID));
         mRegistration.getKey(KEY_ID, callback);
 
         completeAllTasks();
