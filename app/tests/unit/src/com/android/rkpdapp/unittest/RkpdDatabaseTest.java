@@ -129,7 +129,7 @@ public class RkpdDatabaseTest {
     public void testAssignedKeysAreAlsoExpired() {
         mKeyDao.insertKeys(List.of(mProvisionedKey1));
 
-        assertThat(mKeyDao.assignKey(TEST_HAL_1, Instant.now(), FAKE_CLIENT_UID, FAKE_KEY_ID))
+        assertThat(mKeyDao.getOrAssignKey(TEST_HAL_1, Instant.now(), FAKE_CLIENT_UID, FAKE_KEY_ID))
                 .isNotNull();
         assertThat(mKeyDao.getKeyForClientAndIrpc(TEST_HAL_1, FAKE_CLIENT_UID, FAKE_KEY_ID))
                 .isNotNull();
@@ -248,18 +248,15 @@ public class RkpdDatabaseTest {
             assertThat(databaseKey.clientUid).isNull();
         }
 
-        ProvisionedKey assignedKey = mKeyDao.assignKey(TEST_HAL_1, Instant.now(), FAKE_CLIENT_UID,
-                FAKE_KEY_ID);
+        ProvisionedKey assignedKey = mKeyDao.getOrAssignKey(TEST_HAL_1, Instant.now(),
+                FAKE_CLIENT_UID, FAKE_KEY_ID);
 
         assertThat(assignedKey.keyId).isEqualTo(FAKE_KEY_ID);
         assertThat(assignedKey.clientUid).isEqualTo(FAKE_CLIENT_UID);
 
-        try {
-            mKeyDao.assignKey(TEST_HAL_1, Instant.now(), FAKE_CLIENT_UID, FAKE_KEY_ID);
-            fail("Able to assign key with duplicate IRPC, clientId and keyId.");
-        } catch (SQLiteConstraintException ex) {
-            assertThat(ex).hasMessageThat().contains("UNIQUE constraint failed");
-        }
+        ProvisionedKey sameKey = mKeyDao.getOrAssignKey(TEST_HAL_1, Instant.now(), FAKE_CLIENT_UID,
+                FAKE_KEY_ID);
+        assertThat(sameKey).isEqualTo(assignedKey);
     }
 
     @Test
@@ -268,8 +265,8 @@ public class RkpdDatabaseTest {
         mProvisionedKey2.irpcHal = TEST_HAL_1;
         mKeyDao.insertKeys(List.of(mProvisionedKey1, mProvisionedKey2));
 
-        ProvisionedKey assignedKey = mKeyDao.assignKey(TEST_HAL_1, Instant.now(), FAKE_CLIENT_UID,
-                FAKE_KEY_ID);
+        ProvisionedKey assignedKey = mKeyDao.getOrAssignKey(TEST_HAL_1, Instant.now(),
+                FAKE_CLIENT_UID, FAKE_KEY_ID);
 
         // The first key is expired, so it should not have been assigned
         assertThat(assignedKey.keyBlob).isNotEqualTo(mProvisionedKey1.publicKey);
@@ -283,13 +280,13 @@ public class RkpdDatabaseTest {
         mProvisionedKey2.expirationTime = Instant.now().minusMillis(1);
         mKeyDao.insertKeys(List.of(mProvisionedKey1, mProvisionedKey2));
 
-        assertThat(mKeyDao.assignKey(TEST_HAL_1, Instant.now(), FAKE_CLIENT_UID,
+        assertThat(mKeyDao.getOrAssignKey(TEST_HAL_1, Instant.now(), FAKE_CLIENT_UID,
                 FAKE_KEY_ID)).isNull();
     }
 
     @Test
     public void testNoUnassignedKeyRemaining() {
-        assertThat(mKeyDao.assignKey(TEST_HAL_1, Instant.now(), FAKE_CLIENT_UID,
+        assertThat(mKeyDao.getOrAssignKey(TEST_HAL_1, Instant.now(), FAKE_CLIENT_UID,
                 FAKE_KEY_ID)).isNull();
     }
 
