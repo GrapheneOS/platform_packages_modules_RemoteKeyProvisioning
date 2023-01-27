@@ -29,8 +29,8 @@ import android.os.Process;
 import android.os.ServiceManager;
 import android.os.SystemProperties;
 import android.security.KeyStoreException;
-import android.security.keymaster.KeymasterDefs;
 import android.security.keystore.KeyGenParameterSpec;
+import android.system.keystore2.ResponseCode;
 
 import androidx.test.core.app.ApplicationProvider;
 import androidx.work.ListenableWorker;
@@ -226,7 +226,7 @@ public class KeystoreIntegrationTest {
         } catch (ProviderException e) {
             assertThat(e.getCause()).isInstanceOf(KeyStoreException.class);
             assertThat(((KeyStoreException) e.getCause()).getErrorCode())
-                    .isEqualTo(KeymasterDefs.KM_ERROR_UNKNOWN_ERROR);
+                    .isEqualTo(ResponseCode.OUT_OF_KEYS);
         } finally {
             if (!originalPropertyValue) {
                 SystemProperties.set(getRkpOnlyProp(), "false");
