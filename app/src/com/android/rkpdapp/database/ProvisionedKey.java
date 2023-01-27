@@ -19,6 +19,7 @@ package com.android.rkpdapp.database;
 import androidx.annotation.NonNull;
 import androidx.room.ColumnInfo;
 import androidx.room.Entity;
+import androidx.room.Ignore;
 import androidx.room.Index;
 import androidx.room.PrimaryKey;
 
@@ -61,6 +62,10 @@ public class ProvisionedKey {
     @ColumnInfo(name = "key_id")
     public Integer keyId;
 
+    // Provide default ctor just for Room generated code
+    public ProvisionedKey() {}
+
+    @Ignore
     public ProvisionedKey(@NonNull byte[] keyBlob, @NonNull String irpcHal,
             @NonNull byte[] publicKey, @NonNull byte[] certificateChain,
             @NonNull Instant expirationTime) {
