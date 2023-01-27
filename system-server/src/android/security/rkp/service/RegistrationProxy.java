@@ -264,11 +264,11 @@ public class RegistrationProxy {
             }
 
             @Override
-            public void onError(String error) {
+            public void onError(byte error, String description) {
                 if (operationComplete.compareAndSet(false, true)) {
-                    executor.execute(() -> receiver.onError(new RemoteException(error)));
+                    executor.execute(() -> receiver.onError(new RemoteException(description)));
                 } else {
-                    Log.w(TAG, "Ignoring extra error for " + this);
+                    Log.w(TAG, "Ignoring extra error (" + error + ") for " + this);
                 }
             }
         };
