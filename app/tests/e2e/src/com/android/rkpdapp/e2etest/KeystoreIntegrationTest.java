@@ -146,7 +146,7 @@ public class KeystoreIntegrationTest {
         // has not yet expired.
         provisionFreshKeys();
 
-        mKeyDao.assignKey(mServiceName, Instant.now(), Process.KEYSTORE_UID, Process.myUid());
+        mKeyDao.getOrAssignKey(mServiceName, Instant.now(), Process.KEYSTORE_UID, Process.myUid());
 
         ProvisionedKey attestationKey = mKeyDao.getKeyForClientAndIrpc(mServiceName,
                 Process.KEYSTORE_UID, Process.myUid());
@@ -174,7 +174,8 @@ public class KeystoreIntegrationTest {
         int bogusUidCounter = Process.LAST_APPLICATION_UID;
         while (mKeyDao.getTotalUnassignedKeysForIrpc(mServiceName) > 0) {
             ++bogusUidCounter;
-            mKeyDao.assignKey(mServiceName, Instant.now(), Process.CREDSTORE_UID, bogusUidCounter);
+            mKeyDao.getOrAssignKey(mServiceName, Instant.now(), Process.CREDSTORE_UID,
+                    bogusUidCounter);
         }
 
         assertThat(mKeyDao.getKeyForClientAndIrpc(mServiceName, Process.KEYSTORE_UID,
@@ -192,7 +193,7 @@ public class KeystoreIntegrationTest {
         // provisioning ran and a newly provisioned key was used to attest to the keystore key.
         provisionFreshKeys();
 
-        mKeyDao.assignKey(mServiceName, Instant.now(), Process.KEYSTORE_UID, Process.myUid());
+        mKeyDao.getOrAssignKey(mServiceName, Instant.now(), Process.KEYSTORE_UID, Process.myUid());
 
         ProvisionedKey oldAttestationKey = mKeyDao.getKeyForClientAndIrpc(mServiceName,
                 Process.KEYSTORE_UID, Process.myUid());
