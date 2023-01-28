@@ -37,13 +37,14 @@ public class ProvisionedKeyTest {
     private static final Random sRandom = new Random();
 
     private static byte[] randBytes() {
-        byte[] bytes = new byte[sRandom.nextInt(128)];
+        int length = 16 + sRandom.nextInt(112);
+        byte[] bytes = new byte[length];
         sRandom.nextBytes(bytes);
         return bytes;
     }
 
     private static String randString() {
-        return Base64.encodeToString(randBytes(), Base64.DEFAULT);
+        return Base64.encodeToString(randBytes(), Base64.URL_SAFE);
     }
 
     private static ProvisionedKey randomKey() {
