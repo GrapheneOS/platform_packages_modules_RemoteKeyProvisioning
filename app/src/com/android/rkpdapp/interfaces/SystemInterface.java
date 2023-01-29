@@ -98,7 +98,7 @@ public class SystemInterface {
                     return key;
                 }).toArray(MacedPublicKey[]::new);
         try (ProvisionerMetrics.StopWatch ignored = metrics.startBinderWait()) {
-            if (mBinder.getInterfaceVersion() < 3) {
+            if (getVersion() < 3) {
                 DeviceInfo deviceInfo = new DeviceInfo();
                 ProtectedData protectedData = new ProtectedData();
                 byte[] geekChain = geekResponse.getGeekChain(mSupportedCurve);
@@ -147,6 +147,6 @@ public class SystemInterface {
      * Gets the implemented version for IRemotelyProvisionedComponent.
      */
     public int getVersion() throws RemoteException {
-        return mBinder.getInterfaceVersion();
+        return mBinder.getHardwareInfo().versionNumber;
     }
 }
