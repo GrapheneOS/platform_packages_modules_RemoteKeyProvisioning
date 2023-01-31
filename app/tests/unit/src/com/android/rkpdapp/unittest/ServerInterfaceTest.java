@@ -201,7 +201,7 @@ public class ServerInterfaceTest {
             mServerInterface.requestSignedCertificates(new byte[0], new byte[0], metrics);
             fail("Should fail due to unregistered device.");
         } catch (RkpdException e) {
-            assertThat(e.getErrorCode()).isEqualTo(RkpdException.Status.DEVICE_NOT_REGISTERED);
+            assertThat(e.getErrorCode()).isEqualTo(RkpdException.ErrorCode.DEVICE_NOT_REGISTERED);
         }
     }
 
@@ -216,7 +216,7 @@ public class ServerInterfaceTest {
             mServerInterface.requestSignedCertificates(new byte[0], new byte[0], metrics);
             fail("Should fail due to client error.");
         } catch (RkpdException e) {
-            assertThat(e.getErrorCode()).isEqualTo(RkpdException.Status.HTTP_CLIENT_ERROR);
+            assertThat(e.getErrorCode()).isEqualTo(RkpdException.ErrorCode.HTTP_CLIENT_ERROR);
         }
     }
 
@@ -231,7 +231,7 @@ public class ServerInterfaceTest {
             mServerInterface.requestSignedCertificates(new byte[0], new byte[0], metrics);
             fail("Should fail due to invalid cbor.");
         } catch (RkpdException e) {
-            assertThat(e.getErrorCode()).isEqualTo(RkpdException.Status.INTERNAL_ERROR);
+            assertThat(e.getErrorCode()).isEqualTo(RkpdException.ErrorCode.INTERNAL_ERROR);
             assertThat(e).hasMessageThat().isEqualTo("Response failed to parse.");
         }
     }
@@ -261,7 +261,7 @@ public class ServerInterfaceTest {
         } catch (RkpdException e) {
             assertThat(e).hasMessageThat().contains("Out of data budget due to repeated errors");
             assertThat(e.getErrorCode()).isEqualTo(
-                    RkpdException.Status.NETWORK_COMMUNICATION_ERROR);
+                    RkpdException.ErrorCode.NETWORK_COMMUNICATION_ERROR);
         }
     }
 
@@ -278,7 +278,7 @@ public class ServerInterfaceTest {
             fail("Network transaction should not have proceeded.");
         } catch (RkpdException e) {
             assertThat(e).hasMessageThat().contains("Out of data budget due to repeated errors");
-            assertThat(e.getErrorCode()).isEqualTo(RkpdException.Status.NO_NETWORK_CONNECTIVITY);
+            assertThat(e.getErrorCode()).isEqualTo(RkpdException.ErrorCode.NO_NETWORK_CONNECTIVITY);
         } finally {
             setEthernetEnabled(true);
             setAirplaneMode(false);
