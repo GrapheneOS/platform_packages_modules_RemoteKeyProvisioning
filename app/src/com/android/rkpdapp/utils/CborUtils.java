@@ -289,7 +289,7 @@ public class CborUtils {
 
             if (unverifiedDeviceInfo.get(new UnicodeString("fingerprint")) == null) {
                 Log.e(TAG, "UnverifiedDeviceInfo is missing a fingerprint entry");
-                throw new RkpdException(RkpdException.Status.INTERNAL_ERROR,
+                throw new RkpdException(RkpdException.ErrorCode.INTERNAL_ERROR,
                         "UnverifiedDeviceInfo missing fingerprint entry.");
             }
             // Serialize the actual CertificateSigningRequest structure
@@ -308,7 +308,7 @@ public class CborUtils {
             return baos.toByteArray();
         } catch (CborException e) {
             Log.e(TAG, "Malformed CBOR", e);
-            throw new RkpdException(RkpdException.Status.INTERNAL_ERROR, "Malformed CBOR", e);
+            throw new RkpdException(RkpdException.ErrorCode.INTERNAL_ERROR, "Malformed CBOR", e);
         }
     }
 
@@ -358,7 +358,7 @@ public class CborUtils {
         List<DataItem> dataItems = new CborDecoder(bais).decode();
         if (dataItems.size() != RESPONSE_ARRAY_SIZE
                 || !checkType(dataItems.get(RESPONSE_CERT_ARRAY_INDEX), majorType, debugName)) {
-            throw new RkpdException(RkpdException.Status.INTERNAL_ERROR, debugName
+            throw new RkpdException(RkpdException.ErrorCode.INTERNAL_ERROR, debugName
                     + " not in proper Cbor format. Expected size 1. Actual: " + dataItems.size());
         }
         return dataItems.get(0);

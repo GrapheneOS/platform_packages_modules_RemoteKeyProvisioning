@@ -137,12 +137,12 @@ public class Provisioner {
             throws RkpdException, CborException {
         int batch_size = keysGenerated.size();
         if (batch_size < 1) {
-            throw new RkpdException(RkpdException.Status.INTERNAL_ERROR,
+            throw new RkpdException(RkpdException.ErrorCode.INTERNAL_ERROR,
                     "Request at least 1 key to be signed. Num requested: " + batch_size);
         }
         byte[] certRequest = systemInterface.generateCsr(metrics, response, keysGenerated);
         if (certRequest == null) {
-            throw new RkpdException(RkpdException.Status.INTERNAL_ERROR,
+            throw new RkpdException(RkpdException.ErrorCode.INTERNAL_ERROR,
                     "Failed to serialize payload");
         }
         return new ServerInterface(mContext).requestSignedCertificates(certRequest,
@@ -160,7 +160,7 @@ public class Provisioner {
                     | InvalidAlgorithmParameterException e) {
                 Log.e(TAG, "Unable to parse certificate chain."
                         + Base64.encodeToString(chain, Base64.DEFAULT), e);
-                throw new RkpdException(RkpdException.Status.INTERNAL_ERROR,
+                throw new RkpdException(RkpdException.ErrorCode.INTERNAL_ERROR,
                         "Failed to interpret DER encoded certificate chain", e);
             }
             long expirationDate = cert.getNotAfter().getTime();
