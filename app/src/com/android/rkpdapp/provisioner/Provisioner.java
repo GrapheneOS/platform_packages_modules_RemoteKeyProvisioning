@@ -35,6 +35,9 @@ import com.android.rkpdapp.utils.Settings;
 import com.android.rkpdapp.utils.StatsProcessor;
 import com.android.rkpdapp.utils.X509Utils;
 
+import java.security.InvalidAlgorithmParameterException;
+import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
@@ -153,7 +156,8 @@ public class Provisioner {
             X509Certificate cert;
             try {
                 cert = X509Utils.formatX509Certs(chain)[0];
-            } catch (CertificateException e) {
+            } catch (CertificateException | NoSuchAlgorithmException | NoSuchProviderException
+                    | InvalidAlgorithmParameterException e) {
                 Log.e(TAG, "Unable to parse certificate chain."
                         + Base64.encodeToString(chain, Base64.DEFAULT), e);
                 throw new RkpdException(RkpdException.Status.INTERNAL_ERROR,
