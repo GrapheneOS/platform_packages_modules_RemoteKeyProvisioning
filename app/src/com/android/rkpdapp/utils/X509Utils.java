@@ -20,13 +20,24 @@ import android.util.Log;
 
 import java.io.ByteArrayInputStream;
 import java.math.BigInteger;
+import java.security.InvalidAlgorithmParameterException;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
 import java.security.PublicKey;
+import java.security.SignatureException;
+import java.security.cert.CertPathValidator;
+import java.security.cert.CertPathValidatorException;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
+import java.security.cert.PKIXParameters;
+import java.security.cert.TrustAnchor;
 import java.security.cert.X509Certificate;
 import java.security.interfaces.ECPublicKey;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Set;
 
 /**
  * Provides convenience methods for parsing certificates and extracting information.
@@ -40,11 +51,17 @@ public class X509Utils {
      * contained within as an X509Certificate array.
      */
     public static X509Certificate[] formatX509Certs(byte[] certStream)
-            throws CertificateException {
+            throws CertificateException, InvalidAlgorithmParameterException,
+            NoSuchAlgorithmException, NoSuchProviderException {
         CertificateFactory fact = CertificateFactory.getInstance("X.509");
         ByteArrayInputStream in = new ByteArrayInputStream(certStream);
-        ArrayList<Certificate> certs = new ArrayList<Certificate>(fact.generateCertificates(in));
-        return certs.toArray(new X509Certificate[certs.size()]);
+        ArrayList<Certificate> certs = new ArrayList<>(fact.generateCertificates(in));
+        X509Certificate[] certChain = certs.toArray(new X509Certificate[0]);
+        if (isCertChainValid(certChain)) {
+            return certChain;
+        } else {
+            throw new CertificateException("Could not validate certificate chain.");
+        }
     }
 
     /**
@@ -87,5 +104,48 @@ public class X509Utils {
                              formattedKey, 64 - yBytes.length, yBytes.length);
         }
         return formattedKey;
+    }
+
+    /**
+     * Validates the X509 certificate chain and returns appropriate boolean result.
+     */
+    public static boolean isCertChainValid(X509Certificate[] certChain)
+            throws NoSuchAlgorithmException, NoSuchProviderException,
+            InvalidAlgorithmParameterException {
+        X509Certificate rootCert = certChain[certChain.length - 1];
+        return isSelfSignedCertificate(rootCert) && verifyCertChain(rootCert, certChain);
+    }
+
+    private static boolean verifyCertChain(X509Certificate rootCert, X509Certificate[] certChain)
+            throws NoSuchAlgorithmException, InvalidAlgorithmParameterException {
+        try {
+            // Only add the self-signed root certificate as trust anchor.
+            // All the other certificates in the chain should be signed by the previous cert's key.
+            Set<TrustAnchor> trustedAnchors = Set.of(new TrustAnchor(rootCert, null));
+
+            CertificateFactory fact = CertificateFactory.getInstance("X.509");
+            CertPathValidator validator = CertPathValidator.getInstance("PKIX");
+            PKIXParameters parameters = new PKIXParameters(trustedAnchors);
+            parameters.setRevocationEnabled(false);
+            validator.validate(fact.generateCertPath(Arrays.asList(certChain)), parameters);
+            return true;
+        } catch (CertificateException | CertPathValidatorException e) {
+            Log.e(TAG, "certificate chain validation failed.", e);
+            return false;
+        }
+    }
+
+    /**
+     * Verifies whether an X509Certificate is a self-signed certificate.
+     */
+    public static boolean isSelfSignedCertificate(X509Certificate certificate)
+            throws NoSuchAlgorithmException, NoSuchProviderException {
+        try {
+            certificate.verify(certificate.getPublicKey());
+            return true;
+        } catch (SignatureException | InvalidKeyException | CertificateException e) {
+            Log.e(TAG, "Error verifying self signed certificate", e);
+            return false;
+        }
     }
 }
