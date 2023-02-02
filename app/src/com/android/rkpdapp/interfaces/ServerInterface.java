@@ -82,7 +82,7 @@ public class ServerInterface {
         if (certChains == null) {
             metrics.setStatus(ProvisionerMetrics.Status.INTERNAL_ERROR);
             throw new RkpdException(
-                    RkpdException.Status.INTERNAL_ERROR,
+                    RkpdException.ErrorCode.INTERNAL_ERROR,
                     "Response failed to parse.");
         }
         return certChains;
@@ -109,7 +109,7 @@ public class ServerInterface {
         if (resp == null) {
             metrics.setStatus(ProvisionerMetrics.Status.FETCH_GEEK_HTTP_ERROR);
             throw new RkpdException(
-                    RkpdException.Status.HTTP_SERVER_ERROR,
+                    RkpdException.ErrorCode.HTTP_SERVER_ERROR,
                     "Response failed to parse.");
         }
         return resp;
@@ -131,11 +131,11 @@ public class ServerInterface {
         NetworkInfo networkInfo = cm.getActiveNetworkInfo();
         if (networkInfo != null && networkInfo.isConnected()) {
             return new RkpdException(
-                    RkpdException.Status.NETWORK_COMMUNICATION_ERROR, message);
+                    RkpdException.ErrorCode.NETWORK_COMMUNICATION_ERROR, message);
         }
         metrics.setStatus(ProvisionerMetrics.Status.NO_NETWORK_CONNECTIVITY);
         return new RkpdException(
-                RkpdException.Status.NO_NETWORK_CONNECTIVITY, message);
+                RkpdException.ErrorCode.NO_NETWORK_CONNECTIVITY, message);
     }
 
     /**
@@ -248,7 +248,7 @@ public class ServerInterface {
                     Settings.consumeErrDataBudget(mContext, bytesTransacted);
                     RkpdException ex =
                             RkpdException.createFromHttpError(con.getResponseCode());
-                    if (ex.getErrorCode() == RkpdException.Status.DEVICE_NOT_REGISTERED) {
+                    if (ex.getErrorCode() == RkpdException.ErrorCode.DEVICE_NOT_REGISTERED) {
                         metrics.setStatus(
                                 ProvisionerMetrics.Status.SIGN_CERTS_DEVICE_NOT_REGISTERED);
                     } else {

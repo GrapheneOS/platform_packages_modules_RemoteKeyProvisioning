@@ -24,7 +24,7 @@ import android.platform.test.annotations.Presubmit;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 
 import com.android.rkpdapp.RkpdException;
-import com.android.rkpdapp.RkpdException.Status;
+import com.android.rkpdapp.RkpdException.ErrorCode;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -33,20 +33,10 @@ import org.junit.runner.RunWith;
 public class RkpdExceptionTest {
     @Presubmit
     @Test
-    public void handlesArbitraryErrors() {
-        for (int i : new int[]{1, 11, 123, 0x8675309}) {
-            RkpdException ex = new RkpdException(i, "error: " + i);
-            assertThat(ex.getErrorCode()).isEqualTo(i);
-            assertThat(ex).hasMessageThat().isEqualTo("error: " + i);
-        }
-    }
-
-    @Presubmit
-    @Test
     public void handlesUnknownHttpStatus() {
         RkpdException ex = RkpdException.createFromHttpError(123);
         assertThat(ex).isNotNull();
-        assertThat(ex.getErrorCode()).isEqualTo(Status.HTTP_UNKNOWN_ERROR);
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.HTTP_UNKNOWN_ERROR);
     }
 
     @Presubmit
@@ -58,7 +48,7 @@ public class RkpdExceptionTest {
             assertThat(ex).isNotNull();
             assertThat(ex).hasMessageThat().contains("HTTP");
             assertWithMessage(httpStatus + "should have been a server error")
-                    .that(ex.getErrorCode()).isEqualTo(Status.HTTP_SERVER_ERROR);
+                    .that(ex.getErrorCode()).isEqualTo(ErrorCode.HTTP_SERVER_ERROR);
         }
     }
 
@@ -70,10 +60,10 @@ public class RkpdExceptionTest {
                     httpStatus);
             assertThat(ex).isNotNull();
             if (httpStatus == 444) {
-                assertThat(ex.getErrorCode()).isEqualTo(Status.DEVICE_NOT_REGISTERED);
+                assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.DEVICE_NOT_REGISTERED);
             } else {
                 assertWithMessage(httpStatus + "should have been a client error")
-                        .that(ex.getErrorCode()).isEqualTo(Status.HTTP_CLIENT_ERROR);
+                        .that(ex.getErrorCode()).isEqualTo(ErrorCode.HTTP_CLIENT_ERROR);
             }
             assertThat(ex).hasMessageThat().contains("HTTP");
         }

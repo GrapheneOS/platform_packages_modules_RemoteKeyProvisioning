@@ -41,6 +41,7 @@ import com.android.rkpdapp.database.ProvisionedKeyDao;
 import com.android.rkpdapp.database.RkpdDatabase;
 import com.android.rkpdapp.provisioner.PeriodicProvisioner;
 import com.android.rkpdapp.utils.Settings;
+import com.android.rkpdapp.utils.X509Utils;
 
 import com.google.common.primitives.Bytes;
 
@@ -57,9 +58,11 @@ import java.security.KeyPairGenerator;
 import java.security.KeyStore;
 import java.security.ProviderException;
 import java.security.cert.Certificate;
+import java.security.cert.X509Certificate;
 import java.security.spec.ECGenParameterSpec;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.concurrent.Executors;
 
 @RunWith(Parameterized.class)
@@ -153,15 +156,7 @@ public class KeystoreIntegrationTest {
 
         createKeystoreKey();
 
-        Certificate[] certChain = mKeyStore.getCertificateChain(getTestKeyAlias());
-        assertThat(Bytes.concat(SUBJECT_PUBKEY_ASN1_PREFIX, attestationKey.publicKey))
-                .isEqualTo(certChain[1].getPublicKey().getEncoded());
-
-        byte[] encodedCerts = new byte[0];
-        for (int i = 1; i < certChain.length; ++i) {
-            encodedCerts = Bytes.concat(encodedCerts, certChain[i].getEncoded());
-        }
-        assertThat(attestationKey.certificateChain).isEqualTo(encodedCerts);
+        verifyCertificateChain(attestationKey);
     }
 
     @Test
@@ -283,7 +278,16 @@ public class KeystoreIntegrationTest {
         assertThat(attestationKey).isNotNull();
         assertThat(attestationKey.irpcHal).isEqualTo(mServiceName);
 
+        verifyCertificateChain(attestationKey);
+    }
+
+    private void verifyCertificateChain(ProvisionedKey attestationKey) throws Exception {
         Certificate[] certChain = mKeyStore.getCertificateChain(getTestKeyAlias());
+        X509Certificate[] x509Certificates = Arrays.stream(certChain)
+                .map(x -> (X509Certificate) x)
+                .toList()
+                .toArray(new X509Certificate[0]);
+        assertThat(X509Utils.isCertChainValid(x509Certificates)).isTrue();
         assertThat(Bytes.concat(SUBJECT_PUBKEY_ASN1_PREFIX, attestationKey.publicKey))
                 .isEqualTo(certChain[1].getPublicKey().getEncoded());
 

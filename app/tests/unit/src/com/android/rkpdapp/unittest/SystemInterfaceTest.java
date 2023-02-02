@@ -282,7 +282,7 @@ public class SystemInterfaceTest {
         } else {
             Assert.fail("Unsupported curve: " + curve);
         }
-        throw new RkpdException(RkpdException.Status.INTERNAL_ERROR,
+        throw new RkpdException(RkpdException.ErrorCode.INTERNAL_ERROR,
                 "Could not generate eek chain");
     }
 
