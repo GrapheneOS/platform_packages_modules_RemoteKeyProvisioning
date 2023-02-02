@@ -404,8 +404,10 @@ public class RegistrationProxyTests {
                 createMockRegistrationForComponent(context, FAKE_COMPONENT, FAKE_IRPC,
                         FAKE_CALLER_UID);
 
+        final byte errorCode = IGetKeyCallback.Error.ERROR_PERMANENT;
         final String errorMsg = "oopsie, it didn't work";
-        doAnswer(answerVoid((keyId, callback) -> ((IGetKeyCallback) callback).onError(errorMsg)))
+        doAnswer(answerVoid((keyId, callback) ->
+                ((IGetKeyCallback) callback).onError(errorCode, errorMsg)))
                 .when(mockIRegistration).getKey(anyInt(), any());
 
         final var registrationReceiver = new ResultReceiver<RegistrationProxy>();

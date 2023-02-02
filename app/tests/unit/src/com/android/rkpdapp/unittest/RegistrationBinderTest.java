@@ -46,6 +46,7 @@ import com.android.rkpdapp.GeekResponse;
 import com.android.rkpdapp.IGetKeyCallback;
 import com.android.rkpdapp.IStoreUpgradedKeyCallback;
 import com.android.rkpdapp.RemotelyProvisionedKey;
+import com.android.rkpdapp.RkpdException;
 import com.android.rkpdapp.database.ProvisionedKey;
 import com.android.rkpdapp.database.ProvisionedKeyDao;
 import com.android.rkpdapp.interfaces.ServerInterface;
@@ -216,7 +217,7 @@ public class RegistrationBinderTest {
     }
 
     @Test
-    public void getKeyHandlesProvisioningFailure() throws Exception {
+    public void getKeyHandlesUnexpectedProvisioningFailure() throws Exception {
         doThrow(new RuntimeException("PROVISIONING FAIL"))
                 .when(mMockProvisioner)
                 .provisionKeys(any(), eq(IRPC_HAL), any());
@@ -224,9 +225,43 @@ public class RegistrationBinderTest {
         IGetKeyCallback callback = mock(IGetKeyCallback.class);
         mRegistration.getKey(KEY_ID, callback);
         completeAllTasks();
-        verify(callback).onError("PROVISIONING FAIL");
+        verify(callback).onError(IGetKeyCallback.Error.ERROR_UNKNOWN, "PROVISIONING FAIL");
         verify(callback).onProvisioningNeeded();
         verifyNoMoreInteractions(callback);
+    }
+
+    private static byte getExpectedGetKeyError(RkpdException.ErrorCode errorCode) {
+        switch (errorCode) {
+            case NO_NETWORK_CONNECTIVITY:
+                return IGetKeyCallback.Error.ERROR_PENDING_INTERNET_CONNECTIVITY;
+            case DEVICE_NOT_REGISTERED:
+                return IGetKeyCallback.Error.ERROR_PERMANENT;
+            case NETWORK_COMMUNICATION_ERROR:
+            case HTTP_CLIENT_ERROR:
+            case HTTP_SERVER_ERROR:
+            case HTTP_UNKNOWN_ERROR:
+            case INTERNAL_ERROR:
+                return IGetKeyCallback.Error.ERROR_UNKNOWN;
+        }
+        throw new RuntimeException("Unexpected error code: " + errorCode);
+    }
+
+    @Test
+    public void getKeyMapsRkpdExceptionsCorrectly() throws Exception {
+        for (RkpdException.ErrorCode errorCode: RkpdException.ErrorCode.values()) {
+            doThrow(new RkpdException(errorCode, errorCode.toString()))
+                    .when(mMockProvisioner)
+                    .provisionKeys(any(), eq(IRPC_HAL), any());
+
+            IGetKeyCallback callback = mock(IGetKeyCallback.class);
+            mRegistration.getKey(KEY_ID, callback);
+            // We cannot use completeAllTasks here because that shuts down the thread pool,
+            // so use a timeout on verifying the callback instead.
+            verify(callback, timeout(MAX_TIMEOUT.toMillis()))
+                    .onError(getExpectedGetKeyError(errorCode), errorCode.toString());
+            verify(callback).onProvisioningNeeded();
+            verifyNoMoreInteractions(callback);
+        }
     }
 
     @Test
@@ -250,7 +285,8 @@ public class RegistrationBinderTest {
         IGetKeyCallback callback = mock(IGetKeyCallback.class);
         mRegistration.getKey(KEY_ID, callback);
         completeAllTasks();
-        verify(callback).onError("Provisioning failed, no keys available");
+        verify(callback).onError(IGetKeyCallback.Error.ERROR_UNKNOWN,
+                "Provisioning failed, no keys available");
         verify(callback).onProvisioningNeeded();
         verify(mMockProvisioner).provisionKeys(any(), eq(IRPC_HAL), any());
         verifyNoMoreInteractions(callback);
