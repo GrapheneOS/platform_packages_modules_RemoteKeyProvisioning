@@ -79,23 +79,22 @@ public class X509UtilsTest {
 
     @Test
     public void testCertificateChains() throws Exception {
-        String encodedTestCert = "MIIBzDCCAXOgAwIBAgIRAKrDc87UaGSeFTRzF4vz0IcwCgYIKoZIzj0EAwIwMjEY"
-                + "MBYGA1UEChMPR29vZ2xlIFRlc3QgTExDMRYwFAYDVQQDEw1Ecm9pZCBUZXN0IENBMB4XDTIzMDEyMzE"
-                + "wMzU1OVoXDTIzMDIwMTEwMzU1OVowOTEMMAoGA1UEChMDVEVFMSkwJwYDVQQDEyBhYWMzNzNjZWQ0Nj"
-                + "g2NDllMTUzNDczMTc4YmYzZDA4NzBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABLObeIaknIBWLIJlD"
-                + "R2nH7R7J4uG35pMaOdKx7Z0l+zwd78zT/Q3tvCNk412YNwMlpXYd9lqP6GbMmLplU9lNU6jYzBhMB0G"
-                + "A1UdDgQWBBRyvR22kj7DPA6hYebzV/7SAV75+zAfBgNVHSMEGDAWgBT4MR/vSGF22DdunejgJitJY4X"
-                + "DPTAPBgNVHRMBAf8EBTADAQH/MA4GA1UdDwEB/wQEAwICBDAKBggqhkjOPQQDAgNHADBEAiA+91WraD"
-                + "ckWIWpRePZRv/zrBNY8PbD72hl1M3wzC1mkAIgV3pRHYjsQM2OfLweVvIDT9TNKf4cbyYc+K/6xakrm"
-                + "NE=";
-        String encodedRootCert = "MIIBxDCCAWugAwIBAgIQf7TE7zQ0iDLyiZIIpqKCvjAKBggqhkjOPQQDAjAyMRgw"
-                + "FgYDVQQKEw9Hb29nbGUgVGVzdCBMTEMxFjAUBgNVBAMTDURyb2lkIFRlc3QgQ0EwHhcNMjMwMTIyMTg"
-                + "yMjUyWhcNMjMwMjI4MTgyMjUyWjAyMRgwFgYDVQQKEw9Hb29nbGUgVGVzdCBMTEMxFjAUBgNVBAMTDU"
-                + "Ryb2lkIFRlc3QgQ0EwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAAQeq/B7LxO49X7o6bqrJ93pulwAk"
-                + "uKbSdSwDae51ZdnAyuMxL2gUwVcHL8JViQS5uNQLuvpFegPKxDDFj6mzDpio2MwYTAdBgNVHQ4EFgQU"
-                + "+DEf70hhdtg3bp3o4CYrSWOFwz0wHwYDVR0jBBgwFoAU+DEf70hhdtg3bp3o4CYrSWOFwz0wDwYDVR0"
-                + "TAQH/BAUwAwEB/zAOBgNVHQ8BAf8EBAMCAgQwCgYIKoZIzj0EAwIDRwAwRAIgJHyRnMmtZ36uSkuVTt"
-                + "9OtQNpCM6GgCSh2qb1Xiw60xECIDII1Ps/Cf29SUsgFq8KgvqWRms4Ctp5ioFbbeovcFwX";
+        String encodedTestCert = "MIIBvTCCAWOgAwIBAgIRAKrDc87UaGSeFTRzF4vz0IcwCgYIKoZIzj0EAwIwIDEN"
+                + "MAsGA1UECgwERmFrZTEPMA0GA1UEAwwGSXNzdWVyMCAXDTIzMDIwMTE1MzExMVoYDzIxMjMwMTA4MTU"
+                + "zMTExWjA5MQwwCgYDVQQKDANURUUxKTAnBgNVBAMMIGFhYzM3M2NlZDQ2ODY0OWUxNTM0NzMxNzhiZj"
+                + "NkMDg3MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEcC8SjTKkEqpPGQMXiZMC1/Dk3Fo/PsCZBI0E8"
+                + "N4zXhBHJJZdT4LnYUNQXhSndDhrPO/x0MSySnz+hDZiRlRdzKNjMGEwHQYDVR0OBBYEFMcyyg91rTsG"
+                + "QxM2hY2dfrmcYNIoMB8GA1UdIwQYMBaAFN2wvxbmHbqJicPAK1Ce+692JkfcMA8GA1UdEwEB/wQFMAM"
+                + "BAf8wDgYDVR0PAQH/BAQDAgIEMAoGCCqGSM49BAMCA0gAMEUCIQD/ZJAabKvYlyuL6Ehc7bZMZFn9e7"
+                + "Gu8f+QTA2fPjN/EQIgUeJPlHjNhoiu0QPpAoRbd4idOLyf5pqNEiXt7n8VDe0=";
+        String encodedRootCert = "MIIBpDCCAUmgAwIBAgIQf7TE7zQ0iDLyiZIIpqKCvjAKBggqhkjOPQQDAjAgMQ0w"
+                + "CwYDVQQKDARGYWtlMQ8wDQYDVQQDDAZJc3N1ZXIwIBcNMjMwMjAxMTUxMDM0WhgPMjEyMzAxMDgxNTE"
+                + "wMzRaMCAxDTALBgNVBAoMBEZha2UxDzANBgNVBAMMBklzc3VlcjBZMBMGByqGSM49AgEGCCqGSM49Aw"
+                + "EHA0IABNh7P0mPpgFdSw9pC+aDMDRWnZa6g7H+jdy/a4V+erKJ+lDqdsV4Ao+2+vt2WelEP0DIZl51U"
+                + "CaS8CKqZtRGLB6jYzBhMB0GA1UdDgQWBBTdsL8W5h26iYnDwCtQnvuvdiZH3DAfBgNVHSMEGDAWgBTd"
+                + "sL8W5h26iYnDwCtQnvuvdiZH3DAPBgNVHRMBAf8EBTADAQH/MA4GA1UdDwEB/wQEAwICBDAKBggqhkj"
+                + "OPQQDAgNJADBGAiEAm9Y2YGYe/2RqI6xMGq2IFJzeJ0qjfQzBLg6KjRLiJ10CIQCxpJCHRN4Gj17/ON"
+                + "JGL2npbIsQVpSn1M5xPsY+9/qB1g==";
 
         X509Certificate rootCert = generateCertificateFromEncodedBytes(encodedRootCert);
         X509Certificate testCert = generateCertificateFromEncodedBytes(encodedTestCert);
@@ -108,23 +107,22 @@ public class X509UtilsTest {
 
     @Test
     public void testCertChainSwapOAndCN() throws Exception {
-        String encodedTestCert = "MIIBzDCCAXOgAwIBAgIRAKrDc87UaGSeFTRzF4vz0IcwCgYIKoZIzj0EAwIwMjEW"
-                + "MBQGA1UEAxMNRHJvaWQgVGVzdCBDQTEYMBYGA1UEChMPR29vZ2xlIFRlc3QgTExDMB4XDTIzMDEyMzE"
-                + "wMzU1OVoXDTIzMDIwMTEwMzU1OVowOTEMMAoGA1UEChMDVEVFMSkwJwYDVQQDEyBhYWMzNzNjZWQ0Nj"
-                + "g2NDllMTUzNDczMTc4YmYzZDA4NzBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABLObeIaknIBWLIJlD"
-                + "R2nH7R7J4uG35pMaOdKx7Z0l+zwd78zT/Q3tvCNk412YNwMlpXYd9lqP6GbMmLplU9lNU6jYzBhMB0G"
-                + "A1UdDgQWBBRyvR22kj7DPA6hYebzV/7SAV75+zAfBgNVHSMEGDAWgBT4MR/vSGF22DdunejgJitJY4X"
-                + "DPTAPBgNVHRMBAf8EBTADAQH/MA4GA1UdDwEB/wQEAwICBDAKBggqhkjOPQQDAgNHADBEAiA+91WraD"
-                + "ckWIWpRePZRv/zrBNY8PbD72hl1M3wzC1mkAIgV3pRHYjsQM2OfLweVvIDT9TNKf4cbyYc+K/6xakrm"
-                + "NE=";
-        String encodedRootCert = "MIIBxDCCAWugAwIBAgIQf7TE7zQ0iDLyiZIIpqKCvjAKBggqhkjOPQQDAjAyMRgw"
-                + "FgYDVQQKEw9Hb29nbGUgVGVzdCBMTEMxFjAUBgNVBAMTDURyb2lkIFRlc3QgQ0EwHhcNMjMwMTIyMTg"
-                + "yMjUyWhcNMjMwMjI4MTgyMjUyWjAyMRgwFgYDVQQKEw9Hb29nbGUgVGVzdCBMTEMxFjAUBgNVBAMTDU"
-                + "Ryb2lkIFRlc3QgQ0EwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAAQeq/B7LxO49X7o6bqrJ93pulwAk"
-                + "uKbSdSwDae51ZdnAyuMxL2gUwVcHL8JViQS5uNQLuvpFegPKxDDFj6mzDpio2MwYTAdBgNVHQ4EFgQU"
-                + "+DEf70hhdtg3bp3o4CYrSWOFwz0wHwYDVR0jBBgwFoAU+DEf70hhdtg3bp3o4CYrSWOFwz0wDwYDVR0"
-                + "TAQH/BAUwAwEB/zAOBgNVHQ8BAf8EBAMCAgQwCgYIKoZIzj0EAwIDRwAwRAIgJHyRnMmtZ36uSkuVTt"
-                + "9OtQNpCM6GgCSh2qb1Xiw60xECIDII1Ps/Cf29SUsgFq8KgvqWRms4Ctp5ioFbbeovcFwX";
+        String encodedTestCert = "MIIBvTCCAWOgAwIBAgIRAKrDc87UaGSeFTRzF4vz0IcwCgYIKoZIzj0EAwIwIDEP"
+                + "MA0GA1UEAwwGSXNzdWVyMQ0wCwYDVQQKDARGYWtlMCAXDTIzMDIwMTE1MzExMVoYDzIxMjMwMTA4MTU"
+                + "zMTExWjA5MQwwCgYDVQQKDANURUUxKTAnBgNVBAMMIGFhYzM3M2NlZDQ2ODY0OWUxNTM0NzMxNzhiZj"
+                + "NkMDg3MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEcC8SjTKkEqpPGQMXiZMC1/Dk3Fo/PsCZBI0E8"
+                + "N4zXhBHJJZdT4LnYUNQXhSndDhrPO/x0MSySnz+hDZiRlRdzKNjMGEwHQYDVR0OBBYEFMcyyg91rTsG"
+                + "QxM2hY2dfrmcYNIoMB8GA1UdIwQYMBaAFN2wvxbmHbqJicPAK1Ce+692JkfcMA8GA1UdEwEB/wQFMAM"
+                + "BAf8wDgYDVR0PAQH/BAQDAgIEMAoGCCqGSM49BAMCA0gAMEUCIQD/ZJAabKvYlyuL6Ehc7bZMZFn9e7"
+                + "Gu8f+QTA2fPjN/EQIgUeJPlHjNhoiu0QPpAoRbd4idOLyf5pqNEiXt7n8VDe0=";
+        String encodedRootCert = "MIIBpDCCAUmgAwIBAgIQf7TE7zQ0iDLyiZIIpqKCvjAKBggqhkjOPQQDAjAgMQ0w"
+                + "CwYDVQQKDARGYWtlMQ8wDQYDVQQDDAZJc3N1ZXIwIBcNMjMwMjAxMTUxMDM0WhgPMjEyMzAxMDgxNTE"
+                + "wMzRaMCAxDTALBgNVBAoMBEZha2UxDzANBgNVBAMMBklzc3VlcjBZMBMGByqGSM49AgEGCCqGSM49Aw"
+                + "EHA0IABNh7P0mPpgFdSw9pC+aDMDRWnZa6g7H+jdy/a4V+erKJ+lDqdsV4Ao+2+vt2WelEP0DIZl51U"
+                + "CaS8CKqZtRGLB6jYzBhMB0GA1UdDgQWBBTdsL8W5h26iYnDwCtQnvuvdiZH3DAfBgNVHSMEGDAWgBTd"
+                + "sL8W5h26iYnDwCtQnvuvdiZH3DAPBgNVHRMBAf8EBTADAQH/MA4GA1UdDwEB/wQEAwICBDAKBggqhkj"
+                + "OPQQDAgNJADBGAiEAm9Y2YGYe/2RqI6xMGq2IFJzeJ0qjfQzBLg6KjRLiJ10CIQCxpJCHRN4Gj17/ON"
+                + "JGL2npbIsQVpSn1M5xPsY+9/qB1g==";
 
         X509Certificate rootCert = generateCertificateFromEncodedBytes(encodedRootCert);
         X509Certificate testCert = generateCertificateFromEncodedBytes(encodedTestCert);
