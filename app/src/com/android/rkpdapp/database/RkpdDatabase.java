@@ -23,8 +23,7 @@ import androidx.room.Room;
 import androidx.room.RoomDatabase;
 import androidx.room.TypeConverters;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import com.android.rkpdapp.ThreadPool;
 
 /**
  * Stores the remotely provisioned keys.
@@ -37,9 +36,6 @@ public abstract class RkpdDatabase extends RoomDatabase {
      */
     public abstract ProvisionedKeyDao provisionedKeyDao();
 
-    private static final int NUMBER_OF_THREADS = Runtime.getRuntime().availableProcessors();
-    public static final ExecutorService DATABASE_WRITE_EXECUTOR =
-            Executors.newFixedThreadPool(NUMBER_OF_THREADS);
     private static volatile RkpdDatabase sInstance;
 
     /**
@@ -55,7 +51,7 @@ public abstract class RkpdDatabase extends RoomDatabase {
                 sInstance = Room.databaseBuilder(context.getApplicationContext(),
                                 RkpdDatabase.class,
                                 "rkpd_database")
-                        .setQueryExecutor(DATABASE_WRITE_EXECUTOR)
+                        .setQueryExecutor(ThreadPool.EXECUTOR)
                         .build();
             }
             return sInstance;
