@@ -264,11 +264,12 @@ public class RegistrationProxy {
             }
 
             @Override
-            public void onError(String error) {
+            public void onError(byte error, String description) {
                 if (operationComplete.compareAndSet(false, true)) {
-                    executor.execute(() -> receiver.onError(new RemoteException(error)));
+                    executor.execute(() -> receiver.onError(
+                            new RkpProxyException(convertGetKeyError(error), description)));
                 } else {
-                    Log.w(TAG, "Ignoring extra error for " + this);
+                    Log.w(TAG, "Ignoring extra error (" + error + ") for " + this);
                 }
             }
         };
@@ -334,6 +335,23 @@ public class RegistrationProxy {
             mBinder.storeUpgradedKeyAsync(oldKeyBlob, newKeyBlob, callback);
         } catch (RemoteException e) {
             throw e.rethrowAsRuntimeException();
+        }
+    }
+
+    /** Converts an IGetKeyCallback.Error code into an RkpProxyException error code. */
+    private static int convertGetKeyError(byte error) {
+        switch (error) {
+            case IGetKeyCallback.Error.ERROR_REQUIRES_SECURITY_PATCH:
+                return RkpProxyException.ERROR_REQUIRES_SECURITY_PATCH;
+            case IGetKeyCallback.Error.ERROR_PENDING_INTERNET_CONNECTIVITY:
+                return RkpProxyException.ERROR_PENDING_INTERNET_CONNECTIVITY;
+            case IGetKeyCallback.Error.ERROR_PERMANENT:
+                return RkpProxyException.ERROR_PERMANENT;
+            case IGetKeyCallback.Error.ERROR_UNKNOWN:
+                return RkpProxyException.ERROR_UNKNOWN;
+            default:
+                Log.e(TAG, "Undefined error from rkpd: " + error);
+                return RkpProxyException.ERROR_UNKNOWN;
         }
     }
 }

@@ -48,6 +48,7 @@ import android.os.OutcomeReceiver;
 import android.os.RemoteException;
 import android.os.UserHandle;
 import android.security.rkp.service.RegistrationProxy;
+import android.security.rkp.service.RkpProxyException;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -66,6 +67,7 @@ import org.junit.runner.RunWith;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -404,8 +406,10 @@ public class RegistrationProxyTests {
                 createMockRegistrationForComponent(context, FAKE_COMPONENT, FAKE_IRPC,
                         FAKE_CALLER_UID);
 
+        final byte errorCode = IGetKeyCallback.Error.ERROR_PERMANENT;
         final String errorMsg = "oopsie, it didn't work";
-        doAnswer(answerVoid((keyId, callback) -> ((IGetKeyCallback) callback).onError(errorMsg)))
+        doAnswer(answerVoid((keyId, callback) ->
+                ((IGetKeyCallback) callback).onError(errorCode, errorMsg)))
                 .when(mockIRegistration).getKey(anyInt(), any());
 
         final var registrationReceiver = new ResultReceiver<RegistrationProxy>();
@@ -418,8 +422,44 @@ public class RegistrationProxyTests {
         registration.getKeyAsync(1234, new CancellationSignal(), mExecutor, errorReceiver);
         mExecutor.shutdown();
         final Exception error = errorReceiver.waitForError();
-        assertThat(error).isInstanceOf(RemoteException.class);
-        assertThat(error).hasMessageThat().isEqualTo(errorMsg);
+        assertThat(error).isInstanceOf(RkpProxyException.class);
+        assertThat(error).hasMessageThat().contains("ERROR_PERMANENT");
+        assertThat(error).hasMessageThat().contains(errorMsg);
+    }
+
+    @Test
+    public void getKeyAsyncCorrectlyMapsErrorCodes() throws Exception {
+        final Context context = mock(Context.class);
+        final IRegistration mockIRegistration =
+                createMockRegistrationForComponent(context, FAKE_COMPONENT, FAKE_IRPC,
+                        FAKE_CALLER_UID);
+
+        Map<Byte, Integer> errorConversions = Map.of(
+                IGetKeyCallback.Error.ERROR_UNKNOWN,
+                RkpProxyException.ERROR_UNKNOWN,
+                IGetKeyCallback.Error.ERROR_PENDING_INTERNET_CONNECTIVITY,
+                RkpProxyException.ERROR_PENDING_INTERNET_CONNECTIVITY,
+                IGetKeyCallback.Error.ERROR_REQUIRES_SECURITY_PATCH,
+                RkpProxyException.ERROR_REQUIRES_SECURITY_PATCH,
+                IGetKeyCallback.Error.ERROR_PERMANENT,
+                RkpProxyException.ERROR_PERMANENT);
+        for (Map.Entry<Byte, Integer> entry: errorConversions.entrySet()) {
+            doAnswer(answerVoid((keyId, callback) ->
+                    ((IGetKeyCallback) callback).onError(entry.getKey(), "")))
+                    .when(mockIRegistration).getKey(anyInt(), any());
+
+            final var registrationReceiver = new ResultReceiver<RegistrationProxy>();
+            RegistrationProxy.createAsync(context, FAKE_CALLER_UID, FAKE_IRPC, BIND_TIMEOUT,
+                    mExecutor,
+                    registrationReceiver);
+            final RegistrationProxy registration = registrationReceiver.waitForResult();
+
+            final var errorReceiver =
+                    new ErrorReceiver<android.security.rkp.service.RemotelyProvisionedKey>();
+            registration.getKeyAsync(0, new CancellationSignal(), mExecutor, errorReceiver);
+            final RkpProxyException exception = (RkpProxyException) errorReceiver.waitForError();
+            assertThat(exception.getError()).isEqualTo(entry.getValue());
+        }
     }
 
     @Test
