@@ -95,8 +95,8 @@ public class RegistrationBinderStressTest {
             }
 
             @Override
-            public void onError(String error) throws RemoteException {
-                result.complete(error);
+            public void onError(byte error, String description) throws RemoteException {
+                result.complete(description);
             }
         });
         try {
