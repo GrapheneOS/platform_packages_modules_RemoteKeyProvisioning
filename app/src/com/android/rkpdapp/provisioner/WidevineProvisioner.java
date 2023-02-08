@@ -107,9 +107,7 @@ public class WidevineProvisioner extends Worker {
      *         yet been provisioned.
      */
     public static boolean isWidevineProvisioningNeeded() {
-        try {
-            final MediaDrm drm = new MediaDrm(WIDEVINE_UUID);
-
+        try (MediaDrm drm = new MediaDrm(WIDEVINE_UUID)) {
             if (!drm.getPropertyString("provisioningModel").equals("BootCertificateChain")) {
                 // Not a provisioning 4.0 device.
                 Log.i(TAG, "Not a WV provisioning 4.0 device. No provisioning required.");
