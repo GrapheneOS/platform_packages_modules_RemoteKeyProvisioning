@@ -14,11 +14,6 @@
      limitations under the License.
 -->
 <configuration description="Stress tests for the rkpd app.">
-    <object type="module_controller"
-            class="com.android.tradefed.testtype.suite.module.MinApiLevelModuleController">
-        <option name="min-api-level" value="34" />
-        <option name="api-level-prop" value="ro.product.first_api_level" />
-    </object>
     <option name="test-suite-tag" value="apct" />
     <option name="test-suite-tag" value="apct-instrumentation" />
 
