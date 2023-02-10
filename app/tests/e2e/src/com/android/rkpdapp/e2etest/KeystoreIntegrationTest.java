@@ -221,7 +221,7 @@ public class KeystoreIntegrationTest {
         } catch (ProviderException e) {
             assertThat(e.getCause()).isInstanceOf(KeyStoreException.class);
             assertThat(((KeyStoreException) e.getCause()).getErrorCode())
-                    .isEqualTo(ResponseCode.OUT_OF_KEYS);
+                    .isEqualTo(ResponseCode.OUT_OF_KEYS_TRANSIENT_ERROR);
         } finally {
             if (!originalPropertyValue) {
                 SystemProperties.set(getRkpOnlyProp(), "false");
