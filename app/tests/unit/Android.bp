@@ -15,10 +15,9 @@ package {
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
-java_defaults {
-    name: "RkpdAppUnitTestsDefault",
-    srcs: [":com.android.rkpdapp.unittests.src"],
-    exclude_srcs: ["src/**/KeyRegisteredTest.java"],
+android_test {
+    name: "RkpdAppUnitTests",
+    srcs: ["src/**/*.java"],
     static_libs: [
         "Nene",
         "RkpdAppTestUtil",
@@ -43,36 +42,6 @@ java_defaults {
         "mts-rkpd",
     ],
     min_sdk_version: "UpsideDownCake",
-}
-
-filegroup {
-    name: "com.android.rkpdapp.unittests.src",
-    srcs: ["src/**/*.java"],
-}
-
-android_test {
-    name: "RkpdAppUnitTests",
-    defaults: ["RkpdAppUnitTestsDefault"],
-    test_config: "RkpdAppUnitTests.xml",
-    instrumentation_for: "rkpdapp",
-}
-
-// Specifically tests to see if the key is registered for the given device under test.
-android_test {
-    name: "RkpRegistrationTest",
-    srcs: ["src/**/KeyRegisteredTest.java"],
-    static_libs: [
-        "androidx.test.ext.junit",
-        "androidx.test.core",
-        "androidx.test.rules",
-        "android.security.remoteprovisioning-java",
-        "cbor-java",
-        "platform-test-annotations",
-        "truth-prebuilt",
-    ],
-    platform_apis: true,
-    test_config: "RkpRegistrationTest.xml",
-    test_suites: ["device-tests"],
     instrumentation_for: "rkpdapp",
 }
 
