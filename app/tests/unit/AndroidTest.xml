@@ -13,21 +13,24 @@
      See the License for the specific language governing permissions and
      limitations under the License.
 -->
-<configuration description="Unit test that verifies a device is registered with the RKP backend.">
-    <object type="module_controller" class="com.android.tradefed.testtype.suite.module.MinApiLevelModuleController">
-        <option name="min-api-level" value="34" />
-        <option name="api-level-prop" value="ro.product.first_api_level" />
-    </object>
+<configuration description="Unit tests for the rkpd app.">
     <option name="test-suite-tag" value="apct" />
     <option name="test-suite-tag" value="apct-instrumentation" />
 
     <target_preparer class="com.android.tradefed.targetprep.suite.SuiteApkInstaller">
         <option name="cleanup-apks" value="true" />
-        <option name="test-file-name" value="RkpRegistrationTest.apk" />
+        <option name="test-file-name" value="RkpdAppUnitTests.apk" />
     </target_preparer>
 
     <test class="com.android.tradefed.testtype.AndroidJUnitTest" >
         <option name="package" value="com.android.rkpdapp.unittest" />
         <option name="runner" value="androidx.test.runner.AndroidJUnitRunner" />
     </test>
+
+    <!-- Only run if RKPD mainline module is installed -->
+    <object type="module_controller"
+            class="com.android.tradefed.testtype.suite.module.MainlineTestModuleController">
+        <option name="enable" value="true" />
+        <option name="mainline-module-package-name" value="com.android.rkpd" />
+    </object>
 </configuration>
