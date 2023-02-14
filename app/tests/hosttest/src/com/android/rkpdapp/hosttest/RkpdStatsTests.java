@@ -13,9 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.android.remoteprovisioner.hosttest;
+package com.android.rkpdapp.hosttest;
 
 import static com.google.common.truth.Truth.assertThat;
+import static com.google.common.truth.Truth.assertWithMessage;
 
 import android.cts.statsdatom.lib.ConfigUtils;
 import android.cts.statsdatom.lib.ReportUtils;
@@ -30,6 +31,7 @@ import com.android.os.AtomsProto.RemoteKeyProvisioningNetworkInfo;
 import com.android.os.AtomsProto.RemoteKeyProvisioningTiming;
 import com.android.os.StatsLog.EventMetricData;
 import com.android.remoteprovisioner.RemoteprovisionerEnums.RemoteKeyProvisioningStatus;
+import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.testtype.DeviceJUnit4ClassRunner;
 import com.android.tradefed.testtype.junit4.BaseHostJUnit4Test;
 
@@ -40,12 +42,15 @@ import org.junit.runner.RunWith;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 
 @RunWith(DeviceJUnit4ClassRunner.class)
-public final class RemoteProvisionerStatsTests extends BaseHostJUnit4Test {
-    private static final String APP_PACKAGE_NAME = "com.android.remoteprovisioner";
-    private static final String TEST_PACKAGE_NAME = "com.android.remoteprovisioner.unittest";
+public final class RkpdStatsTests extends BaseHostJUnit4Test {
+    private String mTestPackageName;
     private static final int NO_HTTP_STATUS_ERROR = 0;
+    private static final int HTTPS_OK = 200;
+    private static final String RPC_DEFAULT =
+            "android.hardware.security.keymint.IRemotelyProvisionedComponent/default";
 
     private static final List<TransportType> VALID_TRANSPORT_TYPES = Arrays.asList(
             TransportType.TT_CELLULAR, TransportType.TT_WIFI, TransportType.TT_BLUETOOTH,
@@ -63,8 +68,24 @@ public final class RemoteProvisionerStatsTests extends BaseHostJUnit4Test {
         ConfigUtils.removeConfig(getDevice());
         ReportUtils.clearReports(getDevice());
 
+        String appPackageName = null;
+        Set<ITestDevice.ApexInfo> mActiveApexes = getDevice().getActiveApexes();
+        for (ITestDevice.ApexInfo ap : mActiveApexes) {
+            if ("com.android.rkpd".equals(ap.name)) {
+                appPackageName = "com.android.rkpdapp";
+                mTestPackageName = "com.android.rkpdapp.e2etest";
+                break;
+            } else if ("com.google.android.rkpd".equals(ap.name)) {
+                appPackageName = "com.google.android.rkpdapp";
+                mTestPackageName = "com.android.rkpdapp.e2etest";
+                break;
+            }
+        }
+        if (appPackageName == null) {
+            assertWithMessage("rkpd mainline module not installed").fail();
+        }
         ConfigUtils.uploadConfigForPushedAtoms(getDevice(),
-                APP_PACKAGE_NAME,
+                appPackageName,
                 new int[]{
                         AtomsProto.Atom.REMOTE_KEY_PROVISIONING_ATTEMPT_FIELD_NUMBER,
                         AtomsProto.Atom.REMOTE_KEY_PROVISIONING_NETWORK_INFO_FIELD_NUMBER,
@@ -78,91 +99,22 @@ public final class RemoteProvisionerStatsTests extends BaseHostJUnit4Test {
     }
 
     @Test
-    public void testGenerateKeyRkpOnly() throws Exception {
-        runTest("ServerToSystemTest", "testGenerateKeyRkpOnly");
-        final List<EventMetricData> data = ReportUtils.getEventMetricDataList(getDevice());
-        assertThat(data).hasSize(6);
-
-        // First three metrics are for when we actually generated keys
-        final List<EventMetricData> firstAttemptData = data.subList(0, 3);
-        RemoteKeyProvisioningAttempt attempt = getAttemptMetric(firstAttemptData);
-        assertThat(attempt).isNotNull();
-        assertThat(attempt.getCause()).isEqualTo(Cause.OUT_OF_KEYS);
-        assertThat(attempt.getRemotelyProvisionedComponent()).isEqualTo("TEE_KEYMINT");
-        assertThat(attempt.getUptime()).isNotEqualTo(UpTime.UPTIME_UNKNOWN);
-        assertThat(attempt.getEnablement()).isEqualTo(Enablement.ENABLED_RKP_ONLY);
-        assertThat(attempt.getIsKeyPoolEmpty()).isTrue();
-        assertThat(attempt.getStatus()).isEqualTo(
-                RemoteKeyProvisioningStatus.KEYS_SUCCESSFULLY_PROVISIONED);
-
-        RemoteKeyProvisioningTiming timing = getTimingMetric(firstAttemptData);
-        assertThat(timing).isNotNull();
-        assertThat(timing.getTransportType()).isNotEqualTo(VALID_TRANSPORT_TYPES);
-        assertThat(timing.getRemotelyProvisionedComponent()).isEqualTo(
-                attempt.getRemotelyProvisionedComponent());
-        // We're going over the internet here, so it realistically must take at least 1ms
-        assertThat(timing.getServerWaitMillis()).isAtLeast(1);
-        assertThat(timing.getBinderWaitMillis()).isAtLeast(0);
-        assertThat(timing.getLockWaitMillis()).isAtLeast(0);
-        assertThat(timing.getTotalProcessingTime()).isAtLeast(
-                timing.getServerWaitMillis() + timing.getBinderWaitMillis()
-                        + timing.getLockWaitMillis());
-
-        RemoteKeyProvisioningNetworkInfo network = getNetworkMetric(firstAttemptData);
-        assertThat(network).isNotNull();
-        assertThat(network.getTransportType()).isEqualTo(timing.getTransportType());
-        assertThat(network.getStatus()).isEqualTo(attempt.getStatus());
-        assertThat(network.getHttpStatusError()).isEqualTo(200);
-
-        // Second three metrics are for the call to keyGenerated, which should have been a noop
-        final List<EventMetricData> secondAttemptData = data.subList(3, 6);
-        attempt = getAttemptMetric(secondAttemptData);
-        assertThat(attempt).isNotNull();
-        assertThat(attempt.getCause()).isEqualTo(Cause.KEY_CONSUMED);
-        assertThat(attempt.getRemotelyProvisionedComponent()).isEqualTo("TEE_KEYMINT");
-        assertThat(attempt.getUptime()).isNotEqualTo(UpTime.UPTIME_UNKNOWN);
-        assertThat(attempt.getEnablement()).isEqualTo(Enablement.ENABLED_RKP_ONLY);
-        assertThat(attempt.getIsKeyPoolEmpty()).isFalse();
-        assertThat(attempt.getStatus()).isEqualTo(
-                RemoteKeyProvisioningStatus.NO_PROVISIONING_NEEDED);
-
-        timing = getTimingMetric(secondAttemptData);
-        assertThat(timing).isNotNull();
-        assertThat(timing.getTransportType()).isNotEqualTo(VALID_TRANSPORT_TYPES);
-        assertThat(timing.getRemotelyProvisionedComponent()).isEqualTo(
-                attempt.getRemotelyProvisionedComponent());
-        assertThat(timing.getServerWaitMillis()).isEqualTo(0);
-        assertThat(timing.getBinderWaitMillis()).isAtLeast(0);
-        assertThat(timing.getLockWaitMillis()).isAtLeast(0);
-        assertThat(timing.getTotalProcessingTime()).isAtLeast(
-                timing.getServerWaitMillis() + timing.getBinderWaitMillis()
-                        + timing.getLockWaitMillis());
-
-        network = getNetworkMetric(secondAttemptData);
-        assertThat(network).isNotNull();
-        assertThat(network.getTransportType()).isEqualTo(timing.getTransportType());
-        assertThat(network.getStatus()).isEqualTo(attempt.getStatus());
-        assertThat(network.getHttpStatusError()).isEqualTo(0);
-    }
-
-    @Test
-    public void testDataBudgetEmptyCallGenerateRkpKeyService() throws Exception {
-        runTest("ServerToSystemTest", "testDataBudgetEmptyCallGenerateRkpKeyService");
+    public void testDataBudgetEmptyGenerateKey() throws Exception {
+        runTest("testDataBudgetEmptyGenerateKey");
         final List<EventMetricData> data = ReportUtils.getEventMetricDataList(getDevice());
         assertThat(data).hasSize(3);
 
         final RemoteKeyProvisioningAttempt attempt = getAttemptMetric(data);
         assertThat(attempt).isNotNull();
-        assertThat(attempt.getCause()).isEqualTo(Cause.KEY_CONSUMED);
-        assertThat(attempt.getRemotelyProvisionedComponent()).isEqualTo("TEE_KEYMINT");
+        assertThat(attempt.getCause()).isEqualTo(Cause.OUT_OF_KEYS);
+        assertThat(attempt.getRemotelyProvisionedComponent()).isEqualTo(RPC_DEFAULT);
         assertThat(attempt.getUptime()).isNotEqualTo(UpTime.UPTIME_UNKNOWN);
         assertThat(attempt.getEnablement()).isIn(VALID_ENABLEMENTS);
-        assertThat(attempt.getIsKeyPoolEmpty()).isTrue();
         assertThat(attempt.getStatus()).isEqualTo(RemoteKeyProvisioningStatus.OUT_OF_ERROR_BUDGET);
 
         final RemoteKeyProvisioningTiming timing = getTimingMetric(data);
         assertThat(timing).isNotNull();
-        assertThat(timing.getTransportType()).isNotEqualTo(VALID_TRANSPORT_TYPES);
+        assertThat(timing.getTransportType()).isIn(VALID_TRANSPORT_TYPES);
         assertThat(timing.getRemotelyProvisionedComponent()).isEqualTo(
                 attempt.getRemotelyProvisionedComponent());
         assertThat(timing.getServerWaitMillis()).isEqualTo(0);
@@ -181,23 +133,22 @@ public final class RemoteProvisionerStatsTests extends BaseHostJUnit4Test {
 
     @Test
     public void testRetryableRkpError() throws Exception {
-        runTest("ServerToSystemTest", "testRetryableRkpError");
+        runTest("testRetryableRkpError");
         final List<EventMetricData> data = ReportUtils.getEventMetricDataList(getDevice());
         assertThat(data).hasSize(3);
 
         final RemoteKeyProvisioningAttempt attempt = getAttemptMetric(data);
         assertThat(attempt).isNotNull();
         assertThat(attempt.getCause()).isEqualTo(Cause.OUT_OF_KEYS);
-        assertThat(attempt.getRemotelyProvisionedComponent()).isEqualTo("TEE_KEYMINT");
+        assertThat(attempt.getRemotelyProvisionedComponent()).isEqualTo(RPC_DEFAULT);
         assertThat(attempt.getUptime()).isNotEqualTo(UpTime.UPTIME_UNKNOWN);
         assertThat(attempt.getEnablement()).isEqualTo(Enablement.ENABLED_RKP_ONLY);
-        assertThat(attempt.getIsKeyPoolEmpty()).isTrue();
         assertThat(attempt.getStatus()).isEqualTo(
                 RemoteKeyProvisioningStatus.FETCH_GEEK_IO_EXCEPTION);
 
         final RemoteKeyProvisioningTiming timing = getTimingMetric(data);
         assertThat(timing).isNotNull();
-        assertThat(timing.getTransportType()).isNotEqualTo(VALID_TRANSPORT_TYPES);
+        assertThat(timing.getTransportType()).isIn(VALID_TRANSPORT_TYPES);
         assertThat(timing.getRemotelyProvisionedComponent()).isEqualTo(
                 attempt.getRemotelyProvisionedComponent());
         assertThat(timing.getServerWaitMillis()).isAtLeast(0);
@@ -216,14 +167,14 @@ public final class RemoteProvisionerStatsTests extends BaseHostJUnit4Test {
 
     @Test
     public void testRetryNeverWhenDeviceNotRegistered() throws Exception {
-        runTest("ServerToSystemTest", "testRetryNeverWhenDeviceNotRegistered");
+        runTest("testRetryNeverWhenDeviceNotRegistered");
         final List<EventMetricData> data = ReportUtils.getEventMetricDataList(getDevice());
         assertThat(data).hasSize(3);
 
         final RemoteKeyProvisioningAttempt attempt = getAttemptMetric(data);
         assertThat(attempt).isNotNull();
         assertThat(attempt.getCause()).isEqualTo(Cause.OUT_OF_KEYS);
-        assertThat(attempt.getRemotelyProvisionedComponent()).isEqualTo("TEE_KEYMINT");
+        assertThat(attempt.getRemotelyProvisionedComponent()).isEqualTo(RPC_DEFAULT);
         assertThat(attempt.getUptime()).isNotEqualTo(UpTime.UPTIME_UNKNOWN);
         assertThat(attempt.getEnablement()).isEqualTo(Enablement.ENABLED_RKP_ONLY);
         assertThat(attempt.getIsKeyPoolEmpty()).isTrue();
@@ -232,7 +183,7 @@ public final class RemoteProvisionerStatsTests extends BaseHostJUnit4Test {
 
         final RemoteKeyProvisioningTiming timing = getTimingMetric(data);
         assertThat(timing).isNotNull();
-        assertThat(timing.getTransportType()).isNotEqualTo(VALID_TRANSPORT_TYPES);
+        assertThat(timing.getTransportType()).isIn(VALID_TRANSPORT_TYPES);
         assertThat(timing.getRemotelyProvisionedComponent()).isEqualTo(
                 attempt.getRemotelyProvisionedComponent());
         assertThat(timing.getServerWaitMillis()).isAtLeast(0);
@@ -250,47 +201,13 @@ public final class RemoteProvisionerStatsTests extends BaseHostJUnit4Test {
     }
 
     @Test
-    public void testRetryWithoutNetworkTee() throws Exception {
-        runTest("ServerToSystemTest", "testRetryWithoutNetworkTee");
+    public void testKeyCreationUsesRemotelyProvisionedCertificate() throws Exception {
+        runTest("testKeyCreationUsesRemotelyProvisionedCertificate");
         final List<EventMetricData> data = ReportUtils.getEventMetricDataList(getDevice());
-        assertThat(data).hasSize(3);
+        assertThat(data).hasSize(6);
 
-        final RemoteKeyProvisioningAttempt attempt = getAttemptMetric(data);
-        assertThat(attempt).isNotNull();
-        assertThat(attempt.getCause()).isEqualTo(Cause.OUT_OF_KEYS);
-        assertThat(attempt.getRemotelyProvisionedComponent()).isEqualTo("TEE_KEYMINT");
-        assertThat(attempt.getUptime()).isNotEqualTo(UpTime.UPTIME_UNKNOWN);
-        assertThat(attempt.getEnablement()).isIn(VALID_ENABLEMENTS);
-        assertThat(attempt.getIsKeyPoolEmpty()).isTrue();
-        assertThat(attempt.getStatus()).isEqualTo(
-                RemoteKeyProvisioningStatus.NO_NETWORK_CONNECTIVITY);
-
-        final RemoteKeyProvisioningTiming timing = getTimingMetric(data);
-        assertThat(timing).isNotNull();
-        assertThat(timing.getTransportType()).isNotEqualTo(VALID_TRANSPORT_TYPES);
-        assertThat(timing.getRemotelyProvisionedComponent()).isEqualTo(
-                attempt.getRemotelyProvisionedComponent());
-        assertThat(timing.getServerWaitMillis()).isAtLeast(0);
-        assertThat(timing.getBinderWaitMillis()).isAtLeast(0);
-        assertThat(timing.getLockWaitMillis()).isAtLeast(0);
-        assertThat(timing.getTotalProcessingTime()).isAtLeast(
-                timing.getServerWaitMillis() + timing.getBinderWaitMillis()
-                        + timing.getLockWaitMillis());
-
-        final RemoteKeyProvisioningNetworkInfo network = getNetworkMetric(data);
-        assertThat(network).isNotNull();
-        assertThat(network.getTransportType()).isEqualTo(timing.getTransportType());
-        assertThat(network.getStatus()).isEqualTo(attempt.getStatus());
-        assertThat(network.getHttpStatusError()).isEqualTo(NO_HTTP_STATUS_ERROR);
-    }
-
-    @Test
-    public void testPeriodicProvisionerRoundTrip() throws Exception {
-        runTest("ServerToSystemTest", "testPeriodicProvisionerRoundTrip");
-        final List<EventMetricData> data = ReportUtils.getEventMetricDataList(getDevice());
-        assertThat(data).hasSize(3);
-
-        final RemoteKeyProvisioningAttempt attempt = getAttemptMetric(data);
+        final List<EventMetricData> firstAttemptData = data.subList(0, 3);
+        RemoteKeyProvisioningAttempt attempt = getAttemptMetric(firstAttemptData);
         assertThat(attempt).isNotNull();
         assertThat(attempt.getCause()).isEqualTo(Cause.SCHEDULED);
         assertThat(attempt.getRemotelyProvisionedComponent()).isEmpty();
@@ -302,9 +219,9 @@ public final class RemoteProvisionerStatsTests extends BaseHostJUnit4Test {
         assertThat(attempt.getStatus()).isEqualTo(
                 RemoteKeyProvisioningStatus.KEYS_SUCCESSFULLY_PROVISIONED);
 
-        final RemoteKeyProvisioningTiming timing = getTimingMetric(data);
+        RemoteKeyProvisioningTiming timing = getTimingMetric(firstAttemptData);
         assertThat(timing).isNotNull();
-        assertThat(timing.getTransportType()).isNotEqualTo(VALID_TRANSPORT_TYPES);
+        assertThat(timing.getTransportType()).isIn(VALID_TRANSPORT_TYPES);
         assertThat(timing.getRemotelyProvisionedComponent()).isEqualTo(
                 attempt.getRemotelyProvisionedComponent());
         assertThat(timing.getServerWaitMillis()).isAtLeast(0);
@@ -314,17 +231,20 @@ public final class RemoteProvisionerStatsTests extends BaseHostJUnit4Test {
                 timing.getServerWaitMillis() + timing.getBinderWaitMillis()
                         + timing.getLockWaitMillis());
 
-        final RemoteKeyProvisioningNetworkInfo network = getNetworkMetric(data);
+        RemoteKeyProvisioningNetworkInfo network = getNetworkMetric(firstAttemptData);
         assertThat(network).isNotNull();
         assertThat(network.getTransportType()).isEqualTo(timing.getTransportType());
         assertThat(network.getStatus()).isEqualTo(attempt.getStatus());
         assertThat(network.getHttpStatusError()).isEqualTo(200);
+
+        // Where we actually get a key.
+        verifyMetricsForKeyAssignedAfterFreshProvisioning(data.subList(3, 6));
     }
 
     @Test
     public void testPeriodicProvisionerNoop() throws Exception {
         // First pass of the test will provision some keys
-        runTest("ServerToSystemTest", "testPeriodicProvisionerNoop");
+        runTest("testPeriodicProvisionerNoop", "RkpdHostTestHelperTests");
 
         List<EventMetricData> data = ReportUtils.getEventMetricDataList(getDevice());
         assertThat(data).hasSize(6);
@@ -347,7 +267,7 @@ public final class RemoteProvisionerStatsTests extends BaseHostJUnit4Test {
 
         final RemoteKeyProvisioningTiming timing = getTimingMetric(data);
         assertThat(timing).isNotNull();
-        assertThat(timing.getTransportType()).isNotEqualTo(VALID_TRANSPORT_TYPES);
+        assertThat(timing.getTransportType()).isIn(VALID_TRANSPORT_TYPES);
         assertThat(timing.getRemotelyProvisionedComponent()).isEqualTo(
                 attempt.getRemotelyProvisionedComponent());
         assertThat(timing.getServerWaitMillis()).isAtLeast(0);
@@ -361,63 +281,27 @@ public final class RemoteProvisionerStatsTests extends BaseHostJUnit4Test {
         assertThat(network).isNotNull();
         assertThat(network.getTransportType()).isEqualTo(timing.getTransportType());
         assertThat(network.getStatus()).isEqualTo(attempt.getStatus());
-        assertThat(network.getHttpStatusError()).isEqualTo(NO_HTTP_STATUS_ERROR);
-    }
-
-    @Test
-    public void testPeriodicProvisionerDataBudgetEmpty() throws Exception {
-        runTest("ServerToSystemTest", "testPeriodicProvisionerDataBudgetEmpty");
-        final List<EventMetricData> data = ReportUtils.getEventMetricDataList(getDevice());
-        assertThat(data).hasSize(3);
-
-        final RemoteKeyProvisioningAttempt attempt = getAttemptMetric(data);
-        assertThat(attempt).isNotNull();
-        assertThat(attempt.getCause()).isEqualTo(Cause.SCHEDULED);
-        assertThat(attempt.getRemotelyProvisionedComponent()).isEmpty();
-        assertThat(attempt.getUptime()).isNotEqualTo(UpTime.UPTIME_UNKNOWN);
-        assertThat(attempt.getEnablement()).isEqualTo(Enablement.ENABLEMENT_UNKNOWN);
-        assertThat(attempt.getIsKeyPoolEmpty()).isTrue();
-        assertThat(attempt.getStatus()).isEqualTo(
-                RemoteKeyProvisioningStatus.OUT_OF_ERROR_BUDGET);
-
-        final RemoteKeyProvisioningTiming timing = getTimingMetric(data);
-        assertThat(timing).isNotNull();
-        assertThat(timing.getTransportType()).isNotEqualTo(VALID_TRANSPORT_TYPES);
-        assertThat(timing.getRemotelyProvisionedComponent()).isEqualTo(
-                attempt.getRemotelyProvisionedComponent());
-        assertThat(timing.getServerWaitMillis()).isAtLeast(0);
-        assertThat(timing.getBinderWaitMillis()).isAtLeast(0);
-        assertThat(timing.getLockWaitMillis()).isAtLeast(0);
-        assertThat(timing.getTotalProcessingTime()).isAtLeast(
-                timing.getServerWaitMillis() + timing.getBinderWaitMillis()
-                        + timing.getLockWaitMillis());
-
-        final RemoteKeyProvisioningNetworkInfo network = getNetworkMetric(data);
-        assertThat(network).isNotNull();
-        assertThat(network.getTransportType()).isEqualTo(timing.getTransportType());
-        assertThat(network.getStatus()).isEqualTo(attempt.getStatus());
-        assertThat(network.getHttpStatusError()).isEqualTo(NO_HTTP_STATUS_ERROR);
+        assertThat(network.getHttpStatusError()).isEqualTo(HTTPS_OK);
     }
 
     @Test
     public void testPeriodicProvisionerProvisioningDisabled() throws Exception {
-        runTest("ServerToSystemTest", "testPeriodicProvisionerProvisioningDisabled");
+        runTest("testPeriodicProvisionerProvisioningDisabled");
         final List<EventMetricData> data = ReportUtils.getEventMetricDataList(getDevice());
         assertThat(data).hasSize(3);
 
         final RemoteKeyProvisioningAttempt attempt = getAttemptMetric(data);
         assertThat(attempt).isNotNull();
-        assertThat(attempt.getCause()).isEqualTo(Cause.SCHEDULED);
-        assertThat(attempt.getRemotelyProvisionedComponent()).isEmpty();
+        assertThat(attempt.getCause()).isEqualTo(Cause.OUT_OF_KEYS);
+        assertThat(attempt.getRemotelyProvisionedComponent()).isEqualTo(RPC_DEFAULT);
         assertThat(attempt.getUptime()).isNotEqualTo(UpTime.UPTIME_UNKNOWN);
         assertThat(attempt.getEnablement()).isEqualTo(Enablement.DISABLED);
-        assertThat(attempt.getIsKeyPoolEmpty()).isTrue();
         assertThat(attempt.getStatus()).isEqualTo(
                 RemoteKeyProvisioningStatus.PROVISIONING_DISABLED);
 
         final RemoteKeyProvisioningTiming timing = getTimingMetric(data);
         assertThat(timing).isNotNull();
-        assertThat(timing.getTransportType()).isNotEqualTo(VALID_TRANSPORT_TYPES);
+        assertThat(timing.getTransportType()).isIn(VALID_TRANSPORT_TYPES);
         assertThat(timing.getRemotelyProvisionedComponent()).isEqualTo(
                 attempt.getRemotelyProvisionedComponent());
         assertThat(timing.getServerWaitMillis()).isAtLeast(0);
@@ -434,9 +318,96 @@ public final class RemoteProvisionerStatsTests extends BaseHostJUnit4Test {
         assertThat(network.getHttpStatusError()).isEqualTo(200);
     }
 
-    private void runTest(String testClassName, String testMethodName) throws Exception {
-        testClassName = TEST_PACKAGE_NAME + "." + testClassName;
-        assertThat(runDeviceTests(TEST_PACKAGE_NAME, testClassName, testMethodName)).isTrue();
+    @Test
+    public void testKeyCreationWithEmptyKeyPool() throws Exception {
+        runTest("testKeyCreationWithEmptyKeyPool");
+        final List<EventMetricData> data = ReportUtils.getEventMetricDataList(getDevice());
+        assertThat(data).hasSize(6);
+
+        final List<EventMetricData> firstAttemptData = data.subList(0, 3);
+        RemoteKeyProvisioningAttempt attempt = getAttemptMetric(firstAttemptData);
+        assertThat(attempt).isNotNull();
+        assertThat(attempt.getCause()).isEqualTo(Cause.OUT_OF_KEYS);
+        assertThat(attempt.getRemotelyProvisionedComponent()).isEqualTo(RPC_DEFAULT);
+        assertThat(attempt.getUptime()).isNotEqualTo(UpTime.UPTIME_UNKNOWN);
+        assertThat(attempt.getEnablement()).isEqualTo(Enablement.ENABLED_RKP_ONLY);
+        assertThat(attempt.getIsKeyPoolEmpty()).isTrue();
+        assertThat(attempt.getStatus()).isEqualTo(
+                RemoteKeyProvisioningStatus.KEYS_SUCCESSFULLY_PROVISIONED);
+
+        RemoteKeyProvisioningTiming timing = getTimingMetric(firstAttemptData);
+        assertThat(timing).isNotNull();
+        assertThat(timing.getTransportType()).isIn(VALID_TRANSPORT_TYPES);
+        assertThat(timing.getRemotelyProvisionedComponent()).isEqualTo(
+                attempt.getRemotelyProvisionedComponent());
+        // We're going over the internet here, so it realistically must take at least 1ms
+        assertThat(timing.getServerWaitMillis()).isAtLeast(1);
+        assertThat(timing.getBinderWaitMillis()).isAtLeast(0);
+        assertThat(timing.getLockWaitMillis()).isAtLeast(0);
+        assertThat(timing.getTotalProcessingTime()).isAtLeast(
+                timing.getServerWaitMillis() + timing.getBinderWaitMillis()
+                        + timing.getLockWaitMillis());
+
+        RemoteKeyProvisioningNetworkInfo network = getNetworkMetric(firstAttemptData);
+        assertThat(network).isNotNull();
+        assertThat(network.getTransportType()).isEqualTo(timing.getTransportType());
+        assertThat(network.getStatus()).isEqualTo(attempt.getStatus());
+        assertThat(network.getHttpStatusError()).isEqualTo(200);
+
+        verifyMetricsForKeyAssignedAfterFreshProvisioning(data.subList(3, 6));
+    }
+
+    @Test
+    public void testKeyCreationWorksWhenAllKeysAssigned() throws Exception {
+        runTest("testKeyCreationWorksWhenAllKeysAssigned");
+        final List<EventMetricData> data = ReportUtils.getEventMetricDataList(getDevice());
+        assertThat(data).hasSize(9);
+
+        // first 3 metrics are for fresh key provisioning which we have measured elsewhere.
+
+        // next 3 metrics should be for our of keys since all the keys are assigned.
+        final List<EventMetricData> attemptData = data.subList(3, 6);
+        RemoteKeyProvisioningAttempt attempt = getAttemptMetric(attemptData);
+        assertThat(attempt).isNotNull();
+        assertThat(attempt.getCause()).isEqualTo(Cause.OUT_OF_KEYS);
+        assertThat(attempt.getRemotelyProvisionedComponent()).isEqualTo(RPC_DEFAULT);
+        assertThat(attempt.getUptime()).isNotEqualTo(UpTime.UPTIME_UNKNOWN);
+        assertThat(attempt.getEnablement()).isEqualTo(Enablement.ENABLED_RKP_ONLY);
+        assertThat(attempt.getIsKeyPoolEmpty()).isTrue();
+        assertThat(attempt.getStatus()).isEqualTo(
+                RemoteKeyProvisioningStatus.KEYS_SUCCESSFULLY_PROVISIONED);
+
+        RemoteKeyProvisioningTiming timing = getTimingMetric(attemptData);
+        assertThat(timing).isNotNull();
+        assertThat(timing.getTransportType()).isIn(VALID_TRANSPORT_TYPES);
+        assertThat(timing.getRemotelyProvisionedComponent()).isEqualTo(
+                attempt.getRemotelyProvisionedComponent());
+        // We're going over the internet here, so it realistically must take at least 1ms
+        assertThat(timing.getServerWaitMillis()).isAtLeast(1);
+        assertThat(timing.getBinderWaitMillis()).isAtLeast(0);
+        assertThat(timing.getLockWaitMillis()).isAtLeast(0);
+        assertThat(timing.getTotalProcessingTime()).isAtLeast(
+                timing.getServerWaitMillis() + timing.getBinderWaitMillis()
+                        + timing.getLockWaitMillis());
+
+        RemoteKeyProvisioningNetworkInfo network = getNetworkMetric(attemptData);
+        assertThat(network).isNotNull();
+        assertThat(network.getTransportType()).isEqualTo(timing.getTransportType());
+        assertThat(network.getStatus()).isEqualTo(attempt.getStatus());
+        assertThat(network.getHttpStatusError()).isEqualTo(200);
+
+        // last 3 metrics show key assignment from RegistrationBinder's provisionKeysOnKeyConsumed
+        verifyMetricsForKeyAssignedAfterFreshProvisioning(data.subList(6, 9));
+    }
+
+    private void runTest(String testMethodName) throws Exception {
+        runTest(testMethodName, "KeystoreIntegrationTest");
+    }
+
+    private void runTest(String testMethodName, String className) throws Exception {
+        String testClassName = mTestPackageName + "." + className;
+        testMethodName = testMethodName + "[0: instanceName=default]";
+        assertThat(runDeviceTests(mTestPackageName, testClassName, testMethodName)).isTrue();
     }
 
     private static RemoteKeyProvisioningAttempt getAttemptMetric(List<EventMetricData> data) {
@@ -470,5 +441,36 @@ public final class RemoteProvisionerStatsTests extends BaseHostJUnit4Test {
             }
         }
         return metric;
+    }
+
+    private void verifyMetricsForKeyAssignedAfterFreshProvisioning(List<EventMetricData> data) {
+        RemoteKeyProvisioningAttempt attempt = getAttemptMetric(data);
+        assertThat(attempt).isNotNull();
+        assertThat(attempt.getCause()).isEqualTo(Cause.KEY_CONSUMED);
+        assertThat(attempt.getRemotelyProvisionedComponent()).isEqualTo(RPC_DEFAULT);
+        assertThat(attempt.getUptime()).isNotEqualTo(UpTime.UPTIME_UNKNOWN);
+        assertThat(attempt.getEnablement()).isEqualTo(Enablement.ENABLED_RKP_ONLY);
+        assertThat(attempt.getIsKeyPoolEmpty()).isFalse();
+        assertThat(attempt.getStatus()).isEqualTo(
+                RemoteKeyProvisioningStatus.NO_PROVISIONING_NEEDED);
+
+        RemoteKeyProvisioningTiming timing = getTimingMetric(data);
+        assertThat(timing).isNotNull();
+        assertThat(timing.getTransportType()).isIn(VALID_TRANSPORT_TYPES);
+        assertThat(timing.getRemotelyProvisionedComponent()).isEqualTo(
+                attempt.getRemotelyProvisionedComponent());
+        assertThat(timing.getServerWaitMillis()).isAtLeast(0);
+        assertThat(timing.getBinderWaitMillis()).isAtLeast(0);
+        assertThat(timing.getLockWaitMillis()).isAtLeast(0);
+        assertThat(timing.getTotalProcessingTime()).isAtLeast(
+                timing.getServerWaitMillis() + timing.getBinderWaitMillis()
+                        + timing.getLockWaitMillis());
+
+        RemoteKeyProvisioningNetworkInfo network = getNetworkMetric(data);
+        assertThat(network).isNotNull();
+        assertThat(network.getTransportType()).isEqualTo(timing.getTransportType());
+        assertThat(network.getStatus()).isEqualTo(attempt.getStatus());
+        // There are no network calls, but we add network component in metrics class.
+        assertThat(network.getHttpStatusError()).isEqualTo(0);
     }
 }

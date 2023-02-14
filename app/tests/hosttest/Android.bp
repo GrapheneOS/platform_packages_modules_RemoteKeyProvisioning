@@ -16,9 +16,12 @@ package {
 }
 
 java_test_host {
-    name: "RemoteProvisionerHostTests",
+    name: "RkpdAppHostTests",
     srcs: ["src/**/*.java"],
-    test_suites: ["general-tests"],
+    test_suites: [
+        "general-tests",
+        "device-tests",
+    ],
     libs: [
         "compatibility-host-util",
         "core_cts_test_resources",
@@ -28,12 +31,10 @@ java_test_host {
         "tradefed",
         "truth-prebuilt",
     ],
-
     static_libs: [
         "cts-statsd-atom-host-test-utils",
     ],
-
     data: [
-        ":RemoteProvisionerUnitTests",
+        ":RkpdAppIntegrationTests",
     ],
 }
