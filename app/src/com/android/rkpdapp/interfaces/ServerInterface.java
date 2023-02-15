@@ -242,7 +242,7 @@ public class ServerInterface {
                 if (con.getResponseCode() != HttpURLConnection.HTTP_OK) {
                     serverWaitTimer.stop();
                     int failures = Settings.incrementFailureCounter(mContext);
-                    Log.e(TAG, "Server connection failed to " + url + ", response code: "
+                    Log.e(TAG, "Server connection failed for url: " + url + ", response code: "
                             + con.getResponseCode() + "\nRepeated failure count: " + failures);
                     Log.e(TAG, readErrorFromConnection(con));
                     Settings.consumeErrDataBudget(mContext, bytesTransacted);
