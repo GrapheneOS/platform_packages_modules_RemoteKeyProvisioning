@@ -31,6 +31,7 @@ android_test {
     test_suites: [
         "general-tests",
         "device-tests",
+        "mts-rkpd",
     ],
     min_sdk_version: "UpsideDownCake",
     instrumentation_for: "rkpdapp",
