@@ -80,7 +80,7 @@ public final class RegistrationBinder extends IRegistration.Stub {
     }
 
     private void getKeyWorker(int keyId, IGetKeyCallback callback)
-            throws CborException, InterruptedException, RkpdException, RemoteException {
+            throws CborException, InterruptedException, RkpdException {
         Log.i(TAG, "Key requested for service: " + mServiceName + ", clientUid: " + mClientUid
                 + ", keyId: " + keyId + ", callback: " + callback.hashCode());
         // Use reduced look-ahead to get rid of soon-to-be expired keys, because the periodic
@@ -113,8 +113,7 @@ public final class RegistrationBinder extends IRegistration.Stub {
                 GeekResponse geekResponse = mRkpServer.fetchGeek(metrics);
                 mProvisioner.provisionKeys(metrics, mServiceName, geekResponse);
             }
-            assignedKey = mProvisionedKeyDao.getOrAssignKey(mServiceName, minExpiry, mClientUid,
-                    keyId);
+            assignedKey = tryToAssignKey(minExpiry, keyId);
         }
 
         // Now that we've gotten back from our network round-trip, it's possible an interrupt came
@@ -151,27 +150,30 @@ public final class RegistrationBinder extends IRegistration.Stub {
             ProvisionedKey key = mProvisionedKeyDao.getOrAssignKey(mServiceName, expiry, mClientUid,
                     keyId);
             if (key != null) {
-                provisionKeysIfNeeded();
+                provisionKeysOnKeyConsumed();
                 return key;
             }
         }
         return null;
     }
 
-    private void provisionKeysIfNeeded() {
-        if (!mProvisioner.isProvisioningNeeded(mServiceName)) {
-            return;
-        }
-
-        mThreadPool.execute(() -> {
-            try (ProvisionerMetrics metrics = ProvisionerMetrics.createKeyConsumedAttemptMetrics(
-                    mContext, mServiceName)) {
-                GeekResponse geekResponse = mRkpServer.fetchGeekAndUpdate(metrics);
-                mProvisioner.provisionKeys(metrics, mServiceName, geekResponse);
-            } catch (CborException | RemoteException | RkpdException | InterruptedException e) {
-                Log.e(TAG, "Error provisioning keys", e);
+    private void provisionKeysOnKeyConsumed() {
+        try (ProvisionerMetrics metrics = ProvisionerMetrics.createKeyConsumedAttemptMetrics(
+                mContext, mServiceName)) {
+            if (!mProvisioner.isProvisioningNeeded(metrics, mServiceName)) {
+                metrics.setStatus(ProvisionerMetrics.Status.NO_PROVISIONING_NEEDED);
+                return;
             }
-        });
+
+            mThreadPool.execute(() -> {
+                try {
+                    GeekResponse geekResponse = mRkpServer.fetchGeekAndUpdate(metrics);
+                    mProvisioner.provisionKeys(metrics, mServiceName, geekResponse);
+                } catch (CborException | RkpdException | InterruptedException e) {
+                    Log.e(TAG, "Error provisioning keys", e);
+                }
+            });
+        }
     }
 
     private void checkForCancel() throws InterruptedException {
