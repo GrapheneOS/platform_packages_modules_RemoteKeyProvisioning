@@ -299,7 +299,7 @@ public class RegistrationBinderTest {
                 .getOrAssignKey(eq(IRPC_HAL), notNull(), eq(CLIENT_UID), eq(KEY_ID));
         doReturn(true)
                 .when(mMockProvisioner)
-                .isProvisioningNeeded(IRPC_HAL);
+                .isProvisioningNeeded(notNull(), eq(IRPC_HAL));
 
         IGetKeyCallback callback = mock(IGetKeyCallback.class);
         mRegistration.getKey(KEY_ID, callback);
@@ -309,7 +309,7 @@ public class RegistrationBinderTest {
         verify(callback, timeout(MAX_TIMEOUT.toMillis())).onSuccess(matches(FAKE_KEY));
 
         completeAllTasks();
-        verify(mMockProvisioner).isProvisioningNeeded(eq(IRPC_HAL));
+        verify(mMockProvisioner).isProvisioningNeeded(any(), eq(IRPC_HAL));
         verify(mMockProvisioner).provisionKeys(any(), eq(IRPC_HAL), any());
         verifyNoMoreInteractions(mMockProvisioner);
     }
@@ -321,7 +321,7 @@ public class RegistrationBinderTest {
                 .getOrAssignKey(eq(IRPC_HAL), notNull(), eq(CLIENT_UID), eq(KEY_ID));
         doReturn(false)
                 .when(mMockProvisioner)
-                .isProvisioningNeeded(IRPC_HAL);
+                .isProvisioningNeeded(notNull(), eq(IRPC_HAL));
 
         IGetKeyCallback callback = mock(IGetKeyCallback.class);
         mRegistration.getKey(KEY_ID, callback);
@@ -331,7 +331,7 @@ public class RegistrationBinderTest {
         verify(callback, timeout(MAX_TIMEOUT.toMillis())).onSuccess(matches(FAKE_KEY));
 
         completeAllTasks();
-        verify(mMockProvisioner).isProvisioningNeeded(eq(IRPC_HAL));
+        verify(mMockProvisioner).isProvisioningNeeded(any(), eq(IRPC_HAL));
         verifyNoMoreInteractions(mMockProvisioner);
     }
 
