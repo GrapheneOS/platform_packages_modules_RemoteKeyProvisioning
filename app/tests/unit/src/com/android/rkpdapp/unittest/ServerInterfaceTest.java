@@ -21,20 +21,14 @@ import static com.google.common.truth.Truth.assertWithMessage;
 
 import static org.junit.Assert.fail;
 
-import android.Manifest;
 import android.content.Context;
-import android.content.pm.PackageManager;
 import android.net.ConnectivityManager;
-import android.net.EthernetManager;
 import android.net.NetworkInfo;
 import android.security.NetworkSecurityPolicy;
 import android.util.Base64;
-import android.util.Log;
 
 import androidx.test.core.app.ApplicationProvider;
 
-import com.android.bedstead.nene.TestApis;
-import com.android.bedstead.nene.permissions.PermissionContext;
 import com.android.rkpdapp.GeekResponse;
 import com.android.rkpdapp.ProvisionerMetrics;
 import com.android.rkpdapp.RkpdException;
@@ -60,7 +54,6 @@ import java.util.List;
 import fi.iki.elonen.NanoHTTPD;
 
 public class ServerInterfaceTest {
-    private static final String TAG = "RkpdServerInterfaceTest";
     private static final Duration TIME_TO_REFRESH_HOURS = Duration.ofHours(2);
     private static final byte[] GEEK_RESPONSE = Base64.decode(
             "g4KCAYOEQ6EBJqBYTaUBAgMmIAEhWCD3FIrbl/TMU+/SZBHE43UfZh+kcQxsz/oJRoB0h1TyrSJY"
@@ -109,7 +102,7 @@ public class ServerInterfaceTest {
 
     @BeforeClass
     public static void init() {
-        sContext = ApplicationProvider.getApplicationContext();
+        sContext = Mockito.spy(ApplicationProvider.getApplicationContext());
     }
 
     @Before
@@ -125,6 +118,7 @@ public class ServerInterfaceTest {
     public void tearDown() {
         Settings.clearPreferences(sContext);
         NetworkSecurityPolicy.getInstance().setCleartextTrafficPermitted(mCleartextPolicy);
+        Mockito.reset(sContext);
     }
 
     @Test
@@ -256,6 +250,9 @@ public class ServerInterfaceTest {
         Settings.consumeErrDataBudget(sContext, Settings.FAILURE_DATA_USAGE_MAX);
         ProvisionerMetrics metrics = ProvisionerMetrics.createScheduledAttemptMetrics(sContext);
         try {
+            // We are okay in mocking connectivity failure since err data budget is the first thing
+            // to be checked.
+            mockConnectivityFailure(ConnectivityState.CONNECTED);
             mServerInterface.fetchGeek(metrics);
             fail("Network transaction should not have proceeded.");
         } catch (RkpdException e) {
@@ -266,11 +263,12 @@ public class ServerInterfaceTest {
     }
 
     @Test
-    public void testDataBudgetEmptyFetchGeekNetworkDisconnected() throws Exception {
+    public void testDataBudgetEmptyFetchGeekNetworkDisconnected() {
         // Check the data budget in order to initialize a rolling window.
         try {
-            setEthernetEnabled(false);
-            setAirplaneMode(true);
+            // We are okay in mocking connectivity failure since err data budget is the first thing
+            // to be checked.
+            mockConnectivityFailure(ConnectivityState.DISCONNECTED);
             assertThat(Settings.hasErrDataBudget(sContext, null /* curTime */)).isTrue();
             Settings.consumeErrDataBudget(sContext, Settings.FAILURE_DATA_USAGE_MAX);
             ProvisionerMetrics metrics = ProvisionerMetrics.createScheduledAttemptMetrics(sContext);
@@ -279,9 +277,6 @@ public class ServerInterfaceTest {
         } catch (RkpdException e) {
             assertThat(e).hasMessageThat().contains("Out of data budget due to repeated errors");
             assertThat(e.getErrorCode()).isEqualTo(RkpdException.ErrorCode.NO_NETWORK_CONNECTIVITY);
-        } finally {
-            setEthernetEnabled(true);
-            setAirplaneMode(false);
         }
     }
 
@@ -437,46 +432,19 @@ public class ServerInterfaceTest {
         return "http://localhost:" + server.getListeningPort() + "/";
     }
 
-    private void setEthernetEnabled(boolean enable) throws Exception {
-        // Whether the device running these tests supports ethernet.
-        EthernetManager ethernetManager = sContext.getSystemService(EthernetManager.class);
-        assertThat(ethernetManager).isNotNull();
-        boolean hasEthernet = sContext.getPackageManager()
-                .hasSystemFeature(PackageManager.FEATURE_ETHERNET);
-        if (hasEthernet) {
-            try (PermissionContext c = TestApis.permissions().withPermission(
-                    Manifest.permission.NETWORK_SETTINGS)) {
-                // Enable/Disable the ethernet as it can not be controlled by airplane mode.
-                ethernetManager.setEthernetEnabled(enable);
-            }
-        }
+    private void mockConnectivityFailure(ConnectivityState state) {
+        ConnectivityManager mockedConnectivityManager = Mockito.mock(ConnectivityManager.class);
+        NetworkInfo mockedNetwork = Mockito.mock(NetworkInfo.class);
+
+        Mockito.when(sContext.getSystemService(ConnectivityManager.class))
+                .thenReturn(mockedConnectivityManager);
+        Mockito.when(mockedConnectivityManager.getActiveNetworkInfo()).thenReturn(mockedNetwork);
+        Mockito.when(mockedNetwork.isConnected()).thenReturn(state == ConnectivityState.CONNECTED);
     }
 
-    private void setAirplaneMode(boolean enable) throws Exception {
-        ConnectivityManager cm = sContext.getSystemService(ConnectivityManager.class);
-        assertThat(cm).isNotNull();
-        try (PermissionContext ignored = TestApis.permissions().withPermission(
-                Manifest.permission.NETWORK_SETTINGS)) {
-            cm.setAirplaneMode(enable);
-
-            // Now wait a "reasonable" time for the network to go down. This timeout matches
-            // the connectivity manager tests, which wait for 2 minutes.
-            for (int i = 0; i < 120; ++i) {
-                NetworkInfo networkInfo = cm.getActiveNetworkInfo();
-                Log.e(TAG, "Checking active network... " + networkInfo);
-                if (enable) {
-                    if (networkInfo == null || !networkInfo.isConnected()) {
-                        Log.e(TAG, "Successfully disconnected from to the network.");
-                        return;
-                    }
-                } else if (networkInfo != null && networkInfo.isConnected()) {
-                    Log.e(TAG, "Successfully reconnected to the network.");
-                    return;
-                }
-                Thread.sleep(1000);
-            }
-        }
-        fail("Failed to " + (enable ? "enable" : "disable") + " airplane mode");
+    private enum ConnectivityState {
+        DISCONNECTED,
+        CONNECTED
     }
 
     enum HttpResponse {
