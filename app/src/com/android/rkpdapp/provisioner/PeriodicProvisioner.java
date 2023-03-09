@@ -63,7 +63,14 @@ public class PeriodicProvisioner extends Worker {
             mKeyDao.deleteExpiringKeys(Instant.now());
 
             // Fetch geek from the server and figure out whether provisioning needs to be stopped.
-            GeekResponse response = new ServerInterface(mContext).fetchGeekAndUpdate(metrics);
+            GeekResponse response;
+            try {
+                response = new ServerInterface(mContext).fetchGeekAndUpdate(metrics);
+            } catch (RkpdException e) {
+                Log.e(TAG, "Error fetching configuration from the RKP server", e);
+                return Result.failure();
+            }
+
             if (response.numExtraAttestationKeys == 0) {
                 Log.i(TAG, "Disable provisioning and delete all keys.");
                 metrics.setEnablement(ProvisionerMetrics.Enablement.DISABLED);
@@ -78,17 +85,21 @@ public class PeriodicProvisioner extends Worker {
             String[] serviceNames = ServiceManagerInterface.getDeclaredInstances();
             Log.i(TAG, "Total services found implementing IRPC: " + serviceNames.length);
             Provisioner provisioner = new Provisioner(mContext, mKeyDao);
+            Result result = Result.success();
             for (String serviceName : serviceNames) {
                 Log.i(TAG, "Starting provisioning for " + serviceName);
-                provisioner.provisionKeys(metrics, serviceName, response);
+                try {
+                    provisioner.provisionKeys(metrics, serviceName, response);
+                    Log.i(TAG, "Successfully provisioned " + serviceName);
+                } catch (CborException e) {
+                    Log.e(TAG, "Error parsing CBOR for " + serviceName, e);
+                    result = Result.failure();
+                } catch (InterruptedException | RkpdException e) {
+                    Log.e(TAG, "Error provisioning keys for " + serviceName, e);
+                    result = Result.failure();
+                }
             }
-            Log.i(TAG, "Periodic provisioning completed.");
-            return Result.success();
-        } catch (CborException e) {
-            Log.e(TAG, "Error while translating CBOR messages.", e);
-        } catch (InterruptedException | RkpdException e) {
-            Log.e(TAG, "Encountered exception while provisioning keys.", e);
+            return result;
         }
-        return Result.failure();
     }
 }
