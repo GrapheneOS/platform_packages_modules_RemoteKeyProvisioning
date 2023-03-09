@@ -40,6 +40,7 @@ import java.net.URL;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Provides convenience methods for interfacing with the remote provisioning server.
@@ -50,7 +51,9 @@ public class ServerInterface {
 
     private static final String TAG = "RkpdServerInterface";
     private static final String GEEK_URL = ":fetchEekChain";
-    private static final String CERTIFICATE_SIGNING_URL = ":signCertificates?challenge=";
+    private static final String CERTIFICATE_SIGNING_URL = ":signCertificates?";
+    private static final String CHALLENGE_PARAMETER = "challenge=";
+    private static final String REQUEST_ID_PARAMETER = "request_id=";
     private final Context mContext;
 
     public ServerInterface(Context context) {
@@ -73,7 +76,9 @@ public class ServerInterface {
     public List<byte[]> requestSignedCertificates(byte[] csr, byte[] challenge,
             ProvisionerMetrics metrics) throws RkpdException {
         String connectionEndpoint = CERTIFICATE_SIGNING_URL
-                + Base64.encodeToString(challenge, Base64.URL_SAFE);
+                + String.join("&",
+                      CHALLENGE_PARAMETER + Base64.encodeToString(challenge, Base64.URL_SAFE),
+                      REQUEST_ID_PARAMETER + generateAndLogRequestId());
         byte[] cborBytes = connectAndGetData(metrics, connectionEndpoint, csr,
                 ProvisionerMetrics.Status.SIGN_CERTS_HTTP_ERROR,
                 ProvisionerMetrics.Status.SIGN_CERTS_TIMED_OUT,
@@ -86,6 +91,12 @@ public class ServerInterface {
                     "Response failed to parse.");
         }
         return certChains;
+    }
+
+    private String generateAndLogRequestId() {
+        String reqId = UUID.randomUUID().toString();
+        Log.i(TAG, "request_id: " + reqId);
+        return reqId;
     }
 
     /**
