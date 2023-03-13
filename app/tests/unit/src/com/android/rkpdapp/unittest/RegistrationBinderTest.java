@@ -50,6 +50,7 @@ import com.android.rkpdapp.RkpdException;
 import com.android.rkpdapp.database.ProvisionedKey;
 import com.android.rkpdapp.database.ProvisionedKeyDao;
 import com.android.rkpdapp.interfaces.ServerInterface;
+import com.android.rkpdapp.interfaces.SystemInterface;
 import com.android.rkpdapp.provisioner.Provisioner;
 import com.android.rkpdapp.service.RegistrationBinder;
 import com.android.rkpdapp.utils.Settings;
@@ -129,7 +130,11 @@ public class RegistrationBinderTest {
         mRkpServer = mock(ServerInterface.class);
         mMockProvisioner = mock(Provisioner.class);
         mThreadPool = Executors.newCachedThreadPool();
-        mRegistration = new RegistrationBinder(mContext, CLIENT_UID, IRPC_HAL, mMockDao,
+
+        SystemInterface mockSystem = mock(SystemInterface.class);
+        doReturn(IRPC_HAL).when(mockSystem).getServiceName();
+
+        mRegistration = new RegistrationBinder(mContext, CLIENT_UID, mockSystem, mMockDao,
                 mRkpServer, mMockProvisioner, mThreadPool);
     }
 
@@ -212,7 +217,7 @@ public class RegistrationBinderTest {
         completeAllTasks();
         verify(callback).onSuccess(matches(FAKE_KEY));
         verify(callback).onProvisioningNeeded();
-        verify(mMockProvisioner).provisionKeys(any(), eq(IRPC_HAL), same(fakeGeekResponse));
+        verify(mMockProvisioner).provisionKeys(any(), any(), same(fakeGeekResponse));
         verifyNoMoreInteractions(callback);
     }
 
@@ -220,7 +225,7 @@ public class RegistrationBinderTest {
     public void getKeyHandlesUnexpectedProvisioningFailure() throws Exception {
         doThrow(new RuntimeException("PROVISIONING FAIL"))
                 .when(mMockProvisioner)
-                .provisionKeys(any(), eq(IRPC_HAL), any());
+                .provisionKeys(any(), any(), any());
 
         IGetKeyCallback callback = mock(IGetKeyCallback.class);
         mRegistration.getKey(KEY_ID, callback);
@@ -251,7 +256,7 @@ public class RegistrationBinderTest {
         for (RkpdException.ErrorCode errorCode: RkpdException.ErrorCode.values()) {
             doThrow(new RkpdException(errorCode, errorCode.toString()))
                     .when(mMockProvisioner)
-                    .provisionKeys(any(), eq(IRPC_HAL), any());
+                    .provisionKeys(any(), any(), any());
 
             IGetKeyCallback callback = mock(IGetKeyCallback.class);
             mRegistration.getKey(KEY_ID, callback);
@@ -288,7 +293,7 @@ public class RegistrationBinderTest {
         verify(callback).onError(IGetKeyCallback.Error.ERROR_UNKNOWN,
                 "Provisioning failed, no keys available");
         verify(callback).onProvisioningNeeded();
-        verify(mMockProvisioner).provisionKeys(any(), eq(IRPC_HAL), any());
+        verify(mMockProvisioner).provisionKeys(any(), any(), any());
         verifyNoMoreInteractions(callback);
     }
 
@@ -310,7 +315,7 @@ public class RegistrationBinderTest {
 
         completeAllTasks();
         verify(mMockProvisioner).isProvisioningNeeded(any(), eq(IRPC_HAL));
-        verify(mMockProvisioner).provisionKeys(any(), eq(IRPC_HAL), any());
+        verify(mMockProvisioner).provisionKeys(any(), any(), any());
         verifyNoMoreInteractions(mMockProvisioner);
     }
 
@@ -358,7 +363,7 @@ public class RegistrationBinderTest {
         IGetKeyCallback callback = mock(IGetKeyCallback.class);
         doAnswer(answerVoid((hal, dao, metrics) -> mRegistration.cancelGetKey(callback)))
                 .when(mMockProvisioner)
-                .provisionKeys(any(), eq(IRPC_HAL), any());
+                .provisionKeys(any(), any(), any());
         mRegistration.getKey(KEY_ID, callback);
 
         completeAllTasks();
@@ -379,7 +384,7 @@ public class RegistrationBinderTest {
         IGetKeyCallback callback = mock(IGetKeyCallback.class);
         doThrow(new InterruptedException())
                 .when(mMockProvisioner)
-                .provisionKeys(any(), eq(IRPC_HAL), any());
+                .provisionKeys(any(), any(), any());
         mRegistration.getKey(KEY_ID, callback);
 
         completeAllTasks();

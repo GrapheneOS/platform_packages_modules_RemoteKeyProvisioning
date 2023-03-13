@@ -30,6 +30,7 @@ import com.android.rkpdapp.database.ProvisionedKeyDao;
 import com.android.rkpdapp.database.RkpdDatabase;
 import com.android.rkpdapp.interfaces.ServerInterface;
 import com.android.rkpdapp.interfaces.ServiceManagerInterface;
+import com.android.rkpdapp.interfaces.SystemInterface;
 
 import java.time.Instant;
 
@@ -82,20 +83,20 @@ public class PeriodicProvisioner extends Worker {
             }
 
             // Figure out each of the IRPCs and get SystemInterface instance for each.
-            String[] serviceNames = ServiceManagerInterface.getDeclaredInstances();
-            Log.i(TAG, "Total services found implementing IRPC: " + serviceNames.length);
+            SystemInterface[] irpcs = ServiceManagerInterface.getAllInstances();
+            Log.i(TAG, "Total services found implementing IRPC: " + irpcs.length);
             Provisioner provisioner = new Provisioner(mContext, mKeyDao);
             Result result = Result.success();
-            for (String serviceName : serviceNames) {
-                Log.i(TAG, "Starting provisioning for " + serviceName);
+            for (SystemInterface irpc : irpcs) {
+                Log.i(TAG, "Starting provisioning for " + irpc);
                 try {
-                    provisioner.provisionKeys(metrics, serviceName, response);
-                    Log.i(TAG, "Successfully provisioned " + serviceName);
+                    provisioner.provisionKeys(metrics, irpc, response);
+                    Log.i(TAG, "Successfully provisioned " + irpc);
                 } catch (CborException e) {
-                    Log.e(TAG, "Error parsing CBOR for " + serviceName, e);
+                    Log.e(TAG, "Error parsing CBOR for " + irpc, e);
                     result = Result.failure();
                 } catch (InterruptedException | RkpdException e) {
-                    Log.e(TAG, "Error provisioning keys for " + serviceName, e);
+                    Log.e(TAG, "Error provisioning keys for " + irpc, e);
                     result = Result.failure();
                 }
             }
