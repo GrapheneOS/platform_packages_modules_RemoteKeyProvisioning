@@ -26,7 +26,6 @@ android_test {
         "androidx.test.rules",
         "androidx.work_work-runtime",
         "androidx.work_work-testing",
-        "android.security.remoteprovisioning-java",
         "cbor-java",
         "libnanohttpd",
         "mockito-target-extended-minus-junit4",
