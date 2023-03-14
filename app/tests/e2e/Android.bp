@@ -24,7 +24,6 @@ android_test {
         "androidx.test.core",
         "androidx.test.rules",
         "androidx.work_work-testing",
-        "android.security.remoteprovisioning-java",
         "platform-test-annotations",
         "truth-prebuilt",
     ],
