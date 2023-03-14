@@ -23,7 +23,6 @@ android_test {
         "androidx.test.ext.junit",
         "androidx.test.core",
         "androidx.test.rules",
-        "android.security.remoteprovisioning-java",
         "platform-test-annotations",
         "truth-prebuilt",
     ],
