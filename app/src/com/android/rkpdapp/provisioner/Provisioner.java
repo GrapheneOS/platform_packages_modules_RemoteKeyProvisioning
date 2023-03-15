@@ -28,7 +28,6 @@ import com.android.rkpdapp.database.ProvisionedKey;
 import com.android.rkpdapp.database.ProvisionedKeyDao;
 import com.android.rkpdapp.database.RkpKey;
 import com.android.rkpdapp.interfaces.ServerInterface;
-import com.android.rkpdapp.interfaces.ServiceManagerInterface;
 import com.android.rkpdapp.interfaces.SystemInterface;
 import com.android.rkpdapp.utils.Settings;
 import com.android.rkpdapp.utils.StatsProcessor;
@@ -78,14 +77,10 @@ public class Provisioner {
     /**
      * Generate, sign and store remotely provisioned keys.
      */
-    public void provisionKeys(ProvisionerMetrics metrics, String serviceName,
+    public void provisionKeys(ProvisionerMetrics metrics, SystemInterface systemInterface,
             GeekResponse geekResponse) throws CborException, RkpdException, InterruptedException {
         try {
-            ServiceManagerInterface serviceManagerInterface = new ServiceManagerInterface(
-                    serviceName);
-            SystemInterface systemInterface = new SystemInterface(serviceManagerInterface);
-
-            int keysRequired = calculateKeysRequired(metrics, serviceName);
+            int keysRequired = calculateKeysRequired(metrics, systemInterface.getServiceName());
             Log.i(TAG, "Requested number of keys for provisioning: " + keysRequired);
             if (keysRequired == 0) {
                 metrics.setStatus(ProvisionerMetrics.Status.NO_PROVISIONING_NEEDED);

@@ -16,6 +16,7 @@
 
 package com.android.rkpdapp.interfaces;
 
+import android.annotation.TestApi;
 import android.hardware.security.keymint.IRemotelyProvisionedComponent;
 import android.os.ServiceManager;
 
@@ -26,34 +27,59 @@ import java.util.Arrays;
  */
 public class ServiceManagerInterface {
     private static final String TAG = "RkpdSvcManagerInterface";
-    private final String mServiceName;
-    private final IRemotelyProvisionedComponent mBinder;
+    private static SystemInterface[] sInstances;
 
-    public ServiceManagerInterface(final String serviceName) {
-        mServiceName = serviceName;
-        mBinder = IRemotelyProvisionedComponent.Stub.asInterface(
+    private ServiceManagerInterface() {
+    }
+
+    private static SystemInterface createSystemInterface(String serviceName) {
+        IRemotelyProvisionedComponent binder = IRemotelyProvisionedComponent.Stub.asInterface(
                 ServiceManager.waitForDeclaredService(serviceName));
-        if (mBinder == null) {
-            throw new RuntimeException("Cannot find any implementation for " + mServiceName);
+        if (binder == null) {
+            throw new IllegalArgumentException("Cannot find any implementation for " + serviceName);
         }
-    }
-
-    public String getServiceName() {
-        return mServiceName;
-    }
-
-    public IRemotelyProvisionedComponent getBinder() {
-        return mBinder;
+        return new SystemInterface(binder, serviceName);
     }
 
     /**
-     * Gets all the declared instances for IRemotelyProvisionedComponent as a String array. The
-     * returned values are fully qualified service names which can be directly accessed by using
-     * {@link ServiceManager#waitForDeclaredService}
+     * Gets all the instances on this device for IRemotelyProvisionedComponent as an array. The
+     * returned values each contain a binder for interacting with the instance.
+     *
+     * For testing purposes, the instances may be overridden by setInstances
      */
-    public static String[] getDeclaredInstances() {
+    public static SystemInterface[] getAllInstances() {
+        if (sInstances != null) {
+            return sInstances;
+        }
+
         String irpcInterface = IRemotelyProvisionedComponent.DESCRIPTOR;
         return Arrays.stream(ServiceManager.getDeclaredInstances(irpcInterface))
-                .map(x -> irpcInterface + "/" + x).toArray(String[]::new);
+                .map(x -> createSystemInterface(irpcInterface + "/" + x))
+                .toArray(SystemInterface[]::new);
+    }
+
+    /**
+     * Get a specific system interface instance for a given IRemotelyProvisionedComponent.
+     * If the given serviceName does not map to a known IRemotelyProvisionedComponent, this
+     * method throws IllegalArgumentException.
+     *
+     * For testing purposes, the instances may be overridden by setInstances.
+     */
+    public static SystemInterface getInstance(String serviceName) {
+        if (sInstances != null) {
+            for (SystemInterface i : sInstances) {
+                if (i.getServiceName().equals(serviceName)) {
+                    return i;
+                }
+            }
+            throw new IllegalArgumentException("Cannot find any implementation for " + serviceName);
+        }
+
+        return createSystemInterface(serviceName);
+    }
+
+    @TestApi
+    public static void setInstances(SystemInterface[] instances) {
+        sInstances = instances;
     }
 }
