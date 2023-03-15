@@ -68,7 +68,10 @@ import java.security.interfaces.ECPrivateKey;
 import java.security.interfaces.ECPublicKey;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Random;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import co.nstant.in.cbor.CborBuilder;
 import co.nstant.in.cbor.CborEncoder;
@@ -80,10 +83,10 @@ public class SystemInterfaceTest {
     private static final int INTERFACE_VERSION_V3 = 4;
     private static final String SERVICE = IRemotelyProvisionedComponent.DESCRIPTOR + "/default";
     private static final int INTERFACE_VERSION_V2 = 2;
-    private static final byte[] FAKE_PROTECTED_DATA = new byte[] { (byte) 0x84, 0x43, (byte) 0xA1,
+    private static final byte[] FAKE_PROTECTED_DATA = new byte[]{(byte) 0x84, 0x43, (byte) 0xA1,
             0x01, 0x03, (byte) 0xA1, 0x05, 0x4C, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
             (byte) 0x88, (byte) 0x99, 0x00, (byte) 0xAA, (byte) 0xBB, 0x46, 0x12, 0x34,
-            0x12, 0x34, 0x12, 0x34, (byte) 0x80 };
+            0x12, 0x34, 0x12, 0x34, (byte) 0x80};
 
     @Before
     public void preCheck() {
@@ -92,16 +95,20 @@ public class SystemInterfaceTest {
 
     @Test
     public void testGetDeclaredInstances() {
-        String[] instances = ServiceManagerInterface.getDeclaredInstances();
+        SystemInterface[] instances = ServiceManagerInterface.getAllInstances();
         assertThat(instances).asList().isNotEmpty();
-        assertThat(instances).asList().contains(SERVICE);
+
+        Set<String> instanceNames = Arrays.stream(instances)
+                .map(SystemInterface::getServiceName)
+                .collect(Collectors.toSet());
+        assertThat(instanceNames).contains(SERVICE);
     }
 
     @Test
     public void testSearchFailForOtherServices() {
         try {
-            new ServiceManagerInterface("default");
-            fail("Getting the declared service 'default' should fail due to SEPolicy.");
+            ServiceManagerInterface.getInstance("non-existent");
+            fail("Getting the declared service 'non-existent' should fail due to SEPolicy.");
         } catch (RuntimeException e) {
             assertThat(e).isInstanceOf(SecurityException.class);
         }
@@ -110,9 +117,8 @@ public class SystemInterfaceTest {
     @Test
     public void testGenerateKey() throws CborException, RkpdException, RemoteException {
         IRemotelyProvisionedComponent mockedComponent = mock(IRemotelyProvisionedComponent.class);
-        ServiceManagerInterface mockedServiceManager = mockServiceManager(CborUtils.EC_CURVE_25519,
+        SystemInterface systemInterface = mockSystemInterface(CborUtils.EC_CURVE_25519,
                 INTERFACE_VERSION_V3, mockedComponent);
-        SystemInterface systemInterface = new SystemInterface(mockedServiceManager);
         ProvisionerMetrics metrics = ProvisionerMetrics.createScheduledAttemptMetrics(
                 ApplicationProvider.getApplicationContext());
         RkpKey rkpKey = systemInterface.generateKey(metrics);
@@ -123,12 +129,9 @@ public class SystemInterfaceTest {
     @Test
     public void testGenerateKeyFailureRemoteException() throws RemoteException, CborException,
             RkpdException {
-        ServiceManagerInterface mockedServiceManager = mockServiceManagerFailure(
-                new RemoteException());
+        SystemInterface systemInterface = mockSystemInterfaceFailure(new RemoteException());
         ProvisionerMetrics metrics = ProvisionerMetrics.createScheduledAttemptMetrics(
                 ApplicationProvider.getApplicationContext());
-
-        SystemInterface systemInterface = new SystemInterface(mockedServiceManager);
         try {
             systemInterface.generateKey(metrics);
             fail("GenerateKey should throw RemoteException.");
@@ -140,12 +143,10 @@ public class SystemInterfaceTest {
     @Test
     public void testGenerateKeyFailureServiceSpecificException() throws RemoteException,
             CborException, RkpdException {
-        ServiceManagerInterface mockedServiceManager = mockServiceManagerFailure(
+        SystemInterface systemInterface = mockSystemInterfaceFailure(
                 new ServiceSpecificException(2));
         ProvisionerMetrics metrics = ProvisionerMetrics.createScheduledAttemptMetrics(
                 ApplicationProvider.getApplicationContext());
-
-        SystemInterface systemInterface = new SystemInterface(mockedServiceManager);
         try {
             systemInterface.generateKey(metrics);
             fail("GenerateKey should throw ServiceSpecificException.");
@@ -157,9 +158,8 @@ public class SystemInterfaceTest {
     @Test
     public void testGenerateCSRPreV3P256() throws Exception {
         IRemotelyProvisionedComponent mockedComponent = mock(IRemotelyProvisionedComponent.class);
-        ServiceManagerInterface mockedServiceManager = mockServiceManager(CborUtils.EC_CURVE_P256,
+        SystemInterface systemInterface = mockSystemInterface(CborUtils.EC_CURVE_P256,
                 INTERFACE_VERSION_V2, mockedComponent);
-        SystemInterface systemInterface = new SystemInterface(mockedServiceManager);
 
         ProvisionerMetrics metrics = ProvisionerMetrics.createOutOfKeysAttemptMetrics(
                 ApplicationProvider.getApplicationContext(), SERVICE);
@@ -184,12 +184,11 @@ public class SystemInterfaceTest {
     @Test
     public void testGenerateCSRPreV3Ed25519() throws Exception {
         IRemotelyProvisionedComponent mockedComponent = mock(IRemotelyProvisionedComponent.class);
-        ServiceManagerInterface mockedServiceManager = mockServiceManager(CborUtils.EC_CURVE_25519,
+        SystemInterface systemInterface = mockSystemInterface(CborUtils.EC_CURVE_25519,
                 INTERFACE_VERSION_V2, mockedComponent);
 
         ProvisionerMetrics metrics = ProvisionerMetrics.createOutOfKeysAttemptMetrics(
                 ApplicationProvider.getApplicationContext(), SERVICE);
-        SystemInterface systemInterface = new SystemInterface(mockedServiceManager);
         GeekResponse geekResponse = new GeekResponse();
         byte[] eekPub = new byte[32];
         new Random().nextBytes(eekPub);
@@ -210,12 +209,11 @@ public class SystemInterfaceTest {
     @Test
     public void testGenerateCSRv3() throws Exception {
         IRemotelyProvisionedComponent mockedComponent = mock(IRemotelyProvisionedComponent.class);
-        ServiceManagerInterface mockedServiceManager = mockServiceManager(CborUtils.EC_CURVE_25519,
+        SystemInterface systemInterface = mockSystemInterface(CborUtils.EC_CURVE_25519,
                 INTERFACE_VERSION_V3, mockedComponent);
 
         ProvisionerMetrics metrics = ProvisionerMetrics.createOutOfKeysAttemptMetrics(
                 ApplicationProvider.getApplicationContext(), SERVICE);
-        SystemInterface systemInterface = new SystemInterface(mockedServiceManager);
         GeekResponse geekResponse = new GeekResponse();
         geekResponse.setChallenge(new byte[]{0x02});
 
@@ -286,20 +284,17 @@ public class SystemInterfaceTest {
                 "Could not generate eek chain");
     }
 
-    private ServiceManagerInterface mockServiceManagerFailure(Exception exception)
+    private SystemInterface mockSystemInterfaceFailure(Exception exception)
             throws RemoteException {
         IRemotelyProvisionedComponent mockedComponent = mock(IRemotelyProvisionedComponent.class);
         RpcHardwareInfo mockedHardwareInfo = mock(RpcHardwareInfo.class);
         mockedHardwareInfo.supportedEekCurve = CborUtils.EC_CURVE_25519;
         when(mockedComponent.getHardwareInfo()).thenReturn(mockedHardwareInfo);
         when(mockedComponent.generateEcdsaP256KeyPair(eq(false), any())).thenThrow(exception);
-        ServiceManagerInterface mockedServiceManager = mock(ServiceManagerInterface.class);
-        when(mockedServiceManager.getBinder()).thenReturn(mockedComponent);
-        when(mockedServiceManager.getServiceName()).thenReturn(SERVICE);
-        return mockedServiceManager;
+        return new SystemInterface(mockedComponent, SERVICE);
     }
 
-    private ServiceManagerInterface mockServiceManager(int supportedCurve, int interfaceVersion,
+    private SystemInterface mockSystemInterface(int supportedCurve, int interfaceVersion,
             IRemotelyProvisionedComponent mockedComponent) throws RemoteException {
         RpcHardwareInfo mockedHardwareInfo = mock(RpcHardwareInfo.class);
         mockedHardwareInfo.supportedEekCurve = supportedCurve;
@@ -310,12 +305,12 @@ public class SystemInterfaceTest {
             ((MacedPublicKey) args[1]).macedKey = Base64.decode("g0BAWE2lAQIDJiABIVggUYCsz4+WjOwPU"
                     + "OGpG7eQhjSL48OsZQJNtPYxDghGMjkiWCBU65Sd/ra05HM6JU4vH52dvfpmwRGL6ZaMQ+Qw9tp2"
                     + "qw==", Base64.DEFAULT);
-            return new byte[] { 0x01 };
+            return new byte[]{0x01};
         }).when(mockedComponent).generateEcdsaP256KeyPair(eq(false), any());
         if (interfaceVersion == INTERFACE_VERSION_V2) {
             doAnswer(invocation -> {
                 Object[] args = invocation.getArguments();
-                ((DeviceInfo) args[4]).deviceInfo = new byte[] { (byte) 0xA0 };
+                ((DeviceInfo) args[4]).deviceInfo = new byte[]{(byte) 0xA0};
                 ((ProtectedData) args[5]).protectedData = FAKE_PROTECTED_DATA;
                 return new byte[0];
             }).when(mockedComponent).generateCertificateRequest(anyBoolean(),
@@ -323,12 +318,9 @@ public class SystemInterfaceTest {
                     any(DeviceInfo.class), any(ProtectedData.class));
         } else {
             when(mockedComponent.generateCertificateRequestV2(any(MacedPublicKey[].class),
-                    any(byte[].class))).thenReturn(new byte[] { (byte) 0x80 });
+                    any(byte[].class))).thenReturn(new byte[]{(byte) 0x80});
         }
 
-        ServiceManagerInterface mockedServiceManager = mock(ServiceManagerInterface.class);
-        when(mockedServiceManager.getBinder()).thenReturn(mockedComponent);
-        when(mockedServiceManager.getServiceName()).thenReturn(SERVICE);
-        return mockedServiceManager;
+        return new SystemInterface(mockedComponent, SERVICE);
     }
 }
