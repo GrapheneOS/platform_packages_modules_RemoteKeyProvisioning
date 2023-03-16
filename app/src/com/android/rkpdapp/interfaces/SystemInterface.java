@@ -49,15 +49,29 @@ public class SystemInterface {
     private final String mServiceName;
     private final int mSupportedCurve;
 
-    public SystemInterface(ServiceManagerInterface serviceManagerInterface) {
-        mServiceName = serviceManagerInterface.getServiceName();
-        mBinder = serviceManagerInterface.getBinder();
+    public SystemInterface(IRemotelyProvisionedComponent binder, String serviceName) {
+        mServiceName = serviceName;
+        mBinder = binder;
         try {
             mSupportedCurve = mBinder.getHardwareInfo().supportedEekCurve;
         } catch (RemoteException e) {
             Log.e(TAG, "Failed to call getHardwareInfo", e);
             throw e.rethrowAsRuntimeException();
         }
+    }
+
+    /**
+     * @return the fully qualified name of the underlying IRemotelyProvisionedComponent
+     */
+    public String getServiceName() {
+        return mServiceName;
+    }
+
+    /**
+     * @return human readable string describing this object
+     */
+    public String toString() {
+        return getClass().getName() + "{" + mServiceName + "}";
     }
 
     /**

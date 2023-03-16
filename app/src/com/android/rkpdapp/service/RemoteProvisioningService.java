@@ -30,6 +30,8 @@ import com.android.rkpdapp.ThreadPool;
 import com.android.rkpdapp.database.ProvisionedKeyDao;
 import com.android.rkpdapp.database.RkpdDatabase;
 import com.android.rkpdapp.interfaces.ServerInterface;
+import com.android.rkpdapp.interfaces.ServiceManagerInterface;
+import com.android.rkpdapp.interfaces.SystemInterface;
 import com.android.rkpdapp.provisioner.Provisioner;
 
 /** Provides the implementation for IRemoteProvisioning.aidl */
@@ -56,8 +58,10 @@ public class RemoteProvisioningService extends Service {
                     getApplicationContext()).provisionedKeyDao();
             Context context = getApplicationContext();
             Provisioner provisioner = new Provisioner(context, dao);
-            IRegistration.Stub registration = new RegistrationBinder(context, callerUid, irpcName,
-                    dao, new ServerInterface(context), provisioner, ThreadPool.EXECUTOR);
+            SystemInterface systemInterface = ServiceManagerInterface.getInstance(irpcName);
+            IRegistration.Stub registration = new RegistrationBinder(context, callerUid,
+                    systemInterface, dao, new ServerInterface(context), provisioner,
+                    ThreadPool.EXECUTOR);
             try {
                 callback.onSuccess(registration);
             } catch (RemoteException e) {

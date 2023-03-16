@@ -23,6 +23,9 @@ java_library {
     ],
     static_libs: [
         "androidx.room_room-runtime",
+        "libnanohttpd",
+        "libprotobuf-java-lite",
+        "truth-prebuilt",
     ],
     plugins: [
         "androidx.room_room-compiler-plugin",
