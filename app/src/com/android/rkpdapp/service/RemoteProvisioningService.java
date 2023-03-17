@@ -33,6 +33,7 @@ import com.android.rkpdapp.interfaces.ServerInterface;
 import com.android.rkpdapp.interfaces.ServiceManagerInterface;
 import com.android.rkpdapp.interfaces.SystemInterface;
 import com.android.rkpdapp.provisioner.Provisioner;
+import com.android.rkpdapp.utils.Settings;
 
 /** Provides the implementation for IRemoteProvisioning.aidl */
 public class RemoteProvisioningService extends Service {
@@ -50,22 +51,33 @@ public class RemoteProvisioningService extends Service {
     }
 
     final class RemoteProvisioningBinder extends IRemoteProvisioning.Stub {
-
         @Override
         public void getRegistration(int callerUid, String irpcName,
                 IGetRegistrationCallback callback) {
-            ProvisionedKeyDao dao = RkpdDatabase.getDatabase(
-                    getApplicationContext()).provisionedKeyDao();
-            Context context = getApplicationContext();
-            Provisioner provisioner = new Provisioner(context, dao);
-            SystemInterface systemInterface = ServiceManagerInterface.getInstance(irpcName);
-            IRegistration.Stub registration = new RegistrationBinder(context, callerUid,
-                    systemInterface, dao, new ServerInterface(context), provisioner,
-                    ThreadPool.EXECUTOR);
             try {
+                final Context context = getApplicationContext();
+                if (Settings.getDefaultUrl().isEmpty()) {
+                    callback.onError("RKP is disabled. System configured with no default URL.");
+                    return;
+                }
+
+                SystemInterface systemInterface;
+                try {
+                    systemInterface = ServiceManagerInterface.getInstance(irpcName);
+                } catch (IllegalArgumentException e) {
+                    Log.e(TAG, "Error getting HAL '" + irpcName + "'", e);
+                    callback.onError("Invalid HAL name: " + irpcName);
+                    return;
+                }
+
+                ProvisionedKeyDao dao = RkpdDatabase.getDatabase(context).provisionedKeyDao();
+                Provisioner provisioner = new Provisioner(context, dao);
+                IRegistration.Stub registration = new RegistrationBinder(context, callerUid,
+                        systemInterface, dao, new ServerInterface(context), provisioner,
+                        ThreadPool.EXECUTOR);
                 callback.onSuccess(registration);
             } catch (RemoteException e) {
-                Log.e(TAG, "error sending registration to callback", e);
+                Log.e(TAG, "Error notifying callback binder", e);
                 throw e.rethrowAsRuntimeException();
             }
         }

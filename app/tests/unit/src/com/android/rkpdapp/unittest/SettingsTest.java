@@ -16,6 +16,8 @@
 
 package com.android.rkpdapp.unittest;
 
+import static com.google.common.truth.Truth.assertThat;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -25,6 +27,7 @@ import android.content.Context;
 import androidx.test.core.app.ApplicationProvider;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 
+import com.android.rkpdapp.testutil.SystemPropertySetter;
 import com.android.rkpdapp.utils.Settings;
 
 import org.junit.After;
@@ -54,6 +57,20 @@ public class SettingsTest {
     @After
     public void tearDown() {
         Settings.clearPreferences(sContext);
+    }
+
+    @Test
+    public void testDefaultUrlEmpty() {
+        try (SystemPropertySetter ignored = SystemPropertySetter.setHostname("")) {
+            assertThat(Settings.getDefaultUrl()).isEmpty();
+        }
+    }
+
+    @Test
+    public void testDefaultUrlNonEmpty() {
+        try (SystemPropertySetter ignored = SystemPropertySetter.setHostname("your.hostname")) {
+            assertThat(Settings.getDefaultUrl()).isEqualTo("https://your.hostname/v1");
+        }
     }
 
     @Test
