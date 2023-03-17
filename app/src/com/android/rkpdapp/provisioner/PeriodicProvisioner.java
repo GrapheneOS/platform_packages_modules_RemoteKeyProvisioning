@@ -20,6 +20,7 @@ import android.annotation.NonNull;
 import android.content.Context;
 import android.util.Log;
 
+import androidx.work.WorkManager;
 import androidx.work.Worker;
 import androidx.work.WorkerParameters;
 
@@ -31,6 +32,7 @@ import com.android.rkpdapp.database.RkpdDatabase;
 import com.android.rkpdapp.interfaces.ServerInterface;
 import com.android.rkpdapp.interfaces.ServiceManagerInterface;
 import com.android.rkpdapp.interfaces.SystemInterface;
+import com.android.rkpdapp.utils.Settings;
 
 import java.time.Instant;
 
@@ -42,6 +44,7 @@ import co.nstant.in.cbor.CborException;
  * drive that process.
  */
 public class PeriodicProvisioner extends Worker {
+    public static final String UNIQUE_WORK_NAME = "ProvisioningJob";
     private static final String TAG = "RkpdPeriodicProvisioner";
     private final Context mContext;
     private final ProvisionedKeyDao mKeyDao;
@@ -58,6 +61,20 @@ public class PeriodicProvisioner extends Worker {
     @Override
     public Result doWork() {
         Log.i(TAG, "Waking up; checking provisioning state.");
+
+        SystemInterface[] irpcs = ServiceManagerInterface.getAllInstances();
+        if (irpcs.length == 0) {
+            Log.i(TAG, "Stopping periodic provisioner: there are no IRPC HALs");
+            WorkManager.getInstance(mContext).cancelWorkById(getId());
+            return Result.success();
+        }
+
+        if (Settings.getDefaultUrl().isEmpty()) {
+            Log.i(TAG, "Stopping periodic provisioner: system has no configured server endpoint");
+            WorkManager.getInstance(mContext).cancelWorkById(getId());
+            return Result.success();
+        }
+
         try (ProvisionerMetrics metrics = ProvisionerMetrics.createScheduledAttemptMetrics(
                 mContext)) {
             // Clean up the expired keys
@@ -82,8 +99,6 @@ public class PeriodicProvisioner extends Worker {
                 return Result.success();
             }
 
-            // Figure out each of the IRPCs and get SystemInterface instance for each.
-            SystemInterface[] irpcs = ServiceManagerInterface.getAllInstances();
             Log.i(TAG, "Total services found implementing IRPC: " + irpcs.length);
             Provisioner provisioner = new Provisioner(mContext, mKeyDao);
             Result result = Result.success();
