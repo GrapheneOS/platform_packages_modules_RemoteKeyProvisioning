@@ -57,7 +57,7 @@ public class BootReceiver extends BroadcastReceiver {
                         .build();
         WorkManager
                 .getInstance(context)
-                .enqueueUniquePeriodicWork("ProvisioningJob",
+                .enqueueUniquePeriodicWork(PeriodicProvisioner.UNIQUE_WORK_NAME,
                                        ExistingPeriodicWorkPolicy.UPDATE, // Replace on reboot.
                                        workRequest);
 
