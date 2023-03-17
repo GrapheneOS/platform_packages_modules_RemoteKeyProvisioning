@@ -30,9 +30,15 @@ import android.content.Context;
 
 import androidx.test.core.app.ApplicationProvider;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
+import androidx.work.Configuration;
 import androidx.work.ListenableWorker;
+import androidx.work.WorkInfo;
+import androidx.work.WorkManager;
+import androidx.work.testing.SynchronousExecutor;
 import androidx.work.testing.TestWorkerBuilder;
+import androidx.work.testing.WorkManagerTestInitHelper;
 
+import com.android.rkpdapp.BootReceiver;
 import com.android.rkpdapp.database.ProvisionedKey;
 import com.android.rkpdapp.database.ProvisionedKeyDao;
 import com.android.rkpdapp.database.RkpKey;
@@ -41,6 +47,7 @@ import com.android.rkpdapp.interfaces.ServiceManagerInterface;
 import com.android.rkpdapp.interfaces.SystemInterface;
 import com.android.rkpdapp.provisioner.PeriodicProvisioner;
 import com.android.rkpdapp.testutil.FakeRkpServer;
+import com.android.rkpdapp.testutil.SystemPropertySetter;
 import com.android.rkpdapp.utils.Settings;
 
 import org.junit.After;
@@ -51,6 +58,7 @@ import org.junit.runner.RunWith;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 
 import co.nstant.in.cbor.CborException;
@@ -72,6 +80,12 @@ public class PeriodicProvisionerTests {
                 mContext,
                 PeriodicProvisioner.class,
                 Executors.newSingleThreadExecutor()).build();
+
+        Configuration config = new Configuration.Builder()
+                .setExecutor(new SynchronousExecutor())
+                .build();
+        WorkManagerTestInitHelper.initializeTestWorkManager(mContext, config);
+
     }
 
     @After
@@ -81,16 +95,54 @@ public class PeriodicProvisionerTests {
         Settings.clearPreferences(mContext);
     }
 
+    private WorkInfo getProvisionerWorkInfo() throws ExecutionException, InterruptedException {
+        WorkManager workManager = WorkManager.getInstance(mContext);
+        List<WorkInfo> infos = workManager.getWorkInfosForUniqueWork(
+                PeriodicProvisioner.UNIQUE_WORK_NAME).get();
+        assertThat(infos.size()).isEqualTo(1);
+        return infos.get(0);
+    }
+
     @Test
-    public void provisionNoop() throws Exception {
-        try (FakeRkpServer fakeRkpServer = new FakeRkpServer(
-                FakeRkpServer.Response.FETCH_EEK_OK,
-                // return error here, because signCerts should never be called
-                FakeRkpServer.Response.INTERNAL_ERROR)) {
-            saveUrlInSettings(fakeRkpServer);
-            ServiceManagerInterface.setInstances(new SystemInterface[0]);
-            assertThat(mProvisioner.doWork()).isEqualTo(ListenableWorker.Result.success());
+    public void provisionWithNoHals() throws Exception {
+        // setup work with boot receiver
+        new BootReceiver().onReceive(mContext, null);
+
+        WorkInfo worker = getProvisionerWorkInfo();
+        assertThat(worker.getState()).isEqualTo(WorkInfo.State.ENQUEUED);
+        assertThat(worker.getRunAttemptCount()).isEqualTo(0);
+
+        ServiceManagerInterface.setInstances(new SystemInterface[0]);
+        WorkManagerTestInitHelper.getTestDriver(mContext).setAllConstraintsMet(worker.getId());
+
+        // the worker should uninstall itself once it realizes it's not needed on this system
+        worker = getProvisionerWorkInfo();
+        assertThat(worker.getState()).isEqualTo(WorkInfo.State.CANCELLED);
+        assertThat(worker.getRunAttemptCount()).isEqualTo(1);
+
+        // verify the worker doesn't run again
+        WorkManagerTestInitHelper.getTestDriver(mContext).setAllConstraintsMet(worker.getId());
+        worker = getProvisionerWorkInfo();
+        assertThat(worker.getState()).isEqualTo(WorkInfo.State.CANCELLED);
+        assertThat(worker.getRunAttemptCount()).isEqualTo(1);
+    }
+
+    @Test
+    public void provisionWithNoHostName() throws Exception {
+        // setup work with boot receiver
+        new BootReceiver().onReceive(mContext, null);
+
+        try (SystemPropertySetter ignored = SystemPropertySetter.setHostname("")) {
+            SystemInterface mockHal = mock(SystemInterface.class);
+            ServiceManagerInterface.setInstances(new SystemInterface[]{mockHal});
+
+            WorkInfo worker = getProvisionerWorkInfo();
+            WorkManagerTestInitHelper.getTestDriver(mContext).setAllConstraintsMet(worker.getId());
         }
+
+        WorkInfo worker = getProvisionerWorkInfo();
+        assertThat(worker.getState()).isEqualTo(WorkInfo.State.CANCELLED);
+        assertThat(worker.getRunAttemptCount()).isEqualTo(1);
     }
 
     @Test
@@ -161,7 +213,10 @@ public class PeriodicProvisionerTests {
                 FakeRkpServer.Response.FETCH_EEK_OK,
                 FakeRkpServer.Response.SIGN_CERTS_OK_VALID_CBOR)) {
             saveUrlInSettings(fakeRkpServer);
-            ServiceManagerInterface.setInstances(new SystemInterface[]{});
+            SystemInterface mockHal = mock(SystemInterface.class);
+            doReturn("test-irpc").when(mockHal).getServiceName();
+            doReturn(new byte[1]).when(mockHal).generateCsr(any(), any(), any());
+            ServiceManagerInterface.setInstances(new SystemInterface[]{mockHal});
             assertThat(mProvisioner.doWork()).isEqualTo(ListenableWorker.Result.success());
         }
 
