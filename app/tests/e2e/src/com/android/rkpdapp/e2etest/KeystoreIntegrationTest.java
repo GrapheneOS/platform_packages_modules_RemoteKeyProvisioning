@@ -39,13 +39,19 @@ import androidx.work.testing.TestWorkerBuilder;
 import com.android.rkpdapp.database.ProvisionedKey;
 import com.android.rkpdapp.database.ProvisionedKeyDao;
 import com.android.rkpdapp.database.RkpdDatabase;
+import com.android.rkpdapp.interfaces.ServiceManagerInterface;
+import com.android.rkpdapp.interfaces.SystemInterface;
 import com.android.rkpdapp.provisioner.PeriodicProvisioner;
+import com.android.rkpdapp.testutil.FakeRkpServer;
+import com.android.rkpdapp.testutil.NetworkUtils;
+import com.android.rkpdapp.testutil.SystemPropertySetter;
 import com.android.rkpdapp.utils.Settings;
 import com.android.rkpdapp.utils.X509Utils;
 
 import com.google.common.primitives.Bytes;
 
 import org.junit.After;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Rule;
@@ -114,11 +120,20 @@ public class KeystoreIntegrationTest {
         mKeyDao = RkpdDatabase.getDatabase(sContext).provisionedKeyDao();
         mKeyStore = KeyStore.getInstance("AndroidKeyStore");
         mKeyStore.load(null);
+        mKeyDao.deleteAllKeys();
+
+        SystemInterface systemInterface = ServiceManagerInterface.getInstance(mServiceName);
+        ServiceManagerInterface.setInstances(new SystemInterface[] {systemInterface});
     }
 
     @After
     public void tearDown() throws Exception {
+        Settings.clearPreferences(sContext);
+
         mKeyStore.deleteEntry(getTestKeyAlias());
+        mKeyDao.deleteAllKeys();
+
+        ServiceManagerInterface.setInstances(null);
     }
 
     @Test
@@ -136,8 +151,6 @@ public class KeystoreIntegrationTest {
 
     @Test
     public void testKeyCreationWithEmptyKeyPool() throws Exception {
-        // Remove all keys, the db should be populated automatically when we get a keystore key.
-        mKeyDao.deleteAllKeys();
         assertThat(mKeyDao.getTotalKeysForIrpc(mServiceName)).isEqualTo(0);
 
         createKeystoreKeyAndVerifyAttestationKeyAssigned();
@@ -207,25 +220,27 @@ public class KeystoreIntegrationTest {
         // Verify that if the system is set to rkp only, key creation fails when RKP is unable
         // to get keys.
 
-        mKeyDao.deleteAllKeys();
-
-        boolean originalPropertyValue = SystemProperties.getBoolean(getRkpOnlyProp(), false);
-        try {
-            if (!originalPropertyValue) {
-                SystemProperties.set(getRkpOnlyProp(), "true");
-            }
+        try (SystemPropertySetter ignored = SystemPropertySetter.setRkpOnly(mInstanceName)) {
             Settings.setDeviceConfig(sContext, Settings.EXTRA_SIGNED_KEYS_AVAILABLE_DEFAULT,
                     Duration.ofDays(1), "bad url");
             createKeystoreKey();
             assertWithMessage("Should have gotten a KeyStoreException").fail();
         } catch (ProviderException e) {
             assertThat(e.getCause()).isInstanceOf(KeyStoreException.class);
-            assertThat(((KeyStoreException) e.getCause()).getErrorCode())
-                    .isEqualTo(ResponseCode.OUT_OF_KEYS_TRANSIENT_ERROR);
-        } finally {
-            if (!originalPropertyValue) {
-                SystemProperties.set(getRkpOnlyProp(), "false");
+            if (NetworkUtils.isNetworkConnected(sContext)) {
+                assertThat(((KeyStoreException) e.getCause()).getErrorCode())
+                        .isEqualTo(ResponseCode.OUT_OF_KEYS_TRANSIENT_ERROR);
+            } else {
+                assertThat(((KeyStoreException) e.getCause()).getErrorCode())
+                        .isEqualTo(ResponseCode.OUT_OF_KEYS_PENDING_INTERNET_CONNECTIVITY);
             }
+        }
+    }
+
+    @Test
+    public void testGenerateKeyRkpOnly() throws Exception {
+        try (SystemPropertySetter ignored = SystemPropertySetter.setRkpOnly(mInstanceName)) {
+            createKeystoreKeyAndVerifyAttestationKeyAssigned();
         }
     }
 
@@ -237,8 +252,6 @@ public class KeystoreIntegrationTest {
                 .that(SystemProperties.getBoolean(getRkpOnlyProp(), false))
                 .isFalse();
 
-        mKeyDao.deleteAllKeys();
-
         Settings.setDeviceConfig(sContext, Settings.EXTRA_SIGNED_KEYS_AVAILABLE_DEFAULT,
                 Duration.ofDays(1), "bad url");
 
@@ -249,8 +262,77 @@ public class KeystoreIntegrationTest {
         assertThat(mKeyDao.getTotalKeysForIrpc(mServiceName)).isEqualTo(0);
     }
 
+    @Test
+    public void testDataBudgetEmptyGenerateKey() throws Exception {
+        // Check the data budget in order to initialize a rolling window.
+        assertThat(Settings.hasErrDataBudget(sContext, null /* curTime */)).isTrue();
+        Settings.consumeErrDataBudget(sContext, Settings.FAILURE_DATA_USAGE_MAX);
+        try (SystemPropertySetter ignored = SystemPropertySetter.setRkpOnly(mInstanceName)) {
+            createKeystoreKey();
+            Assert.fail("Expected a keystore exception");
+        } catch (ProviderException e) {
+            assertThat(e).hasCauseThat().isInstanceOf(KeyStoreException.class);
+            KeyStoreException keyStoreException = (KeyStoreException) e.getCause();
+            assertThat(keyStoreException.getErrorCode())
+                    .isEqualTo(ResponseCode.OUT_OF_KEYS_TRANSIENT_ERROR);
+        }
+    }
+
+    @Test
+    public void testRetryableRkpError() throws Exception {
+        try (SystemPropertySetter ignored = SystemPropertySetter.setRkpOnly(mInstanceName)) {
+            Settings.setDeviceConfig(sContext, 1, Duration.ofDays(1), "bad url");
+            createKeystoreKey();
+            Assert.fail("Expected a keystore exception");
+        } catch (ProviderException e) {
+            assertThat(e).hasCauseThat().isInstanceOf(KeyStoreException.class);
+            KeyStoreException keyStoreException = (KeyStoreException) e.getCause();
+            assertThat(keyStoreException.getErrorCode())
+                    .isEqualTo(ResponseCode.OUT_OF_KEYS_TRANSIENT_ERROR);
+            assertThat(keyStoreException.isTransientFailure()).isTrue();
+            assertThat(keyStoreException.getRetryPolicy())
+                    .isEqualTo(KeyStoreException.RETRY_WITH_EXPONENTIAL_BACKOFF);
+        }
+    }
+
+    @Test
+    public void testPeriodicProvisionerProvisioningDisabled() throws Exception {
+        try (SystemPropertySetter ignored = SystemPropertySetter.setRkpOnly(mInstanceName);
+             FakeRkpServer server = new FakeRkpServer(FakeRkpServer.Response.FETCH_EEK_RKP_DISABLED,
+                     FakeRkpServer.Response.INTERNAL_ERROR)) {
+            Settings.setDeviceConfig(sContext, 1, Duration.ofDays(1), server.getUrl());
+            createKeystoreKey();
+            Assert.fail("Expected a keystore exception");
+        } catch (ProviderException e) {
+            assertThat(e).hasCauseThat().isInstanceOf(KeyStoreException.class);
+            KeyStoreException keyStoreException = (KeyStoreException) e.getCause();
+            assertThat(keyStoreException.getErrorCode())
+                    .isEqualTo(ResponseCode.OUT_OF_KEYS_TRANSIENT_ERROR);
+            assertThat(keyStoreException.getRetryPolicy())
+                    .isEqualTo(KeyStoreException.RETRY_WITH_EXPONENTIAL_BACKOFF);
+            assertThat(keyStoreException.isTransientFailure()).isTrue();
+        }
+    }
+
+    @Test
+    public void testRetryNeverWhenDeviceNotRegistered() throws Exception {
+        try (SystemPropertySetter ignored = SystemPropertySetter.setRkpOnly(mInstanceName);
+             FakeRkpServer server = new FakeRkpServer(FakeRkpServer.Response.FETCH_EEK_OK,
+                     FakeRkpServer.Response.SIGN_CERTS_DEVICE_UNREGISTERED)) {
+            Settings.setDeviceConfig(sContext, 1, Duration.ofDays(1), server.getUrl());
+            createKeystoreKey();
+            Assert.fail("Expected a keystore exception");
+        } catch (ProviderException e) {
+            assertThat(e).hasCauseThat().isInstanceOf(KeyStoreException.class);
+            KeyStoreException keyStoreException = (KeyStoreException) e.getCause();
+            assertThat(keyStoreException.getErrorCode())
+                    .isEqualTo(ResponseCode.OUT_OF_KEYS_PERMANENT_ERROR);
+            assertThat(keyStoreException.getRetryPolicy()).isEqualTo(KeyStoreException.RETRY_NEVER);
+            assertThat(keyStoreException.isTransientFailure()).isFalse();
+        }
+    }
+
     private void provisionFreshKeys() {
-        mKeyDao.deleteAllKeys();
         PeriodicProvisioner provisioner = TestWorkerBuilder.from(
                 sContext,
                 PeriodicProvisioner.class,

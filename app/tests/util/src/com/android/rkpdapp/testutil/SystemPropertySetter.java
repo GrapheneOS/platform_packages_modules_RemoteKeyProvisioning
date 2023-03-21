@@ -26,6 +26,17 @@ public class SystemPropertySetter implements AutoCloseable {
         return new SystemPropertySetter("remote_provisioning.hostname", value);
     }
 
+    public static SystemPropertySetter setRkpOnly(String instanceName) {
+        switch (instanceName) {
+            case "default":
+                return new SystemPropertySetter("remote_provisioning.tee.rkp_only", "true");
+            case "strongbox":
+                return new SystemPropertySetter("remote_provisioning.strongbox.rkp_only", "true");
+            default:
+                throw new IllegalArgumentException("Unexpected instance: " + instanceName);
+        }
+    }
+
     private SystemPropertySetter(String key, String value) {
         mKey = key;
         mOriginalValue = SystemProperties.get(key, "");
