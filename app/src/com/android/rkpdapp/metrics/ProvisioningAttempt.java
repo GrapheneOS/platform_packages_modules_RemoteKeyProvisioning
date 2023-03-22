@@ -1,5 +1,5 @@
-/**
- * Copyright (C) 2022 The Android Open Source Project
+/*
+ * Copyright (C) 2023 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.rkpdapp;
+package com.android.rkpdapp.metrics;
 
 import android.content.Context;
 import android.hardware.security.keymint.IRemotelyProvisionedComponent;
@@ -34,7 +34,7 @@ import java.time.Duration;
  * This class will automatically push the atoms on close, and is intended to be used with a
  * try-with-resources block to ensure metrics are automatically logged on completion of an attempt.
  */
-public final class ProvisionerMetrics implements AutoCloseable {
+public final class ProvisioningAttempt implements AutoCloseable {
     // The state of remote provisioning enablement
     public enum Enablement {
         UNKNOWN,
@@ -79,7 +79,7 @@ public final class ProvisionerMetrics implements AutoCloseable {
     private Status mStatus = Status.UNKNOWN;
     private int mHttpStatusError = 0;
 
-    private ProvisionerMetrics(Context context, int cause,
+    private ProvisioningAttempt(Context context, int cause,
             String remotelyProvisionedComponent, Enablement enablement) {
         mContext = context;
         mCause = cause;
@@ -89,12 +89,12 @@ public final class ProvisionerMetrics implements AutoCloseable {
     }
 
     /** Start collecting metrics for scheduled provisioning. */
-    public static ProvisionerMetrics createScheduledAttemptMetrics(Context context) {
+    public static ProvisioningAttempt createScheduledAttemptMetrics(Context context) {
         // Scheduled jobs (PeriodicProvisioner) intermix a lot of operations for multiple
         // components, which makes it difficult to tease apart what is happening for which
         // remotely provisioned component. Thus, on these calls, the component and
         // component-specific enablement are not logged.
-        return new ProvisionerMetrics(
+        return new ProvisioningAttempt(
                 context,
                 RkpdStatsLog.REMOTE_KEY_PROVISIONING_ATTEMPT__CAUSE__SCHEDULED,
                 "",
@@ -102,9 +102,9 @@ public final class ProvisionerMetrics implements AutoCloseable {
     }
 
     /** Start collecting metrics when an attestation key has been consumed from the pool. */
-    public static ProvisionerMetrics createKeyConsumedAttemptMetrics(Context context,
+    public static ProvisioningAttempt createKeyConsumedAttemptMetrics(Context context,
             String remotelyProvisionedComponent) {
-        return new ProvisionerMetrics(
+        return new ProvisioningAttempt(
                 context,
                 RkpdStatsLog.REMOTE_KEY_PROVISIONING_ATTEMPT__CAUSE__KEY_CONSUMED,
                 remotelyProvisionedComponent,
@@ -112,9 +112,9 @@ public final class ProvisionerMetrics implements AutoCloseable {
     }
 
     /** Start collecting metrics when the spare attestation key pool is empty. */
-    public static ProvisionerMetrics createOutOfKeysAttemptMetrics(Context context,
+    public static ProvisioningAttempt createOutOfKeysAttemptMetrics(Context context,
             String remotelyProvisionedComponent) {
-        return new ProvisionerMetrics(
+        return new ProvisioningAttempt(
                 context,
                 RkpdStatsLog.REMOTE_KEY_PROVISIONING_ATTEMPT__CAUSE__OUT_OF_KEYS,
                 remotelyProvisionedComponent,

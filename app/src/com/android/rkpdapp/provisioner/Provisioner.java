@@ -21,7 +21,6 @@ import android.util.Base64;
 import android.util.Log;
 
 import com.android.rkpdapp.GeekResponse;
-import com.android.rkpdapp.ProvisionerMetrics;
 import com.android.rkpdapp.RkpdException;
 import com.android.rkpdapp.database.InstantConverter;
 import com.android.rkpdapp.database.ProvisionedKey;
@@ -29,6 +28,7 @@ import com.android.rkpdapp.database.ProvisionedKeyDao;
 import com.android.rkpdapp.database.RkpKey;
 import com.android.rkpdapp.interfaces.ServerInterface;
 import com.android.rkpdapp.interfaces.SystemInterface;
+import com.android.rkpdapp.metrics.ProvisioningAttempt;
 import com.android.rkpdapp.utils.Settings;
 import com.android.rkpdapp.utils.StatsProcessor;
 import com.android.rkpdapp.utils.X509Utils;
@@ -70,20 +70,20 @@ public class Provisioner {
      * @return true if the remotely provisioned component requires more keys, false if the pool
      *         of available keys is healthy.
      */
-    public boolean isProvisioningNeeded(ProvisionerMetrics metrics, String serviceName) {
+    public boolean isProvisioningNeeded(ProvisioningAttempt metrics, String serviceName) {
         return calculateKeysRequired(metrics, serviceName) > 0;
     }
 
     /**
      * Generate, sign and store remotely provisioned keys.
      */
-    public void provisionKeys(ProvisionerMetrics metrics, SystemInterface systemInterface,
+    public void provisionKeys(ProvisioningAttempt metrics, SystemInterface systemInterface,
             GeekResponse geekResponse) throws CborException, RkpdException, InterruptedException {
         try {
             int keysRequired = calculateKeysRequired(metrics, systemInterface.getServiceName());
             Log.i(TAG, "Requested number of keys for provisioning: " + keysRequired);
             if (keysRequired == 0) {
-                metrics.setStatus(ProvisionerMetrics.Status.NO_PROVISIONING_NEEDED);
+                metrics.setStatus(ProvisioningAttempt.Status.NO_PROVISIONING_NEEDED);
                 return;
             }
 
@@ -96,9 +96,9 @@ public class Provisioner {
 
             mKeyDao.insertKeys(keys);
             Log.i(TAG, "Total provisioned keys: " + keys.size());
-            metrics.setStatus(ProvisionerMetrics.Status.KEYS_SUCCESSFULLY_PROVISIONED);
+            metrics.setStatus(ProvisioningAttempt.Status.KEYS_SUCCESSFULLY_PROVISIONED);
         } catch (InterruptedException e) {
-            metrics.setStatus(ProvisionerMetrics.Status.INTERRUPTED);
+            metrics.setStatus(ProvisioningAttempt.Status.INTERRUPTED);
             throw e;
         } catch (RkpdException e) {
             if (Settings.getFailureCounter(mContext) > FAILURE_MAXIMUM) {
@@ -110,7 +110,7 @@ public class Provisioner {
         }
     }
 
-    private List<RkpKey> generateKeys(ProvisionerMetrics metrics, int numKeysRequired,
+    private List<RkpKey> generateKeys(ProvisioningAttempt metrics, int numKeysRequired,
             SystemInterface systemInterface)
             throws CborException, RkpdException, InterruptedException {
         List<RkpKey> keyArray = new ArrayList<>(numKeysRequired);
@@ -121,7 +121,7 @@ public class Provisioner {
         return keyArray;
     }
 
-    private List<byte[]> fetchCertificates(ProvisionerMetrics metrics, List<RkpKey> keysGenerated,
+    private List<byte[]> fetchCertificates(ProvisioningAttempt metrics, List<RkpKey> keysGenerated,
             SystemInterface systemInterface, GeekResponse geekResponse)
             throws RkpdException, CborException {
         int provisionedSoFar = 0;
@@ -135,7 +135,8 @@ public class Provisioner {
         return certChains;
     }
 
-    private List<byte[]> batchProvision(ProvisionerMetrics metrics, SystemInterface systemInterface,
+    private List<byte[]> batchProvision(ProvisioningAttempt metrics,
+            SystemInterface systemInterface,
             GeekResponse response, List<RkpKey> keysGenerated)
             throws RkpdException, CborException {
         int batch_size = keysGenerated.size();
@@ -187,7 +188,7 @@ public class Provisioner {
     /**
      * Calculate the number of keys to be provisioned.
      */
-    private int calculateKeysRequired(ProvisionerMetrics metrics, String serviceName) {
+    private int calculateKeysRequired(ProvisioningAttempt metrics, String serviceName) {
         int numExtraAttestationKeys = Settings.getExtraSignedKeysAvailable(mContext);
         Instant expirationTime = Settings.getExpirationTime(mContext);
         StatsProcessor.PoolStats poolStats = StatsProcessor.processPool(mKeyDao, serviceName,
