@@ -20,6 +20,7 @@ android_test {
     srcs: ["src/**/*.java"],
     static_libs: [
         "Nene",
+        "RkpdAppTestUtil",
         "androidx.test.ext.junit",
         "androidx.test.core",
         "androidx.test.rules",
