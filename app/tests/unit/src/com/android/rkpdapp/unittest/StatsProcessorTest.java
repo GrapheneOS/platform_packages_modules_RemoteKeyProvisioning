@@ -26,7 +26,6 @@ import static org.mockito.Mockito.when;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 
-import com.android.rkpdapp.database.ProvisionedKey;
 import com.android.rkpdapp.database.ProvisionedKeyDao;
 import com.android.rkpdapp.utils.StatsProcessor;
 
@@ -35,8 +34,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
 
 @RunWith(AndroidJUnit4.class)
 public class StatsProcessorTest {
@@ -252,11 +249,7 @@ public class StatsProcessorTest {
             int expiringKeys, int numExtraKeys) {
         when(mKeyDao.getTotalKeysForIrpc(anyString())).thenReturn(totalKeys);
         when(mKeyDao.getTotalUnassignedKeysForIrpc(anyString())).thenReturn(unassignedKeys);
-        List<ProvisionedKey> expiringKeyList = new ArrayList<>(expiringKeys);
-        for (int i = 0; i < expiringKeys; i++) {
-            expiringKeyList.add(mock(ProvisionedKey.class));
-        }
-        when(mKeyDao.getExpiringKeysForIrpc(anyString(), notNull())).thenReturn(expiringKeyList);
+        when(mKeyDao.getTotalExpiringKeysForIrpc(anyString(), notNull())).thenReturn(expiringKeys);
         return StatsProcessor.processPool(mKeyDao, SERVICE_NAME, numExtraKeys, Instant.now());
     }
 }
