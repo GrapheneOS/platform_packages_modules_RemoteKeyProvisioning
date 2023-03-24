@@ -25,6 +25,7 @@ import android.os.SystemProperties;
 import android.util.Log;
 
 import com.android.rkpdapp.service.RemoteProvisioningService;
+import com.android.rkpdapp.utils.StopWatch;
 
 import java.time.Duration;
 
@@ -64,65 +65,14 @@ public final class ProvisionerMetrics implements AutoCloseable {
         SIGN_CERTS_DEVICE_NOT_REGISTERED
     }
 
-    /**
-     * Restartable stopwatch class that can be used to measure multiple start->stop time
-     * intervals. All measured time intervals are summed and returned by getElapsedMillis.
-     */
-    public static class StopWatch implements AutoCloseable {
-        private long mStartTime = 0;
-        private long mElapsedTime = 0;
-
-        /** Start or resume a timer. */
-        public void start() {
-            if (isRunning()) {
-                Log.w(TAG, "Starting a timer that's already been running for "
-                        + getElapsedMillis() + "ms");
-            } else {
-                mStartTime = SystemClock.elapsedRealtime();
-            }
-        }
-
-        /** Stop recording time. */
-        public void stop() {
-            if (!isRunning()) {
-                Log.w(TAG, "Attempting to stop a timer that hasn't been started.");
-            } else {
-                mElapsedTime += SystemClock.elapsedRealtime() - mStartTime;
-                mStartTime = 0;
-            }
-        }
-
-        /** Stops the timer if it's running. */
-        @Override
-        public void close() {
-            if (isRunning()) {
-                stop();
-            }
-        }
-
-        /** Get how long the timer has been recording. */
-        public int getElapsedMillis() {
-            if (isRunning()) {
-                return (int) (mElapsedTime + SystemClock.elapsedRealtime() - mStartTime);
-            } else {
-                return (int) mElapsedTime;
-            }
-        }
-
-        /** Is the timer currently recording time? */
-        public boolean isRunning() {
-            return mStartTime != 0;
-        }
-    }
-
     private static final String TAG = RemoteProvisioningService.TAG;
 
     private final Context mContext;
     private final int mCause;
-    private final StopWatch mServerWaitTimer = new StopWatch();
-    private final StopWatch mBinderWaitTimer = new StopWatch();
-    private final StopWatch mLockWaitTimer = new StopWatch();
-    private final StopWatch mTotalTimer = new StopWatch();
+    private final StopWatch mServerWaitTimer = new StopWatch(TAG);
+    private final StopWatch mBinderWaitTimer = new StopWatch(TAG);
+    private final StopWatch mLockWaitTimer = new StopWatch(TAG);
+    private final StopWatch mTotalTimer = new StopWatch(TAG);
     private final String mRemotelyProvisionedComponent;
     private Enablement mEnablement;
     private boolean mIsKeyPoolEmpty = false;
