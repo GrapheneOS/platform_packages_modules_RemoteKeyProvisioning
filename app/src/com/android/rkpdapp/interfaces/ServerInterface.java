@@ -28,6 +28,7 @@ import com.android.rkpdapp.ProvisionerMetrics;
 import com.android.rkpdapp.RkpdException;
 import com.android.rkpdapp.utils.CborUtils;
 import com.android.rkpdapp.utils.Settings;
+import com.android.rkpdapp.utils.StopWatch;
 
 import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
@@ -235,7 +236,7 @@ public class ServerInterface {
         try {
             URL url = new URL(Settings.getUrl(mContext) + connectionEndpoint);
             ByteArrayOutputStream cborBytes = new ByteArrayOutputStream();
-            try (ProvisionerMetrics.StopWatch serverWaitTimer = metrics.startServerWait()) {
+            try (StopWatch serverWaitTimer = metrics.startServerWait()) {
                 HttpURLConnection con = (HttpURLConnection) url.openConnection();
                 con.setRequestMethod("POST");
                 con.setConnectTimeout(TIMEOUT_MS);
