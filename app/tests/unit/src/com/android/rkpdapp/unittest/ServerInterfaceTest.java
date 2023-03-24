@@ -29,9 +29,9 @@ import android.util.Base64;
 import androidx.test.core.app.ApplicationProvider;
 
 import com.android.rkpdapp.GeekResponse;
-import com.android.rkpdapp.ProvisionerMetrics;
 import com.android.rkpdapp.RkpdException;
 import com.android.rkpdapp.interfaces.ServerInterface;
+import com.android.rkpdapp.metrics.ProvisioningAttempt;
 import com.android.rkpdapp.testutil.FakeRkpServer;
 import com.android.rkpdapp.utils.CborUtils;
 import com.android.rkpdapp.utils.Settings;
@@ -80,7 +80,7 @@ public class ServerInterfaceTest {
             Settings.setDeviceConfig(sContext, 1 /* extraKeys */,
                     TIME_TO_REFRESH_HOURS /* expiringBy */, server.getUrl());
             GeekResponse response = mServerInterface.fetchGeek(
-                    ProvisionerMetrics.createScheduledAttemptMetrics(sContext));
+                    ProvisioningAttempt.createScheduledAttemptMetrics(sContext));
 
             assertThat(response.numExtraAttestationKeys).isEqualTo(0);
             assertThat(response.getChallenge()).isNotNull();
@@ -96,7 +96,7 @@ public class ServerInterfaceTest {
             Settings.setDeviceConfig(sContext, 1 /* extraKeys */,
                     TIME_TO_REFRESH_HOURS /* expiringBy */, server.getUrl());
             GeekResponse response = mServerInterface.fetchGeek(
-                    ProvisionerMetrics.createScheduledAttemptMetrics(sContext));
+                    ProvisioningAttempt.createScheduledAttemptMetrics(sContext));
 
             assertThat(response.numExtraAttestationKeys).isEqualTo(20);
             assertThat(response.getChallenge()).isNotNull();
@@ -140,7 +140,7 @@ public class ServerInterfaceTest {
             Settings.setDeviceConfig(sContext, 2 /* extraKeys */,
                     TIME_TO_REFRESH_HOURS /* expiringBy */, server.getUrl());
             mServerInterface.fetchGeekAndUpdate(
-                    ProvisionerMetrics.createScheduledAttemptMetrics(sContext));
+                    ProvisioningAttempt.createScheduledAttemptMetrics(sContext));
 
             assertThat(Settings.getExtraSignedKeysAvailable(sContext)).isEqualTo(20);
             assertThat(Settings.getExpiringBy(sContext)).isEqualTo(Duration.ofHours(72));
@@ -154,7 +154,8 @@ public class ServerInterfaceTest {
                 FakeRkpServer.Response.SIGN_CERTS_DEVICE_UNREGISTERED)) {
             Settings.setDeviceConfig(sContext, 2 /* extraKeys */,
                     TIME_TO_REFRESH_HOURS /* expiringBy */, server.getUrl());
-            ProvisionerMetrics metrics = ProvisionerMetrics.createScheduledAttemptMetrics(sContext);
+            ProvisioningAttempt metrics = ProvisioningAttempt.createScheduledAttemptMetrics(
+                    sContext);
             mServerInterface.requestSignedCertificates(new byte[0], new byte[0], metrics);
             fail("Should fail due to unregistered device.");
         } catch (RkpdException e) {
@@ -169,7 +170,8 @@ public class ServerInterfaceTest {
                 FakeRkpServer.Response.SIGN_CERTS_USER_UNAUTHORIZED)) {
             Settings.setDeviceConfig(sContext, 2 /* extraKeys */,
                     TIME_TO_REFRESH_HOURS /* expiringBy */, server.getUrl());
-            ProvisionerMetrics metrics = ProvisionerMetrics.createScheduledAttemptMetrics(sContext);
+            ProvisioningAttempt metrics = ProvisioningAttempt.createScheduledAttemptMetrics(
+                    sContext);
             mServerInterface.requestSignedCertificates(new byte[0], new byte[0], metrics);
             fail("Should fail due to client error.");
         } catch (RkpdException e) {
@@ -184,7 +186,8 @@ public class ServerInterfaceTest {
                 FakeRkpServer.Response.SIGN_CERTS_OK_INVALID_CBOR)) {
             Settings.setDeviceConfig(sContext, 2 /* extraKeys */,
                     TIME_TO_REFRESH_HOURS /* expiringBy */, server.getUrl());
-            ProvisionerMetrics metrics = ProvisionerMetrics.createScheduledAttemptMetrics(sContext);
+            ProvisioningAttempt metrics = ProvisioningAttempt.createScheduledAttemptMetrics(
+                    sContext);
             mServerInterface.requestSignedCertificates(new byte[0], new byte[0], metrics);
             fail("Should fail due to invalid cbor.");
         } catch (RkpdException e) {
@@ -200,7 +203,8 @@ public class ServerInterfaceTest {
                 FakeRkpServer.Response.SIGN_CERTS_OK_VALID_CBOR)) {
             Settings.setDeviceConfig(sContext, 2 /* extraKeys */,
                     TIME_TO_REFRESH_HOURS /* expiringBy */, server.getUrl());
-            ProvisionerMetrics metrics = ProvisionerMetrics.createScheduledAttemptMetrics(sContext);
+            ProvisioningAttempt metrics = ProvisioningAttempt.createScheduledAttemptMetrics(
+                    sContext);
             List<byte[]> certChains = mServerInterface.requestSignedCertificates(new byte[0],
                     new byte[0], metrics);
             assertThat(certChains).isEmpty();
@@ -213,7 +217,7 @@ public class ServerInterfaceTest {
         // Check the data budget in order to initialize a rolling window.
         assertThat(Settings.hasErrDataBudget(sContext, null /* curTime */)).isTrue();
         Settings.consumeErrDataBudget(sContext, Settings.FAILURE_DATA_USAGE_MAX);
-        ProvisionerMetrics metrics = ProvisionerMetrics.createScheduledAttemptMetrics(sContext);
+        ProvisioningAttempt metrics = ProvisioningAttempt.createScheduledAttemptMetrics(sContext);
         try {
             // We are okay in mocking connectivity failure since err data budget is the first thing
             // to be checked.
@@ -236,7 +240,8 @@ public class ServerInterfaceTest {
             mockConnectivityFailure(ConnectivityState.DISCONNECTED);
             assertThat(Settings.hasErrDataBudget(sContext, null /* curTime */)).isTrue();
             Settings.consumeErrDataBudget(sContext, Settings.FAILURE_DATA_USAGE_MAX);
-            ProvisionerMetrics metrics = ProvisionerMetrics.createScheduledAttemptMetrics(sContext);
+            ProvisioningAttempt metrics = ProvisioningAttempt.createScheduledAttemptMetrics(
+                    sContext);
             mServerInterface.fetchGeek(metrics);
             fail("Network transaction should not have proceeded.");
         } catch (RkpdException e) {
