@@ -45,12 +45,12 @@ import androidx.test.core.app.ApplicationProvider;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 
 import com.android.rkpdapp.GeekResponse;
-import com.android.rkpdapp.ProvisionerMetrics;
 import com.android.rkpdapp.RkpdException;
 import com.android.rkpdapp.database.ProvisionedKey;
 import com.android.rkpdapp.database.RkpKey;
 import com.android.rkpdapp.interfaces.ServiceManagerInterface;
 import com.android.rkpdapp.interfaces.SystemInterface;
+import com.android.rkpdapp.metrics.ProvisioningAttempt;
 import com.android.rkpdapp.utils.CborUtils;
 
 import com.google.crypto.tink.subtle.Ed25519Sign;
@@ -119,7 +119,7 @@ public class SystemInterfaceTest {
         IRemotelyProvisionedComponent mockedComponent = mock(IRemotelyProvisionedComponent.class);
         SystemInterface systemInterface = mockSystemInterface(CborUtils.EC_CURVE_25519,
                 INTERFACE_VERSION_V3, mockedComponent);
-        ProvisionerMetrics metrics = ProvisionerMetrics.createScheduledAttemptMetrics(
+        ProvisioningAttempt metrics = ProvisioningAttempt.createScheduledAttemptMetrics(
                 ApplicationProvider.getApplicationContext());
         RkpKey rkpKey = systemInterface.generateKey(metrics);
         ProvisionedKey key = rkpKey.generateProvisionedKey(new byte[0], Instant.now());
@@ -130,7 +130,7 @@ public class SystemInterfaceTest {
     public void testGenerateKeyFailureRemoteException() throws RemoteException, CborException,
             RkpdException {
         SystemInterface systemInterface = mockSystemInterfaceFailure(new RemoteException());
-        ProvisionerMetrics metrics = ProvisionerMetrics.createScheduledAttemptMetrics(
+        ProvisioningAttempt metrics = ProvisioningAttempt.createScheduledAttemptMetrics(
                 ApplicationProvider.getApplicationContext());
         try {
             systemInterface.generateKey(metrics);
@@ -145,7 +145,7 @@ public class SystemInterfaceTest {
             CborException, RkpdException {
         SystemInterface systemInterface = mockSystemInterfaceFailure(
                 new ServiceSpecificException(2));
-        ProvisionerMetrics metrics = ProvisionerMetrics.createScheduledAttemptMetrics(
+        ProvisioningAttempt metrics = ProvisioningAttempt.createScheduledAttemptMetrics(
                 ApplicationProvider.getApplicationContext());
         try {
             systemInterface.generateKey(metrics);
@@ -161,7 +161,7 @@ public class SystemInterfaceTest {
         SystemInterface systemInterface = mockSystemInterface(CborUtils.EC_CURVE_P256,
                 INTERFACE_VERSION_V2, mockedComponent);
 
-        ProvisionerMetrics metrics = ProvisionerMetrics.createOutOfKeysAttemptMetrics(
+        ProvisioningAttempt metrics = ProvisioningAttempt.createOutOfKeysAttemptMetrics(
                 ApplicationProvider.getApplicationContext(), SERVICE);
         KeyPair eekEcdsaKeyPair = generateEcdsaKeyPair();
         ECPublicKey eekPubKey = (ECPublicKey) eekEcdsaKeyPair.getPublic();
@@ -187,7 +187,7 @@ public class SystemInterfaceTest {
         SystemInterface systemInterface = mockSystemInterface(CborUtils.EC_CURVE_25519,
                 INTERFACE_VERSION_V2, mockedComponent);
 
-        ProvisionerMetrics metrics = ProvisionerMetrics.createOutOfKeysAttemptMetrics(
+        ProvisioningAttempt metrics = ProvisioningAttempt.createOutOfKeysAttemptMetrics(
                 ApplicationProvider.getApplicationContext(), SERVICE);
         GeekResponse geekResponse = new GeekResponse();
         byte[] eekPub = new byte[32];
@@ -212,7 +212,7 @@ public class SystemInterfaceTest {
         SystemInterface systemInterface = mockSystemInterface(CborUtils.EC_CURVE_25519,
                 INTERFACE_VERSION_V3, mockedComponent);
 
-        ProvisionerMetrics metrics = ProvisionerMetrics.createOutOfKeysAttemptMetrics(
+        ProvisioningAttempt metrics = ProvisioningAttempt.createOutOfKeysAttemptMetrics(
                 ApplicationProvider.getApplicationContext(), SERVICE);
         GeekResponse geekResponse = new GeekResponse();
         geekResponse.setChallenge(new byte[]{0x02});
