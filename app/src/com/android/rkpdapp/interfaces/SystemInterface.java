@@ -29,6 +29,7 @@ import com.android.rkpdapp.ProvisionerMetrics;
 import com.android.rkpdapp.RkpdException;
 import com.android.rkpdapp.database.RkpKey;
 import com.android.rkpdapp.utils.CborUtils;
+import com.android.rkpdapp.utils.StopWatch;
 
 import java.util.List;
 
@@ -80,7 +81,7 @@ public class SystemInterface {
      */
     public RkpKey generateKey(ProvisionerMetrics metrics) throws CborException, RkpdException {
         MacedPublicKey macedPublicKey = new MacedPublicKey();
-        try (ProvisionerMetrics.StopWatch ignored = metrics.startBinderWait()) {
+        try (StopWatch ignored = metrics.startBinderWait()) {
             byte[] privKey = mBinder.generateEcdsaP256KeyPair(false, macedPublicKey);
             return CborUtils.extractRkpKeyFromMacedKey(privKey, mServiceName, macedPublicKey);
         } catch (RemoteException e) {
@@ -114,7 +115,7 @@ public class SystemInterface {
                     key.macedKey = x.getMacedPublicKey();
                     return key;
                 }).toArray(MacedPublicKey[]::new);
-        try (ProvisionerMetrics.StopWatch ignored = metrics.startBinderWait()) {
+        try (StopWatch ignored = metrics.startBinderWait()) {
             if (getVersion() < 3) {
                 DeviceInfo deviceInfo = new DeviceInfo();
                 ProtectedData protectedData = new ProtectedData();
