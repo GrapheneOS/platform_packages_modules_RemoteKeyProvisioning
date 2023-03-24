@@ -178,16 +178,33 @@ public class RkpdDatabaseTest {
     }
 
     @Test
-    public void testGetExpiringKeysForIrpc() {
-        mProvisionedKey1.expirationTime = Instant.now().minus(1000, ChronoUnit.MINUTES);
-        mProvisionedKey2.expirationTime = Instant.now().plus(1000, ChronoUnit.MINUTES);
-        ProvisionedKey key3 = new ProvisionedKey(TEST_KEY_BLOB_3, TEST_HAL_2, TEST_KEY_BLOB_3,
-                TEST_KEY_BLOB_3, Instant.now().minus(1000, ChronoUnit.MINUTES));
-        mKeyDao.insertKeys(List.of(mProvisionedKey1, mProvisionedKey2, key3));
+    public void testGetTotalExpiringKeysForIrpc() {
+        final Instant past = Instant.now().minus(1000, ChronoUnit.MINUTES);
+        final Instant future = Instant.now().plus(1000, ChronoUnit.MINUTES);
 
-        List<ProvisionedKey> expiringKeys =
-                mKeyDao.getExpiringKeysForIrpc(TEST_HAL_1, Instant.now());
-        assertThat(expiringKeys).containsExactly(mProvisionedKey1);
+        ProvisionedKey key1 = new ProvisionedKey(TEST_KEY_BLOB_1, TEST_HAL_1, TEST_KEY_BLOB_1,
+                TEST_KEY_BLOB_1, past);
+        ProvisionedKey key2 = new ProvisionedKey(TEST_KEY_BLOB_2, TEST_HAL_1, TEST_KEY_BLOB_2,
+                TEST_KEY_BLOB_2, future);
+        ProvisionedKey key3 = new ProvisionedKey(TEST_KEY_BLOB_3, TEST_HAL_2, TEST_KEY_BLOB_3,
+                TEST_KEY_BLOB_3, past);
+        mKeyDao.insertKeys(List.of(key1, key2, key3));
+
+        assertThat(mKeyDao.getTotalExpiringKeysForIrpc(TEST_HAL_1, past)).isEqualTo(0);
+        assertThat(mKeyDao.getTotalExpiringKeysForIrpc(TEST_HAL_2, past)).isEqualTo(0);
+
+        assertThat(mKeyDao.getTotalExpiringKeysForIrpc(TEST_HAL_1, past.plusMillis(1)))
+                .isEqualTo(1);
+        assertThat(mKeyDao.getTotalExpiringKeysForIrpc(TEST_HAL_2, past.plusMillis(1)))
+                .isEqualTo(1);
+
+        assertThat(mKeyDao.getTotalExpiringKeysForIrpc(TEST_HAL_1, future)).isEqualTo(1);
+        assertThat(mKeyDao.getTotalExpiringKeysForIrpc(TEST_HAL_2, future)).isEqualTo(1);
+
+        assertThat(mKeyDao.getTotalExpiringKeysForIrpc(TEST_HAL_1, future.plusMillis(1)))
+                .isEqualTo(2);
+        assertThat(mKeyDao.getTotalExpiringKeysForIrpc(TEST_HAL_2, future.plusMillis(1)))
+                .isEqualTo(1);
     }
 
     @Test
