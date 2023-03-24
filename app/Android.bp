@@ -21,8 +21,8 @@ genrule {
     name: "statslog-rkpd-java-gen",
     tools: ["stats-log-api-gen"],
     cmd: "$(location stats-log-api-gen) --java $(out) --module remoteprovisioner " +
-        "--javaPackage com.android.rkpdapp --javaClass RkpdStatsLog",
-    out: ["com/android/rkpdapp/RkpdStatsLog.java"],
+        "--javaPackage com.android.rkpdapp.metrics --javaClass RkpdStatsLog",
+    out: ["com/android/rkpdapp/metrics/RkpdStatsLog.java"],
 }
 
 aidl_interface {
