@@ -25,10 +25,11 @@ import android.os.ServiceSpecificException;
 import android.util.Log;
 
 import com.android.rkpdapp.GeekResponse;
-import com.android.rkpdapp.ProvisionerMetrics;
 import com.android.rkpdapp.RkpdException;
 import com.android.rkpdapp.database.RkpKey;
+import com.android.rkpdapp.metrics.ProvisioningAttempt;
 import com.android.rkpdapp.utils.CborUtils;
+import com.android.rkpdapp.utils.StopWatch;
 
 import java.util.List;
 
@@ -78,21 +79,21 @@ public class SystemInterface {
      * Generates attestation keys pair through binder service.
      * Returns generated key in {@link RkpKey} format.
      */
-    public RkpKey generateKey(ProvisionerMetrics metrics) throws CborException, RkpdException {
+    public RkpKey generateKey(ProvisioningAttempt metrics) throws CborException, RkpdException {
         MacedPublicKey macedPublicKey = new MacedPublicKey();
-        try (ProvisionerMetrics.StopWatch ignored = metrics.startBinderWait()) {
+        try (StopWatch ignored = metrics.startBinderWait()) {
             byte[] privKey = mBinder.generateEcdsaP256KeyPair(false, macedPublicKey);
             return CborUtils.extractRkpKeyFromMacedKey(privKey, mServiceName, macedPublicKey);
         } catch (RemoteException e) {
-            metrics.setStatus(ProvisionerMetrics.Status.GENERATE_KEYPAIR_FAILED);
+            metrics.setStatus(ProvisioningAttempt.Status.GENERATE_KEYPAIR_FAILED);
             Log.e(TAG, "Failed to generate key.", e);
             throw e.rethrowAsRuntimeException();
         } catch (ServiceSpecificException e) {
-            metrics.setStatus(ProvisionerMetrics.Status.GENERATE_KEYPAIR_FAILED);
+            metrics.setStatus(ProvisioningAttempt.Status.GENERATE_KEYPAIR_FAILED);
             Log.e(TAG, "Failed to generate key. Failed with " + e.errorCode, e);
             throw e;
         } catch (CborException e) {
-            metrics.setStatus(ProvisionerMetrics.Status.GENERATE_KEYPAIR_FAILED);
+            metrics.setStatus(ProvisioningAttempt.Status.GENERATE_KEYPAIR_FAILED);
             throw e;
         }
     }
@@ -104,7 +105,7 @@ public class SystemInterface {
      *                    challenge for the newer ones.
      * @param keysToSign array of keys to be signed.
      */
-    public byte[] generateCsr(ProvisionerMetrics metrics, GeekResponse geekResponse,
+    public byte[] generateCsr(ProvisioningAttempt metrics, GeekResponse geekResponse,
             List<RkpKey> keysToSign) throws CborException, RkpdException {
         byte[] challenge = geekResponse.getChallenge();
         byte[] csrTag;
@@ -114,7 +115,7 @@ public class SystemInterface {
                     key.macedKey = x.getMacedPublicKey();
                     return key;
                 }).toArray(MacedPublicKey[]::new);
-        try (ProvisionerMetrics.StopWatch ignored = metrics.startBinderWait()) {
+        try (StopWatch ignored = metrics.startBinderWait()) {
             if (getVersion() < 3) {
                 DeviceInfo deviceInfo = new DeviceInfo();
                 ProtectedData protectedData = new ProtectedData();
@@ -139,7 +140,7 @@ public class SystemInterface {
                             CborUtils.buildUnverifiedDeviceInfo());
                 } catch (CborException | RkpdException e) {
                     Log.e(TAG, "Failed to parse/build CBOR", e);
-                    metrics.setStatus(ProvisionerMetrics.Status.GENERATE_CSR_FAILED);
+                    metrics.setStatus(ProvisioningAttempt.Status.GENERATE_CSR_FAILED);
                     throw e;
                 }
             } else {
@@ -150,15 +151,15 @@ public class SystemInterface {
                 return CborUtils.encodeCbor(array);
             }
         } catch (RemoteException e) {
-            metrics.setStatus(ProvisionerMetrics.Status.GENERATE_CSR_FAILED);
+            metrics.setStatus(ProvisioningAttempt.Status.GENERATE_CSR_FAILED);
             Log.e(TAG, "Failed to generate CSR blob", e);
             throw e.rethrowAsRuntimeException();
         } catch (ServiceSpecificException ex) {
-            metrics.setStatus(ProvisionerMetrics.Status.GENERATE_CSR_FAILED);
+            metrics.setStatus(ProvisioningAttempt.Status.GENERATE_CSR_FAILED);
             Log.e(TAG, "Failed to generate CSR blob. Failed with " + ex.errorCode, ex);
             throw ex;
         } catch (CborException e) {
-            metrics.setStatus(ProvisionerMetrics.Status.GENERATE_CSR_FAILED);
+            metrics.setStatus(ProvisioningAttempt.Status.GENERATE_CSR_FAILED);
             throw e;
         }
     }
