@@ -111,8 +111,7 @@ public final class RegistrationBinder extends IRegistration.Stub {
             checkedCallback(callback::onProvisioningNeeded);
             try (ProvisioningAttempt metrics = ProvisioningAttempt.createOutOfKeysAttemptMetrics(
                     mContext, mSystemInterface.getServiceName())) {
-                GeekResponse geekResponse = mRkpServer.fetchGeek(metrics);
-                mProvisioner.provisionKeys(metrics, mSystemInterface, geekResponse);
+                fetchGeekAndProvisionKeys(metrics);
             }
             assignedKey = tryToAssignKey(minExpiry, keyId);
         }
@@ -123,7 +122,8 @@ public final class RegistrationBinder extends IRegistration.Stub {
         checkForCancel();
 
         if (assignedKey == null) {
-            // This should never happen...
+            // This can happen if provisioning is disabled on the device for some reason,
+            // or if we're not connected to the internet.
             Log.e(TAG, "Unable to provision keys");
             checkedCallback(() -> callback.onError(IGetKeyCallback.Error.ERROR_UNKNOWN,
                     "Provisioning failed, no keys available"));
@@ -134,6 +134,17 @@ public final class RegistrationBinder extends IRegistration.Stub {
             key.encodedCertChain = assignedKey.certificateChain;
             checkedCallback(() -> callback.onSuccess(key));
         }
+    }
+
+    private void fetchGeekAndProvisionKeys(ProvisioningAttempt metrics)
+            throws CborException, RkpdException, InterruptedException {
+        GeekResponse response = mRkpServer.fetchGeekAndUpdate(metrics);
+        if (response.numExtraAttestationKeys == 0) {
+            metrics.setEnablement(ProvisioningAttempt.Enablement.DISABLED);
+            metrics.setStatus(ProvisioningAttempt.Status.PROVISIONING_DISABLED);
+            return;
+        }
+        mProvisioner.provisionKeys(metrics, mSystemInterface, response);
     }
 
     private ProvisionedKey tryToAssignKey(Instant minExpiry, int keyId) {
@@ -169,8 +180,7 @@ public final class RegistrationBinder extends IRegistration.Stub {
 
             mThreadPool.execute(() -> {
                 try {
-                    GeekResponse geekResponse = mRkpServer.fetchGeekAndUpdate(metrics);
-                    mProvisioner.provisionKeys(metrics, mSystemInterface, geekResponse);
+                    fetchGeekAndProvisionKeys(metrics);
                 } catch (CborException | RkpdException | InterruptedException e) {
                     Log.e(TAG, "Error provisioning keys", e);
                 }
