@@ -17,7 +17,6 @@
 package com.android.rkpdapp.provisioner;
 
 import android.content.Context;
-import android.util.Base64;
 import android.util.Log;
 
 import com.android.rkpdapp.GeekResponse;
@@ -33,10 +32,6 @@ import com.android.rkpdapp.utils.Settings;
 import com.android.rkpdapp.utils.StatsProcessor;
 import com.android.rkpdapp.utils.X509Utils;
 
-import java.security.InvalidAlgorithmParameterException;
-import java.security.NoSuchAlgorithmException;
-import java.security.NoSuchProviderException;
-import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -157,16 +152,7 @@ public class Provisioner {
             List<RkpKey> keysGenerated) throws RkpdException {
         List<ProvisionedKey> provisionedKeys = new ArrayList<>();
         for (byte[] chain : certChains) {
-            X509Certificate cert;
-            try {
-                cert = X509Utils.formatX509Certs(chain)[0];
-            } catch (CertificateException | NoSuchAlgorithmException | NoSuchProviderException
-                    | InvalidAlgorithmParameterException e) {
-                Log.e(TAG, "Unable to parse certificate chain."
-                        + Base64.encodeToString(chain, Base64.DEFAULT), e);
-                throw new RkpdException(RkpdException.ErrorCode.INTERNAL_ERROR,
-                        "Failed to interpret DER encoded certificate chain", e);
-            }
+            X509Certificate cert = X509Utils.formatX509Certs(chain)[0];
             long expirationDate = cert.getNotAfter().getTime();
             byte[] rawPublicKey = X509Utils.getAndFormatRawPublicKey(cert);
             if (rawPublicKey == null) {
