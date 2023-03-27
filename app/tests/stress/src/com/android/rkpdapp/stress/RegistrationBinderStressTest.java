@@ -23,7 +23,7 @@ import static com.google.common.truth.TruthJUnit.assume;
 import android.content.Context;
 import android.hardware.security.keymint.IRemotelyProvisionedComponent;
 import android.os.Process;
-import android.os.RemoteException;
+import android.os.ServiceManager;
 import android.os.SystemProperties;
 
 import androidx.test.core.app.ApplicationProvider;
@@ -55,6 +55,7 @@ import java.util.concurrent.Executors;
 public class RegistrationBinderStressTest {
     private static final int NUM_THREADS = Math.min(16, Runtime.getRuntime().availableProcessors());
     private static final Duration STRESS_THREAD_TIME_LIMIT = Duration.ofSeconds(60);
+    private static final String SERVICE = IRemotelyProvisionedComponent.DESCRIPTOR + "/default";
     private final ExecutorService mExecutor = Executors.newCachedThreadPool();
     private Context mContext;
     private SystemInterface mIrpcHal;
@@ -69,9 +70,12 @@ public class RegistrationBinderStressTest {
                 .withMessage("The RKP server hostname is not configured -- assume RKP disabled.")
                 .that(SystemProperties.get("remote_provisioning.hostname"))
                 .isNotEmpty();
+        assume()
+                .withMessage("Remotely Provisioned Component is not found -- RKP disabled.")
+                .that(ServiceManager.isDeclared(SERVICE))
+                .isTrue();
         mContext = ApplicationProvider.getApplicationContext();
-        mIrpcHal = ServiceManagerInterface.getInstance(
-                IRemotelyProvisionedComponent.DESCRIPTOR + "/default");
+        mIrpcHal = ServiceManagerInterface.getInstance(SERVICE);
         mKeyDao = RkpdDatabase.getDatabase(mContext).provisionedKeyDao();
         mKeyDao.deleteAllKeys();
     }
@@ -86,20 +90,20 @@ public class RegistrationBinderStressTest {
         CompletableFuture<String> result = new CompletableFuture<>();
         binder.getKey(keyId, new IGetKeyCallback.Stub() {
             @Override
-            public void onSuccess(RemotelyProvisionedKey key) throws RemoteException {
+            public void onSuccess(RemotelyProvisionedKey key) {
                 result.complete("");
             }
 
             @Override
-            public void onProvisioningNeeded() throws RemoteException { /* noop */ }
+            public void onProvisioningNeeded() { /* noop */ }
 
             @Override
-            public void onCancel() throws RemoteException {
+            public void onCancel() {
                 result.complete("Received unexpected cancel");
             }
 
             @Override
-            public void onError(byte error, String description) throws RemoteException {
+            public void onError(byte error, String description) {
                 result.complete(description);
             }
         });
