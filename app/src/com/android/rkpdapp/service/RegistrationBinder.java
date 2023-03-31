@@ -140,6 +140,7 @@ public final class RegistrationBinder extends IRegistration.Stub {
             throws CborException, RkpdException, InterruptedException {
         GeekResponse response = mRkpServer.fetchGeekAndUpdate(metrics);
         if (response.numExtraAttestationKeys == 0) {
+            Log.v(TAG, "Provisioning disabled.");
             metrics.setEnablement(ProvisioningAttempt.Enablement.DISABLED);
             metrics.setStatus(ProvisioningAttempt.Status.PROVISIONING_DISABLED);
             return;
