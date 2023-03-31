@@ -231,6 +231,7 @@ public class ServerInterface {
             ProvisioningAttempt.Status serverTimeOutStatus,
             ProvisioningAttempt.Status serverIoExceptionStatus) throws RkpdException {
         TrafficStats.setThreadStatsTag(0);
+        Log.v(TAG, "Network request made to " + connectionEndpoint);
         checkDataBudget(metrics);
         int bytesTransacted = 0;
         try {
@@ -280,6 +281,7 @@ public class ServerInterface {
                 }
                 inputStream.close();
                 serverWaitTimer.stop();
+                Log.v(TAG, "Network request completed successfully.");
             }
             return cborBytes.toByteArray();
         } catch (SocketTimeoutException e) {
