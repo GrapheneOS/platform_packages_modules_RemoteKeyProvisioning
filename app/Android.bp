@@ -20,7 +20,7 @@ package {
 genrule {
     name: "statslog-rkpd-java-gen",
     tools: ["stats-log-api-gen"],
-    cmd: "$(location stats-log-api-gen) --java $(out) --module remoteprovisioner " +
+    cmd: "$(location stats-log-api-gen) --java $(out) --module rkpd " +
         "--javaPackage com.android.rkpdapp.metrics --javaClass RkpdStatsLog",
     out: ["com/android/rkpdapp/metrics/RkpdStatsLog.java"],
 }

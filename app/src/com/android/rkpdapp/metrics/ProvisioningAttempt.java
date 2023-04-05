@@ -176,7 +176,7 @@ public final class ProvisioningAttempt implements AutoCloseable {
         int transportType = getTransportTypeForActiveNetwork();
         RkpdStatsLog.write(RkpdStatsLog.REMOTE_KEY_PROVISIONING_ATTEMPT,
                 mCause, mRemotelyProvisionedComponent, getUpTimeBucket(), getIntEnablement(),
-                mIsKeyPoolEmpty, getIntStatus());
+                mIsKeyPoolEmpty, getIntStatus(), "", 0);
         RkpdStatsLog.write(
                 RkpdStatsLog.REMOTE_KEY_PROVISIONING_NETWORK_INFO,
                 transportType, getIntStatus(), mHttpStatusError);
