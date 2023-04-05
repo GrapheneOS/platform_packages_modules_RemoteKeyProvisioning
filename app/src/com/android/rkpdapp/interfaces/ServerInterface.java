@@ -231,11 +231,11 @@ public class ServerInterface {
             ProvisioningAttempt.Status serverTimeOutStatus,
             ProvisioningAttempt.Status serverIoExceptionStatus) throws RkpdException {
         TrafficStats.setThreadStatsTag(0);
-        Log.v(TAG, "Network request made to " + connectionEndpoint);
         checkDataBudget(metrics);
         int bytesTransacted = 0;
         try {
             URL url = new URL(Settings.getUrl(mContext) + connectionEndpoint);
+            Log.v(TAG, "Connecting to " + url);
             ByteArrayOutputStream cborBytes = new ByteArrayOutputStream();
             try (StopWatch serverWaitTimer = metrics.startServerWait()) {
                 HttpURLConnection con = (HttpURLConnection) url.openConnection();
