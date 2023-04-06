@@ -167,8 +167,7 @@ public class KeystoreIntegrationTest {
         ProvisionedKey attestationKey = mKeyDao.getKeyForClientAndIrpc(mServiceName,
                 Process.KEYSTORE_UID, Process.myUid());
 
-        createKeystoreKey();
-
+        createKeystoreKeyBackedByRkp();
         verifyCertificateChain(attestationKey);
     }
 
@@ -220,10 +219,10 @@ public class KeystoreIntegrationTest {
         // Verify that if the system is set to rkp only, key creation fails when RKP is unable
         // to get keys.
 
-        try (SystemPropertySetter ignored = SystemPropertySetter.setRkpOnly(mInstanceName)) {
+        try {
             Settings.setDeviceConfig(sContext, Settings.EXTRA_SIGNED_KEYS_AVAILABLE_DEFAULT,
                     Duration.ofDays(1), "bad url");
-            createKeystoreKey();
+            createKeystoreKeyBackedByRkp();
             assertWithMessage("Should have gotten a KeyStoreException").fail();
         } catch (ProviderException e) {
             assertThat(e.getCause()).isInstanceOf(KeyStoreException.class);
@@ -234,13 +233,6 @@ public class KeystoreIntegrationTest {
                 assertThat(((KeyStoreException) e.getCause()).getErrorCode())
                         .isEqualTo(ResponseCode.OUT_OF_KEYS_PENDING_INTERNET_CONNECTIVITY);
             }
-        }
-    }
-
-    @Test
-    public void testGenerateKeyRkpOnly() throws Exception {
-        try (SystemPropertySetter ignored = SystemPropertySetter.setRkpOnly(mInstanceName)) {
-            createKeystoreKeyAndVerifyAttestationKeyAssigned();
         }
     }
 
@@ -267,8 +259,8 @@ public class KeystoreIntegrationTest {
         // Check the data budget in order to initialize a rolling window.
         assertThat(Settings.hasErrDataBudget(sContext, null /* curTime */)).isTrue();
         Settings.consumeErrDataBudget(sContext, Settings.FAILURE_DATA_USAGE_MAX);
-        try (SystemPropertySetter ignored = SystemPropertySetter.setRkpOnly(mInstanceName)) {
-            createKeystoreKey();
+        try {
+            createKeystoreKeyBackedByRkp();
             Assert.fail("Expected a keystore exception");
         } catch (ProviderException e) {
             assertThat(e).hasCauseThat().isInstanceOf(KeyStoreException.class);
@@ -280,9 +272,9 @@ public class KeystoreIntegrationTest {
 
     @Test
     public void testRetryableRkpError() throws Exception {
-        try (SystemPropertySetter ignored = SystemPropertySetter.setRkpOnly(mInstanceName)) {
+        try {
             Settings.setDeviceConfig(sContext, 1, Duration.ofDays(1), "bad url");
-            createKeystoreKey();
+            createKeystoreKeyBackedByRkp();
             Assert.fail("Expected a keystore exception");
         } catch (ProviderException e) {
             assertThat(e).hasCauseThat().isInstanceOf(KeyStoreException.class);
@@ -297,11 +289,10 @@ public class KeystoreIntegrationTest {
 
     @Test
     public void testPeriodicProvisionerProvisioningDisabled() throws Exception {
-        try (SystemPropertySetter ignored = SystemPropertySetter.setRkpOnly(mInstanceName);
-             FakeRkpServer server = new FakeRkpServer(FakeRkpServer.Response.FETCH_EEK_RKP_DISABLED,
+        try (FakeRkpServer server = new FakeRkpServer(FakeRkpServer.Response.FETCH_EEK_RKP_DISABLED,
                      FakeRkpServer.Response.INTERNAL_ERROR)) {
             Settings.setDeviceConfig(sContext, 1, Duration.ofDays(1), server.getUrl());
-            createKeystoreKey();
+            createKeystoreKeyBackedByRkp();
             Assert.fail("Expected a keystore exception");
         } catch (ProviderException e) {
             assertThat(e).hasCauseThat().isInstanceOf(KeyStoreException.class);
@@ -316,11 +307,10 @@ public class KeystoreIntegrationTest {
 
     @Test
     public void testRetryNeverWhenDeviceNotRegistered() throws Exception {
-        try (SystemPropertySetter ignored = SystemPropertySetter.setRkpOnly(mInstanceName);
-             FakeRkpServer server = new FakeRkpServer(FakeRkpServer.Response.FETCH_EEK_OK,
+        try (FakeRkpServer server = new FakeRkpServer(FakeRkpServer.Response.FETCH_EEK_OK,
                      FakeRkpServer.Response.SIGN_CERTS_DEVICE_UNREGISTERED)) {
             Settings.setDeviceConfig(sContext, 1, Duration.ofDays(1), server.getUrl());
-            createKeystoreKey();
+            createKeystoreKeyBackedByRkp();
             Assert.fail("Expected a keystore exception");
         } catch (ProviderException e) {
             assertThat(e).hasCauseThat().isInstanceOf(KeyStoreException.class);
@@ -340,6 +330,12 @@ public class KeystoreIntegrationTest {
         assertThat(provisioner.doWork()).isEqualTo(ListenableWorker.Result.success());
     }
 
+    private void createKeystoreKeyBackedByRkp() throws Exception {
+        try (SystemPropertySetter ignored = SystemPropertySetter.setRkpOnly(mInstanceName)) {
+            createKeystoreKey();
+        }
+    }
+
     private void createKeystoreKey() throws Exception {
         KeyPairGenerator generator = KeyPairGenerator.getInstance(KEY_ALGORITHM_EC,
                 "AndroidKeyStore");
@@ -353,7 +349,7 @@ public class KeystoreIntegrationTest {
     }
 
     private void createKeystoreKeyAndVerifyAttestationKeyAssigned() throws Exception {
-        createKeystoreKey();
+        createKeystoreKeyBackedByRkp();
 
         ProvisionedKey attestationKey = mKeyDao.getKeyForClientAndIrpc(mServiceName,
                 Process.KEYSTORE_UID, Process.myUid());
