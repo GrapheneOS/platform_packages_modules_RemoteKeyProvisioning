@@ -24,6 +24,8 @@ import android.util.Base64;
 import com.google.protobuf.ByteString;
 
 import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 
 import fi.iki.elonen.NanoHTTPD;
@@ -125,34 +127,48 @@ public class FakeRkpServer implements AutoCloseable {
     final NanoHTTPD mServer;
     final boolean mCleartextPolicy;
 
-    public FakeRkpServer(Response fetchEekResponse, Response signCertResponse)
-            throws IOException {
+    // Interface allowing users to plug in completely custom handlers.
+    public interface RequestHandler {
+        NanoHTTPD.Response serve(NanoHTTPD.IHTTPSession session, int bodySize)
+                throws IOException, NanoHTTPD.ResponseException;
+    }
+
+    // Create a test server that has a customer handler for all requests
+    public FakeRkpServer(RequestHandler handler) throws IOException {
         mCleartextPolicy = NetworkSecurityPolicy.getInstance().isCleartextTrafficPermitted();
         NetworkSecurityPolicy.getInstance().setCleartextTrafficPermitted(true);
 
         mServer = new NanoHTTPD("localhost", 0) {
             @Override
             public Response serve(IHTTPSession session) {
-                consumeRequestBody((HTTPSession) session);
-                if (session.getUri().contains(":fetchEekChain")) {
-                    return fetchEekResponse.toNanoResponse();
-                } else if (session.getUri().contains(":signCertificates")) {
-                    return signCertResponse.toNanoResponse();
-                }
-                assertWithMessage("Unexpected HTTP request: " + session.getUri()).fail();
-                return null;
-            }
-
-            void consumeRequestBody(HTTPSession session) {
                 try {
-                    session.getInputStream().readNBytes((int) session.getBodySize());
-                } catch (IOException e) {
-                    assertWithMessage("Error reading request bytes: " + e).fail();
+                    return handler.serve(session, (int) ((HTTPSession) session).getBodySize());
+                } catch (IOException | NanoHTTPD.ResponseException e) {
+                    StringWriter stack = new StringWriter();
+                    e.printStackTrace(new PrintWriter(stack));
+                    assertWithMessage("Error handling request: " + stack).fail();
                 }
+                return null;
             }
         };
 
         mServer.start(NanoHTTPD.SOCKET_READ_TIMEOUT, false);
+    }
+
+    // Create a test server that returns pre-defined responses for fetchEek and
+    // signCertificates
+    public FakeRkpServer(Response fetchEekResponse, Response signCertResponse)
+            throws IOException {
+        this((session, bodySize) -> {
+            session.getInputStream().readNBytes(bodySize);
+            if (session.getUri().contains(":fetchEekChain")) {
+                return fetchEekResponse.toNanoResponse();
+            } else if (session.getUri().contains(":signCertificates")) {
+                return signCertResponse.toNanoResponse();
+            }
+            assertWithMessage("Unexpected HTTP request: " + session.getUri()).fail();
+            return null;
+        });
     }
 
     @Override
