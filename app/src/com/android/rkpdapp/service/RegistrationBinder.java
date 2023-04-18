@@ -284,7 +284,8 @@ public final class RegistrationBinder extends IRegistration.Stub {
         Log.i(TAG, "storeUpgradedKeyAsync");
         mThreadPool.execute(() -> {
             try {
-                int keysUpgraded = mProvisionedKeyDao.upgradeKeyBlob(oldKeyBlob, newKeyBlob);
+                int keysUpgraded = mProvisionedKeyDao.upgradeKeyBlob(mClientUid, oldKeyBlob,
+                        newKeyBlob);
                 if (keysUpgraded == 1) {
                     checkedCallback(callback::onSuccess);
                 } else if (keysUpgraded == 0) {
