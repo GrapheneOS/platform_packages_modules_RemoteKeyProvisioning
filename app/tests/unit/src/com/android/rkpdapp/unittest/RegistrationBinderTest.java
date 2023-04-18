@@ -468,7 +468,7 @@ public class RegistrationBinderTest {
 
         doReturn(1)
                 .when(mMockDao)
-                .upgradeKeyBlob(oldKeyBlob, newKeyBlob);
+                .upgradeKeyBlob(CLIENT_UID, oldKeyBlob, newKeyBlob);
 
         IStoreUpgradedKeyCallback callback = mock(IStoreUpgradedKeyCallback.class);
         mRegistration.storeUpgradedKeyAsync(oldKeyBlob, newKeyBlob, callback);
@@ -484,7 +484,7 @@ public class RegistrationBinderTest {
 
         doReturn(0)
                 .when(mMockDao)
-                .upgradeKeyBlob(oldKeyBlob, newKeyBlob);
+                .upgradeKeyBlob(CLIENT_UID, oldKeyBlob, newKeyBlob);
 
         IStoreUpgradedKeyCallback callback = mock(IStoreUpgradedKeyCallback.class);
         mRegistration.storeUpgradedKeyAsync(oldKeyBlob, newKeyBlob, callback);
@@ -500,7 +500,7 @@ public class RegistrationBinderTest {
 
         doReturn(2)
                 .when(mMockDao)
-                .upgradeKeyBlob(oldKeyBlob, newKeyBlob);
+                .upgradeKeyBlob(CLIENT_UID, oldKeyBlob, newKeyBlob);
 
         IStoreUpgradedKeyCallback callback = mock(IStoreUpgradedKeyCallback.class);
         mRegistration.storeUpgradedKeyAsync(oldKeyBlob, newKeyBlob, callback);
@@ -516,7 +516,7 @@ public class RegistrationBinderTest {
 
         doThrow(new IllegalArgumentException("nope!!!"))
                 .when(mMockDao)
-                .upgradeKeyBlob(oldKeyBlob, newKeyBlob);
+                .upgradeKeyBlob(CLIENT_UID, oldKeyBlob, newKeyBlob);
 
         IStoreUpgradedKeyCallback callback = mock(IStoreUpgradedKeyCallback.class);
         mRegistration.storeUpgradedKeyAsync(oldKeyBlob, newKeyBlob, callback);
