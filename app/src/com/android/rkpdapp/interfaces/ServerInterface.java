@@ -41,6 +41,7 @@ import java.net.URL;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -49,6 +50,7 @@ import java.util.UUID;
 public class ServerInterface {
 
     private static final int TIMEOUT_MS = 20000;
+    private static final int BACKOFF_TIME_MS = 100;
 
     private static final String TAG = "RkpdServerInterface";
     private static final String GEEK_URL = ":fetchEekChain";
@@ -56,6 +58,38 @@ public class ServerInterface {
     private static final String CHALLENGE_PARAMETER = "challenge=";
     private static final String REQUEST_ID_PARAMETER = "request_id=";
     private final Context mContext;
+
+    private enum Operation {
+        FETCH_GEEK,
+        SIGN_CERTS;
+
+        public ProvisioningAttempt.Status getHttpErrorStatus() {
+            if (Objects.equals(name(), FETCH_GEEK.name())) {
+                return ProvisioningAttempt.Status.FETCH_GEEK_HTTP_ERROR;
+            } else if (Objects.equals(name(), SIGN_CERTS.name())) {
+                return ProvisioningAttempt.Status.SIGN_CERTS_HTTP_ERROR;
+            }
+            throw new IllegalStateException("Please declare status for new operation.");
+        }
+
+        public ProvisioningAttempt.Status getIoExceptionStatus() {
+            if (Objects.equals(name(), FETCH_GEEK.name())) {
+                return ProvisioningAttempt.Status.FETCH_GEEK_IO_EXCEPTION;
+            } else if (Objects.equals(name(), SIGN_CERTS.name())) {
+                return ProvisioningAttempt.Status.SIGN_CERTS_IO_EXCEPTION;
+            }
+            throw new IllegalStateException("Please declare status for new operation.");
+        }
+
+        public ProvisioningAttempt.Status getTimedOutStatus() {
+            if (Objects.equals(name(), FETCH_GEEK.name())) {
+                return ProvisioningAttempt.Status.FETCH_GEEK_TIMED_OUT;
+            } else if (Objects.equals(name(), SIGN_CERTS.name())) {
+                return ProvisioningAttempt.Status.SIGN_CERTS_TIMED_OUT;
+            }
+            throw new IllegalStateException("Please declare status for new operation.");
+        }
+    }
 
     public ServerInterface(Context context) {
         this.mContext = context;
@@ -81,9 +115,7 @@ public class ServerInterface {
                       CHALLENGE_PARAMETER + Base64.encodeToString(challenge, Base64.URL_SAFE),
                       REQUEST_ID_PARAMETER + generateAndLogRequestId());
         byte[] cborBytes = connectAndGetData(metrics, connectionEndpoint, csr,
-                ProvisioningAttempt.Status.SIGN_CERTS_HTTP_ERROR,
-                ProvisioningAttempt.Status.SIGN_CERTS_TIMED_OUT,
-                ProvisioningAttempt.Status.SIGN_CERTS_IO_EXCEPTION);
+                Operation.SIGN_CERTS);
         List<byte[]> certChains = CborUtils.parseSignedCertificates(cborBytes);
         if (certChains == null) {
             metrics.setStatus(ProvisioningAttempt.Status.INTERNAL_ERROR);
@@ -113,10 +145,7 @@ public class ServerInterface {
      */
     public GeekResponse fetchGeek(ProvisioningAttempt metrics) throws RkpdException {
         byte[] input = CborUtils.buildProvisioningInfo(mContext);
-        byte[] cborBytes = connectAndGetData(metrics, GEEK_URL, input,
-                ProvisioningAttempt.Status.FETCH_GEEK_HTTP_ERROR,
-                ProvisioningAttempt.Status.FETCH_GEEK_TIMED_OUT,
-                ProvisioningAttempt.Status.FETCH_GEEK_IO_EXCEPTION);
+        byte[] cborBytes = connectAndGetData(metrics, GEEK_URL, input, Operation.FETCH_GEEK);
         GeekResponse resp = CborUtils.parseGeekResponse(cborBytes);
         if (resp == null) {
             metrics.setStatus(ProvisioningAttempt.Status.FETCH_GEEK_HTTP_ERROR);
@@ -226,73 +255,94 @@ public class ServerInterface {
         }
     }
 
-    private byte[] connectAndGetData(ProvisioningAttempt metrics, String connectionEndpoint,
-            byte[] input, ProvisioningAttempt.Status failureStatus,
-            ProvisioningAttempt.Status serverTimeOutStatus,
-            ProvisioningAttempt.Status serverIoExceptionStatus) throws RkpdException {
+    private byte[] connectAndGetData(ProvisioningAttempt metrics, String endpoint, byte[] input,
+            Operation operation) throws RkpdException {
         TrafficStats.setThreadStatsTag(0);
-        checkDataBudget(metrics);
-        int bytesTransacted = 0;
-        try {
-            URL url = new URL(Settings.getUrl(mContext) + connectionEndpoint);
-            Log.v(TAG, "Connecting to " + url);
-            ByteArrayOutputStream cborBytes = new ByteArrayOutputStream();
-            try (StopWatch serverWaitTimer = metrics.startServerWait()) {
-                HttpURLConnection con = (HttpURLConnection) url.openConnection();
-                con.setRequestMethod("POST");
-                con.setConnectTimeout(TIMEOUT_MS);
-                con.setReadTimeout(TIMEOUT_MS);
-                con.setDoOutput(true);
-
-                // May not be able to use try-with-resources here if the connection gets closed due
-                // to the output stream being automatically closed.
-                try (OutputStream os = con.getOutputStream()) {
-                    os.write(input, 0, input.length);
-                    bytesTransacted += input.length;
-                }
-
-                metrics.setHttpStatusError(con.getResponseCode());
-                if (con.getResponseCode() != HttpURLConnection.HTTP_OK) {
-                    serverWaitTimer.stop();
-                    int failures = Settings.incrementFailureCounter(mContext);
-                    Log.e(TAG, "Server connection failed for url: " + url + ", response code: "
-                            + con.getResponseCode() + "\nRepeated failure count: " + failures);
-                    Log.e(TAG, readErrorFromConnection(con));
-                    Settings.consumeErrDataBudget(mContext, bytesTransacted);
-                    RkpdException ex =
-                            RkpdException.createFromHttpError(con.getResponseCode());
-                    if (ex.getErrorCode() == RkpdException.ErrorCode.DEVICE_NOT_REGISTERED) {
+        int backoff_time = BACKOFF_TIME_MS;
+        int attempt = 1;
+        try (StopWatch retryTimer = new StopWatch(TAG)) {
+            retryTimer.start();
+            while (true) {
+                checkDataBudget(metrics);
+                try {
+                    Log.v(TAG, "Requesting data from server. Attempt " + attempt);
+                    return requestData(metrics, new URL(Settings.getUrl(mContext) + endpoint),
+                            input);
+                } catch (SocketTimeoutException e) {
+                    metrics.setStatus(operation.getTimedOutStatus());
+                    Log.e(TAG, "Server timed out. " + e.getMessage());
+                } catch (IOException e) {
+                    metrics.setStatus(operation.getIoExceptionStatus());
+                    Log.e(TAG, "Failed to complete request from server." + e.getMessage());
+                } catch (RkpdException e) {
+                    if (e.getErrorCode() == RkpdException.ErrorCode.DEVICE_NOT_REGISTERED) {
                         metrics.setStatus(
                                 ProvisioningAttempt.Status.SIGN_CERTS_DEVICE_NOT_REGISTERED);
+                        throw e;
                     } else {
-                        metrics.setStatus(failureStatus);
+                        metrics.setStatus(operation.getHttpErrorStatus());
+                        if (e.getErrorCode() == RkpdException.ErrorCode.HTTP_CLIENT_ERROR) {
+                            throw e;
+                        }
                     }
-                    throw ex;
                 }
-                serverWaitTimer.stop();
-                Settings.clearFailureCounter(mContext);
-                BufferedInputStream inputStream = new BufferedInputStream(con.getInputStream());
-                byte[] buffer = new byte[1024];
-                int read;
-                serverWaitTimer.start();
-                while ((read = inputStream.read(buffer, 0, buffer.length)) != -1) {
-                    cborBytes.write(buffer, 0, read);
-                    bytesTransacted += read;
+                if (retryTimer.getElapsedMillis() > Settings.getMaxRequestTime(mContext)) {
+                    break;
+                } else {
+                    try {
+                        Thread.sleep(backoff_time);
+                    } catch (InterruptedException e) {
+                        // skip wait time
+                    }
+                    backoff_time *= 2;
+                    attempt += 1;
                 }
-                inputStream.close();
-                serverWaitTimer.stop();
-                Log.v(TAG, "Network request completed successfully.");
             }
-            return cborBytes.toByteArray();
-        } catch (SocketTimeoutException e) {
-            Log.e(TAG, "Server timed out", e);
-            metrics.setStatus(serverTimeOutStatus);
-        } catch (IOException e) {
-            Log.e(TAG, "Failed to complete request from the server", e);
-            metrics.setStatus(serverIoExceptionStatus);
         }
         Settings.incrementFailureCounter(mContext);
-        Settings.consumeErrDataBudget(mContext, bytesTransacted);
-        throw makeNetworkError("Error connecting to network.", metrics);
+        throw makeNetworkError("Error getting data from server.", metrics);
+    }
+
+    private byte[] requestData(ProvisioningAttempt metrics, URL url, byte[] input)
+            throws IOException, RkpdException {
+        int bytesTransacted = 0;
+        try (StopWatch serverWaitTimer = metrics.startServerWait()) {
+            HttpURLConnection con = (HttpURLConnection) url.openConnection();
+            con.setRequestMethod("POST");
+            con.setConnectTimeout(TIMEOUT_MS);
+            con.setReadTimeout(TIMEOUT_MS);
+            con.setDoOutput(true);
+
+            try (OutputStream os = con.getOutputStream()) {
+                os.write(input, 0, input.length);
+                bytesTransacted += input.length;
+            }
+
+            metrics.setHttpStatusError(con.getResponseCode());
+            if (con.getResponseCode() != HttpURLConnection.HTTP_OK) {
+                int failures = Settings.incrementFailureCounter(mContext);
+                Log.e(TAG, "Server connection failed for url: " + url + ", response code: "
+                        + con.getResponseCode() + "\nRepeated failure count: " + failures);
+                Log.e(TAG, readErrorFromConnection(con));
+                throw RkpdException.createFromHttpError(con.getResponseCode());
+            }
+            serverWaitTimer.stop();
+            Settings.clearFailureCounter(mContext);
+            BufferedInputStream inputStream = new BufferedInputStream(con.getInputStream());
+            ByteArrayOutputStream cborBytes = new ByteArrayOutputStream();
+            byte[] buffer = new byte[1024];
+            int read;
+            serverWaitTimer.start();
+            while ((read = inputStream.read(buffer, 0, buffer.length)) != -1) {
+                cborBytes.write(buffer, 0, read);
+                bytesTransacted += read;
+            }
+            inputStream.close();
+            Log.v(TAG, "Network request completed successfully.");
+            return cborBytes.toByteArray();
+        } catch (Exception e) {
+            Settings.consumeErrDataBudget(mContext, bytesTransacted);
+            throw e;
+        }
     }
 }
