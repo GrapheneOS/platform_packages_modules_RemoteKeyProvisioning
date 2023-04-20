@@ -19,8 +19,6 @@ package com.android.rkpdapp.unittest;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
 
-import static org.junit.Assert.fail;
-
 import android.content.Context;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
@@ -73,10 +71,25 @@ public class ServerInterfaceTest {
     }
 
     @Test
+    public void testRetryOnServerFailure() throws IOException {
+        try (FakeRkpServer server = new FakeRkpServer(FakeRkpServer.Response.INTERNAL_ERROR,
+                FakeRkpServer.Response.INTERNAL_ERROR)) {
+            Settings.setDeviceConfig(sContext, 1 /* extraKeys */,
+                    TIME_TO_REFRESH_HOURS /* expiringBy */, server.getUrl());
+            Settings.setMaxRequestTime(sContext, 100);
+            GeekResponse ignored = mServerInterface.fetchGeek(
+                    ProvisioningAttempt.createScheduledAttemptMetrics(sContext));
+            assertWithMessage("Expected RkpdException.").fail();
+        } catch (RkpdException e) {
+            // should throw this
+        }
+    }
+
+    @Test
     public void testFetchGeekRkpDisabled() throws IOException, RkpdException {
         try (FakeRkpServer server = new FakeRkpServer(
                 FakeRkpServer.Response.FETCH_EEK_RKP_DISABLED,
-                FakeRkpServer.Response.SIGN_CERTS_OK_VALID_CBOR)) {
+                FakeRkpServer.Response.INTERNAL_ERROR)) {
             Settings.setDeviceConfig(sContext, 1 /* extraKeys */,
                     TIME_TO_REFRESH_HOURS /* expiringBy */, server.getUrl());
             GeekResponse response = mServerInterface.fetchGeek(
@@ -157,7 +170,7 @@ public class ServerInterfaceTest {
             ProvisioningAttempt metrics = ProvisioningAttempt.createScheduledAttemptMetrics(
                     sContext);
             mServerInterface.requestSignedCertificates(new byte[0], new byte[0], metrics);
-            fail("Should fail due to unregistered device.");
+            assertWithMessage("Should fail due to unregistered device.").fail();
         } catch (RkpdException e) {
             assertThat(e.getErrorCode()).isEqualTo(RkpdException.ErrorCode.DEVICE_NOT_REGISTERED);
         }
@@ -173,7 +186,7 @@ public class ServerInterfaceTest {
             ProvisioningAttempt metrics = ProvisioningAttempt.createScheduledAttemptMetrics(
                     sContext);
             mServerInterface.requestSignedCertificates(new byte[0], new byte[0], metrics);
-            fail("Should fail due to client error.");
+            assertWithMessage("Should fail due to client error.").fail();
         } catch (RkpdException e) {
             assertThat(e.getErrorCode()).isEqualTo(RkpdException.ErrorCode.HTTP_CLIENT_ERROR);
         }
@@ -189,7 +202,7 @@ public class ServerInterfaceTest {
             ProvisioningAttempt metrics = ProvisioningAttempt.createScheduledAttemptMetrics(
                     sContext);
             mServerInterface.requestSignedCertificates(new byte[0], new byte[0], metrics);
-            fail("Should fail due to invalid cbor.");
+            assertWithMessage("Should fail due to invalid cbor.").fail();
         } catch (RkpdException e) {
             assertThat(e.getErrorCode()).isEqualTo(RkpdException.ErrorCode.INTERNAL_ERROR);
             assertThat(e).hasMessageThat().isEqualTo("Response failed to parse.");
@@ -223,7 +236,7 @@ public class ServerInterfaceTest {
             // to be checked.
             mockConnectivityFailure(ConnectivityState.CONNECTED);
             mServerInterface.fetchGeek(metrics);
-            fail("Network transaction should not have proceeded.");
+            assertWithMessage("Network transaction should not have proceeded.").fail();
         } catch (RkpdException e) {
             assertThat(e).hasMessageThat().contains("Out of data budget due to repeated errors");
             assertThat(e.getErrorCode()).isEqualTo(
@@ -243,7 +256,7 @@ public class ServerInterfaceTest {
             ProvisioningAttempt metrics = ProvisioningAttempt.createScheduledAttemptMetrics(
                     sContext);
             mServerInterface.fetchGeek(metrics);
-            fail("Network transaction should not have proceeded.");
+            assertWithMessage("Network transaction should not have proceeded.").fail();
         } catch (RkpdException e) {
             assertThat(e).hasMessageThat().contains("Out of data budget due to repeated errors");
             assertThat(e.getErrorCode()).isEqualTo(RkpdException.ErrorCode.NO_NETWORK_CONNECTIVITY);
