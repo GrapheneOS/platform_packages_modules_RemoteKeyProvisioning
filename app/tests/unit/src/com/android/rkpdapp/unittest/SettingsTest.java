@@ -106,6 +106,7 @@ public class SettingsTest {
         assertTrue("Method did not return true on write.",
                    Settings.setDeviceConfig(sContext, extraKeys, expiringBy, url));
         Settings.incrementFailureCounter(sContext);
+        Settings.setMaxRequestTime(sContext, 100);
         Settings.resetDefaultConfig(sContext);
         assertEquals(Settings.EXTRA_SIGNED_KEYS_AVAILABLE_DEFAULT,
                      Settings.getExtraSignedKeysAvailable(sContext));
@@ -114,6 +115,7 @@ public class SettingsTest {
         assertEquals(Settings.getDefaultUrl(),
                      Settings.getUrl(sContext));
         assertEquals(0, Settings.getFailureCounter(sContext));
+        assertEquals(20000, Settings.getMaxRequestTime(sContext));
     }
 
     @Test
@@ -204,5 +206,12 @@ public class SettingsTest {
         assertTrue(Settings.hasErrDataBudget(sContext, null));
         Settings.consumeErrDataBudget(sContext, 1);
         assertFalse(Settings.hasErrDataBudget(sContext, null));
+    }
+
+    @Test
+    public void testServerTimeoutSetting() {
+        assertEquals(20000, Settings.getMaxRequestTime(sContext));
+        Settings.setMaxRequestTime(sContext, 100);
+        assertEquals(100, Settings.getMaxRequestTime(sContext));
     }
 }
