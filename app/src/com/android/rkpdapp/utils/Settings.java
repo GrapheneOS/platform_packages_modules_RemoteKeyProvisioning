@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (C) 2022 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -41,10 +41,10 @@ public class Settings {
     public static final int EXTRA_SIGNED_KEYS_AVAILABLE_DEFAULT = 6;
     // Check for expiring certs in the next 3 days
     public static final int EXPIRING_BY_MS_DEFAULT = 1000 * 60 * 60 * 24 * 3;
-    public static final boolean IS_TEST_MODE = false;
     // Limit data consumption from failures within a window of time to 1 MB.
     public static final int FAILURE_DATA_USAGE_MAX = 1024 * 1024;
     public static final Duration FAILURE_DATA_USAGE_WINDOW = Duration.ofDays(1);
+    public static final int MAX_REQUEST_TIME_MS_DEFAULT = 20000;
 
     private static final String KEY_EXPIRING_BY = "expiring_by";
     private static final String KEY_EXTRA_KEYS = "extra_keys";
@@ -53,21 +53,22 @@ public class Settings {
     private static final String KEY_FAILURE_COUNTER = "failure_counter";
     private static final String KEY_FAILURE_BYTES = "failure_data";
     private static final String KEY_URL = "url";
+    private static final String KEY_MAX_REQUEST_TIME = "max_request_time";
     private static final String PREFERENCES_NAME = "com.android.rkpdapp.utils.preferences";
     private static final String TAG = "RkpdSettings";
 
     /**
-     * Determines whether or not there is enough data budget remaining to attempt provisioning.
+     * Determines if there is enough data budget remaining to attempt provisioning.
      * If {@code FAILURE_DATA_USAGE_MAX} bytes have already been used up in previous calls that
      * resulted in errors, then false will be returned.
-     *
+     * <p>
      * Additionally, the rolling window of data usage is managed within this call. The used data
      * budget will be reset if a time greater than @{code FAILURE_DATA_USAGE_WINDOW} has passed.
      *
      * @param context The application context
      * @param curTime An instant representing the current time to measure the window against. If
      *                null, then the code will use {@code Instant.now()} instead.
-     * @return whether or not the data budget has been exceeded.
+     * @return if the data budget has been exceeded.
      */
     public static boolean hasErrDataBudget(Context context, Instant curTime) {
         if (curTime == null) {
@@ -154,6 +155,7 @@ public class Settings {
                 Duration.ofMillis(EXPIRING_BY_MS_DEFAULT),
                 getDefaultUrl());
         clearFailureCounter(context);
+        setMaxRequestTime(context, MAX_REQUEST_TIME_MS_DEFAULT);
     }
 
     /**
@@ -281,6 +283,26 @@ public class Settings {
     }
 
     /**
+     * Gets max request time in milliseconds.
+     */
+    public static int getMaxRequestTime(Context context) {
+        SharedPreferences sharedPref = getSharedPreferences(context);
+        return sharedPref.getInt(KEY_MAX_REQUEST_TIME, MAX_REQUEST_TIME_MS_DEFAULT);
+    }
+
+    /**
+     * Sets the server timeout time.
+     */
+    public static void setMaxRequestTime(Context context, int timeout) {
+        SharedPreferences sharedPref = getSharedPreferences(context);
+        if (sharedPref.getInt(KEY_MAX_REQUEST_TIME, MAX_REQUEST_TIME_MS_DEFAULT) != 0) {
+            SharedPreferences.Editor editor = sharedPref.edit();
+            editor.putInt(KEY_MAX_REQUEST_TIME, timeout);
+            editor.apply();
+        }
+    }
+
+    /**
      * Clears all preferences, thus restoring the defaults.
      */
     public static void clearPreferences(Context context) {
@@ -288,14 +310,6 @@ public class Settings {
         SharedPreferences.Editor editor = sharedPref.edit();
         editor.clear();
         editor.apply();
-    }
-
-    /**
-     * Checks whether RKP is in test mode.
-     * @return true if device is in test mode, false otherwise.
-     */
-    public static boolean isTestMode() {
-        return IS_TEST_MODE;
     }
 
     private static SharedPreferences getSharedPreferences(Context context) {
