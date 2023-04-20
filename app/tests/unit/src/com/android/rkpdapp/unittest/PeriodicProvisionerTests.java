@@ -166,6 +166,7 @@ public class PeriodicProvisionerTests {
                 FakeRkpServer.Response.INTERNAL_ERROR,
                 FakeRkpServer.Response.SIGN_CERTS_OK_VALID_CBOR)) {
             saveUrlInSettings(fakeRkpServer);
+            Settings.setMaxRequestTime(mContext, 100);
             SystemInterface mockHal = mock(SystemInterface.class);
             ServiceManagerInterface.setInstances(new SystemInterface[]{mockHal});
             assertThat(mProvisioner.doWork()).isEqualTo(ListenableWorker.Result.failure());
