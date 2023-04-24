@@ -110,12 +110,11 @@ public class ServerInterface {
      */
     public List<byte[]> requestSignedCertificates(byte[] csr, byte[] challenge,
             ProvisioningAttempt metrics) throws RkpdException {
-        String connectionEndpoint = CERTIFICATE_SIGNING_URL
-                + String.join("&",
-                      CHALLENGE_PARAMETER + Base64.encodeToString(challenge, Base64.URL_SAFE),
-                      REQUEST_ID_PARAMETER + generateAndLogRequestId());
-        byte[] cborBytes = connectAndGetData(metrics, connectionEndpoint, csr,
-                Operation.SIGN_CERTS);
+        final String challengeParam = CHALLENGE_PARAMETER + Base64.encodeToString(challenge,
+                Base64.URL_SAFE | Base64.NO_WRAP);
+        final String fullUrl = CERTIFICATE_SIGNING_URL + String.join("&", challengeParam,
+                REQUEST_ID_PARAMETER + generateAndLogRequestId());
+        final byte[] cborBytes = connectAndGetData(metrics, fullUrl, csr, Operation.SIGN_CERTS);
         List<byte[]> certChains = CborUtils.parseSignedCertificates(cborBytes);
         if (certChains == null) {
             metrics.setStatus(ProvisioningAttempt.Status.INTERNAL_ERROR);
