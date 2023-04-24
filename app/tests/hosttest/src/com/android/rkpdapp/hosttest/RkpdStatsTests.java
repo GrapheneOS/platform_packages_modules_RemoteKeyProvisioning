@@ -16,9 +16,7 @@
 package com.android.rkpdapp.hosttest;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.common.truth.Truth.assertWithMessage;
 
-import android.cts.statsdatom.lib.ConfigUtils;
 import android.cts.statsdatom.lib.ReportUtils;
 import android.stats.connectivity.TransportType;
 
@@ -31,22 +29,16 @@ import com.android.os.AtomsProto.RemoteKeyProvisioningNetworkInfo;
 import com.android.os.AtomsProto.RemoteKeyProvisioningTiming;
 import com.android.os.StatsLog.EventMetricData;
 import com.android.remoteprovisioner.RemoteprovisionerEnums.RemoteKeyProvisioningStatus;
-import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.testtype.DeviceJUnit4ClassRunner;
-import com.android.tradefed.testtype.junit4.BaseHostJUnit4Test;
 
-import org.junit.After;
-import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.Set;
 
 @RunWith(DeviceJUnit4ClassRunner.class)
-public final class RkpdStatsTests extends BaseHostJUnit4Test {
-    private String mTestPackageName;
+public final class RkpdStatsTests extends AtomsHostTest {
     private static final int NO_HTTP_STATUS_ERROR = 0;
     private static final int HTTPS_OK = 200;
     private static final String RPC_DEFAULT =
@@ -63,39 +55,10 @@ public final class RkpdStatsTests extends BaseHostJUnit4Test {
     private static final List<Enablement> VALID_ENABLEMENTS = Arrays.asList(
             Enablement.ENABLED_RKP_ONLY, Enablement.ENABLED_WITH_FALLBACK);
 
-    @Before
-    public void setUp() throws Exception {
-        ConfigUtils.removeConfig(getDevice());
-        ReportUtils.clearReports(getDevice());
-
-        String appPackageName = null;
-        Set<ITestDevice.ApexInfo> mActiveApexes = getDevice().getActiveApexes();
-        for (ITestDevice.ApexInfo ap : mActiveApexes) {
-            if ("com.android.rkpd".equals(ap.name)) {
-                appPackageName = "com.android.rkpdapp";
-                mTestPackageName = "com.android.rkpdapp.e2etest";
-                break;
-            } else if ("com.google.android.rkpd".equals(ap.name)) {
-                appPackageName = "com.google.android.rkpdapp";
-                mTestPackageName = "com.android.rkpdapp.e2etest";
-                break;
-            }
-        }
-        if (appPackageName == null) {
-            assertWithMessage("rkpd mainline module not installed").fail();
-        }
-        ConfigUtils.uploadConfigForPushedAtoms(getDevice(),
-                appPackageName,
-                new int[]{
-                        AtomsProto.Atom.REMOTE_KEY_PROVISIONING_ATTEMPT_FIELD_NUMBER,
-                        AtomsProto.Atom.REMOTE_KEY_PROVISIONING_NETWORK_INFO_FIELD_NUMBER,
-                        AtomsProto.Atom.REMOTE_KEY_PROVISIONING_TIMING_FIELD_NUMBER});
-    }
-
-    @After
-    public void tearDown() throws Exception {
-        ConfigUtils.removeConfig(getDevice());
-        ReportUtils.clearReports(getDevice());
+    public RkpdStatsTests() {
+        super(AtomsProto.Atom.REMOTE_KEY_PROVISIONING_ATTEMPT_FIELD_NUMBER,
+                AtomsProto.Atom.REMOTE_KEY_PROVISIONING_NETWORK_INFO_FIELD_NUMBER,
+                AtomsProto.Atom.REMOTE_KEY_PROVISIONING_TIMING_FIELD_NUMBER);
     }
 
     @Test
@@ -244,7 +207,7 @@ public final class RkpdStatsTests extends BaseHostJUnit4Test {
     @Test
     public void testPeriodicProvisionerNoop() throws Exception {
         // First pass of the test will provision some keys
-        runTest("testPeriodicProvisionerNoop", "RkpdHostTestHelperTests");
+        runIntegrationTest("testPeriodicProvisionerNoop", "RkpdHostTestHelperTests");
 
         List<EventMetricData> data = ReportUtils.getEventMetricDataList(getDevice());
         assertThat(data).hasSize(6);
@@ -400,16 +363,6 @@ public final class RkpdStatsTests extends BaseHostJUnit4Test {
         verifyMetricsForKeyAssignedAfterFreshProvisioning(data.subList(6, 9));
     }
 
-    private void runTest(String testMethodName) throws Exception {
-        runTest(testMethodName, "KeystoreIntegrationTest");
-    }
-
-    private void runTest(String testMethodName, String className) throws Exception {
-        String testClassName = mTestPackageName + "." + className;
-        testMethodName = testMethodName + "[0: instanceName=default]";
-        assertThat(runDeviceTests(mTestPackageName, testClassName, testMethodName)).isTrue();
-    }
-
     private static RemoteKeyProvisioningAttempt getAttemptMetric(List<EventMetricData> data) {
         RemoteKeyProvisioningAttempt metric = null;
         for (EventMetricData event : data) {
@@ -441,6 +394,10 @@ public final class RkpdStatsTests extends BaseHostJUnit4Test {
             }
         }
         return metric;
+    }
+
+    private void runTest(String testName) throws Exception {
+        runIntegrationTest(testName, "KeystoreIntegrationTest");
     }
 
     private void verifyMetricsForKeyAssignedAfterFreshProvisioning(List<EventMetricData> data) {
