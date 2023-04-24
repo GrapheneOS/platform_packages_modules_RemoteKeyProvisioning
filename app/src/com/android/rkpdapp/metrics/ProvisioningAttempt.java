@@ -77,7 +77,9 @@ public final class ProvisioningAttempt implements AutoCloseable {
     private Enablement mEnablement;
     private boolean mIsKeyPoolEmpty = false;
     private Status mStatus = Status.UNKNOWN;
-    private int mHttpStatusError = 0;
+    private int mHttpStatusError;
+    private String mRootCertFingerprint = "<none>";
+    private int mCertChainLength;
 
     private ProvisioningAttempt(Context context, int cause,
             String remotelyProvisionedComponent, Enablement enablement) {
@@ -141,6 +143,14 @@ public final class ProvisioningAttempt implements AutoCloseable {
         mHttpStatusError = httpStatusError;
     }
 
+    public void setRootCertFingerprint(String rootCertFingerprint) {
+        mRootCertFingerprint = rootCertFingerprint;
+    }
+
+    public void setCertChainLength(int certChainLength) {
+        mCertChainLength = certChainLength;
+    }
+
     /**
      * Starts the server wait timer, returning a reference to an object to be closed when the
      * wait is over.
@@ -176,7 +186,7 @@ public final class ProvisioningAttempt implements AutoCloseable {
         int transportType = getTransportTypeForActiveNetwork();
         RkpdStatsLog.write(RkpdStatsLog.REMOTE_KEY_PROVISIONING_ATTEMPT,
                 mCause, mRemotelyProvisionedComponent, getUpTimeBucket(), getIntEnablement(),
-                mIsKeyPoolEmpty, getIntStatus(), "", 0);
+                mIsKeyPoolEmpty, getIntStatus(), mRootCertFingerprint, mCertChainLength);
         RkpdStatsLog.write(
                 RkpdStatsLog.REMOTE_KEY_PROVISIONING_NETWORK_INFO,
                 transportType, getIntStatus(), mHttpStatusError);

@@ -29,6 +29,7 @@ import com.android.rkpdapp.metrics.ProvisioningAttempt;
 import com.android.rkpdapp.utils.CborUtils;
 import com.android.rkpdapp.utils.Settings;
 import com.android.rkpdapp.utils.StopWatch;
+import com.android.rkpdapp.utils.X509Utils;
 
 import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
@@ -40,6 +41,9 @@ import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.cert.X509Certificate;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -122,6 +126,20 @@ public class ServerInterface {
             throw new RkpdException(
                     RkpdException.ErrorCode.INTERNAL_ERROR,
                     "Response failed to parse.");
+        } else if (certChains.isEmpty()) {
+            metrics.setCertChainLength(0);
+            metrics.setRootCertFingerprint("");
+        } else {
+            try {
+                X509Certificate[] certs = X509Utils.formatX509Certs(certChains.get(0));
+                metrics.setCertChainLength(certs.length);
+                byte[] pubKey = certs[certs.length - 1].getPublicKey().getEncoded();
+                byte[] pubKeyDigest = MessageDigest.getInstance("SHA-256").digest(pubKey);
+                metrics.setRootCertFingerprint(Base64.encodeToString(pubKeyDigest, Base64.DEFAULT));
+            } catch (NoSuchAlgorithmException e) {
+                throw new RkpdException(RkpdException.ErrorCode.INTERNAL_ERROR,
+                        "Algorithm not found", e);
+            }
         }
         return certChains;
     }
