@@ -70,6 +70,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @RunWith(AndroidJUnit4.class)
 public class RegistrationBinderTest {
@@ -236,6 +237,31 @@ public class RegistrationBinderTest {
         verifyNoMoreInteractions(callback);
     }
 
+    @Test
+    public void getKeyInternalError() throws Exception {
+        doThrow(new RkpdException(RkpdException.ErrorCode.INTERNAL_ERROR, "FAIL"))
+                .when(mMockProvisioner)
+                .provisionKeys(any(), any(), any());
+
+        IGetKeyCallback callback = mock(IGetKeyCallback.class);
+        mRegistration.getKey(KEY_ID, callback);
+        completeAllTasks();
+        verify(callback).onError(IGetKeyCallback.Error.ERROR_UNKNOWN, "FAIL");
+    }
+
+    @Test
+    public void getKeyNoInternetConnectivity() throws Exception {
+        doThrow(new RkpdException(RkpdException.ErrorCode.NO_NETWORK_CONNECTIVITY, "FAIL"))
+                .when(mMockProvisioner)
+                .provisionKeys(any(), any(), any());
+
+        IGetKeyCallback callback = mock(IGetKeyCallback.class);
+        mRegistration.getKey(KEY_ID, callback);
+        completeAllTasks();
+        verify(callback).onError(IGetKeyCallback.Error.ERROR_PENDING_INTERNET_CONNECTIVITY,
+                "FAIL");
+    }
+
     private static byte getExpectedGetKeyError(RkpdException.ErrorCode errorCode) {
         switch (errorCode) {
             case NO_NETWORK_CONNECTIVITY:
@@ -359,9 +385,12 @@ public class RegistrationBinderTest {
     @Test
     public void getKeyHandlesCancelBeforeProvisioning() throws Exception {
         IGetKeyCallback callback = mock(IGetKeyCallback.class);
+        AtomicBoolean allowCancel = new AtomicBoolean(true);
         doAnswer(
                 answer((hal, minExpiry, uid, keyId) -> {
-                    mRegistration.cancelGetKey(callback);
+                    if (allowCancel.getAndSet(false)) {
+                        mRegistration.cancelGetKey(callback);
+                    }
                     return null;
                 }))
                 .when(mMockDao)
