@@ -20,6 +20,7 @@ import android.hardware.security.keymint.DeviceInfo;
 import android.hardware.security.keymint.IRemotelyProvisionedComponent;
 import android.hardware.security.keymint.MacedPublicKey;
 import android.hardware.security.keymint.ProtectedData;
+import android.hardware.security.keymint.RpcHardwareInfo;
 import android.os.RemoteException;
 import android.os.ServiceSpecificException;
 import android.util.Log;
@@ -170,4 +171,30 @@ public class SystemInterface {
     public int getVersion() throws RemoteException {
         return mBinder.getHardwareInfo().versionNumber;
     }
+
+    /**
+     * Gets the maximum size of a batch that's supported by the underlying implementation. Since
+     * memory may be tightly constrained in the trusted runtime, the maximum batch size may be
+     * quite small. The HAL mandates an absolute minimum of 20, which is enforced via VTS.
+     */
+    public int getBatchSize() throws RemoteException {
+        final int maxBatchSize = 512;
+
+        int batchSize = mBinder.getHardwareInfo().supportedNumKeysInCsr;
+
+        if (batchSize <= RpcHardwareInfo.MIN_SUPPORTED_NUM_KEYS_IN_CSR) {
+            Log.w(TAG, "HAL returned a batch size that's too small (" + batchSize
+                    + "), defaulting to " + RpcHardwareInfo.MIN_SUPPORTED_NUM_KEYS_IN_CSR);
+            return RpcHardwareInfo.MIN_SUPPORTED_NUM_KEYS_IN_CSR;
+        }
+
+        if (batchSize >= maxBatchSize) {
+            Log.w(TAG, "HAL returned a batch size that's too large (" + batchSize
+                    + "), defaulting to " + maxBatchSize);
+            return maxBatchSize;
+        }
+
+        return batchSize;
+    }
+
 }
