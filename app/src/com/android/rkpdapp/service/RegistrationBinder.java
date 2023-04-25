@@ -17,6 +17,7 @@
 package com.android.rkpdapp.service;
 
 import android.content.Context;
+import android.os.IBinder;
 import android.os.RemoteException;
 import android.util.Log;
 
@@ -67,7 +68,7 @@ public final class RegistrationBinder extends IRegistration.Stub {
     private final ExecutorService mThreadPool;
     private final Object mTasksLock = new Object();
     @GuardedBy("mTasksLock")
-    private final HashMap<IGetKeyCallback, Future<?>> mTasks = new HashMap<>();
+    private final HashMap<IBinder, Future<?>> mTasks = new HashMap<>();
 
     public RegistrationBinder(Context context, int clientUid, SystemInterface systemInterface,
             ProvisionedKeyDao provisionedKeyDao, ServerInterface rkpServer,
@@ -84,7 +85,8 @@ public final class RegistrationBinder extends IRegistration.Stub {
     private void getKeyWorker(int keyId, IGetKeyCallback callback)
             throws CborException, InterruptedException, RkpdException {
         Log.i(TAG, "Key requested for : " + mSystemInterface.getServiceName() + ", clientUid: "
-                + mClientUid + ", keyId: " + keyId + ", callback: " + callback.hashCode());
+                + mClientUid + ", keyId: " + keyId + ", callback: "
+                + callback.asBinder().hashCode());
         // Use reduced look-ahead to get rid of soon-to-be expired keys, because the periodic
         // provisioner should be ensuring that old keys are already expired. However, in the
         // edge case that periodic provisioning didn't work, we want to allow slightly "more stale"
@@ -212,12 +214,13 @@ public final class RegistrationBinder extends IRegistration.Stub {
     @Override
     public void getKey(int keyId, IGetKeyCallback callback) {
         synchronized (mTasksLock) {
-            if (mTasks.containsKey(callback)) {
-                throw new IllegalArgumentException("Callback " + callback.hashCode()
+            if (mTasks.containsKey(callback.asBinder())) {
+                throw new IllegalArgumentException("Callback " + callback.asBinder().hashCode()
                         + " is already associated with a getKey operation that is in-progress");
             }
 
-            mTasks.put(callback, mThreadPool.submit(() -> getKeyThreadWorker(keyId, callback)));
+            mTasks.put(callback.asBinder(),
+                    mThreadPool.submit(() -> getKeyThreadWorker(keyId, callback)));
         }
     }
 
@@ -250,7 +253,7 @@ public final class RegistrationBinder extends IRegistration.Stub {
         } finally {
             metric.close();
             synchronized (mTasksLock) {
-                mTasks.remove(callback);
+                mTasks.remove(callback.asBinder());
             }
         }
     }
@@ -281,11 +284,11 @@ public final class RegistrationBinder extends IRegistration.Stub {
 
     @Override
     public void cancelGetKey(IGetKeyCallback callback) throws RemoteException {
-        Log.i(TAG, "cancelGetKey(" + callback.hashCode() + ")");
+        Log.i(TAG, "cancelGetKey(" + callback.asBinder().hashCode() + ")");
         synchronized (mTasksLock) {
             try (RkpdClientOperation metric = RkpdClientOperation.cancelGetKey(mClientUid,
                     mSystemInterface.getServiceName())) {
-                Future<?> task = mTasks.get(callback);
+                Future<?> task = mTasks.get(callback.asBinder());
 
                 if (task == null) {
                     Log.w(TAG, "callback not found, task may have already completed");
