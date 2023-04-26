@@ -86,7 +86,7 @@ public class PeriodicProvisioner extends Worker {
             GeekResponse response;
             try {
                 response = new ServerInterface(mContext).fetchGeekAndUpdate(metrics);
-            } catch (RkpdException e) {
+            } catch (InterruptedException | RkpdException e) {
                 Log.e(TAG, "Error fetching configuration from the RKP server", e);
                 return Result.failure();
             }

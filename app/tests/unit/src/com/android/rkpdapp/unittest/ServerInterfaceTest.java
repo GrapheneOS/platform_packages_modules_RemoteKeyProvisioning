@@ -71,7 +71,7 @@ public class ServerInterfaceTest {
     }
 
     @Test
-    public void testRetryOnServerFailure() throws IOException {
+    public void testRetryOnServerFailure() throws Exception {
         try (FakeRkpServer server = new FakeRkpServer(FakeRkpServer.Response.INTERNAL_ERROR,
                 FakeRkpServer.Response.INTERNAL_ERROR)) {
             Settings.setDeviceConfig(sContext, 1 /* extraKeys */,
@@ -86,7 +86,7 @@ public class ServerInterfaceTest {
     }
 
     @Test
-    public void testFetchGeekRkpDisabled() throws IOException, RkpdException {
+    public void testFetchGeekRkpDisabled() throws Exception {
         try (FakeRkpServer server = new FakeRkpServer(
                 FakeRkpServer.Response.FETCH_EEK_RKP_DISABLED,
                 FakeRkpServer.Response.INTERNAL_ERROR)) {
@@ -102,7 +102,7 @@ public class ServerInterfaceTest {
     }
 
     @Test
-    public void testFetchGeekRkpEnabled() throws IOException, RkpdException {
+    public void testFetchGeekRkpEnabled() throws Exception {
         try (FakeRkpServer server = new FakeRkpServer(
                 FakeRkpServer.Response.FETCH_EEK_OK,
                 FakeRkpServer.Response.SIGN_CERTS_OK_VALID_CBOR)) {
@@ -146,7 +146,7 @@ public class ServerInterfaceTest {
     }
 
     @Test
-    public void testFetchKeyAndUpdate() throws IOException, RkpdException {
+    public void testFetchKeyAndUpdate() throws Exception {
         try (FakeRkpServer server = new FakeRkpServer(
                 FakeRkpServer.Response.FETCH_EEK_OK,
                 FakeRkpServer.Response.SIGN_CERTS_OK_VALID_CBOR)) {
@@ -161,7 +161,7 @@ public class ServerInterfaceTest {
     }
 
     @Test
-    public void testRequestSignedCertUnregistered() throws IOException {
+    public void testRequestSignedCertUnregistered() throws Exception {
         try (FakeRkpServer server = new FakeRkpServer(
                 FakeRkpServer.Response.FETCH_EEK_OK,
                 FakeRkpServer.Response.SIGN_CERTS_DEVICE_UNREGISTERED)) {
@@ -177,7 +177,7 @@ public class ServerInterfaceTest {
     }
 
     @Test
-    public void testRequestSignedCertClientError() throws IOException {
+    public void testRequestSignedCertClientError() throws Exception {
         try (FakeRkpServer server = new FakeRkpServer(
                 FakeRkpServer.Response.FETCH_EEK_OK,
                 FakeRkpServer.Response.SIGN_CERTS_USER_UNAUTHORIZED)) {
@@ -193,7 +193,7 @@ public class ServerInterfaceTest {
     }
 
     @Test
-    public void testRequestSignedCertCborError() throws IOException {
+    public void testRequestSignedCertCborError() throws Exception {
         try (FakeRkpServer server = new FakeRkpServer(
                 FakeRkpServer.Response.FETCH_EEK_OK,
                 FakeRkpServer.Response.SIGN_CERTS_OK_INVALID_CBOR)) {
@@ -210,7 +210,7 @@ public class ServerInterfaceTest {
     }
 
     @Test
-    public void testRequestSignedCertValid() throws IOException, RkpdException {
+    public void testRequestSignedCertValid() throws Exception {
         try (FakeRkpServer server = new FakeRkpServer(
                 FakeRkpServer.Response.FETCH_EEK_OK,
                 FakeRkpServer.Response.SIGN_CERTS_OK_VALID_CBOR)) {
@@ -226,7 +226,7 @@ public class ServerInterfaceTest {
     }
 
     @Test
-    public void testDataBudgetEmptyFetchGeekNetworkConnected() {
+    public void testDataBudgetEmptyFetchGeekNetworkConnected() throws Exception {
         // Check the data budget in order to initialize a rolling window.
         assertThat(Settings.hasErrDataBudget(sContext, null /* curTime */)).isTrue();
         Settings.consumeErrDataBudget(sContext, Settings.FAILURE_DATA_USAGE_MAX);
@@ -245,7 +245,7 @@ public class ServerInterfaceTest {
     }
 
     @Test
-    public void testDataBudgetEmptyFetchGeekNetworkDisconnected() {
+    public void testDataBudgetEmptyFetchGeekNetworkDisconnected() throws Exception {
         // Check the data budget in order to initialize a rolling window.
         try {
             // We are okay in mocking connectivity failure since err data budget is the first thing
@@ -272,7 +272,7 @@ public class ServerInterfaceTest {
     }
 
     @Test
-    public void testReadTextErrorFromErrorStreamNoErrorData() throws IOException {
+    public void testReadTextErrorFromErrorStreamNoErrorData() throws Exception {
         final String expectedError = "No error data returned by server.";
 
         HttpURLConnection connection = Mockito.mock(HttpURLConnection.class);
@@ -284,7 +284,7 @@ public class ServerInterfaceTest {
     }
 
     @Test
-    public void testReadTextErrorFromErrorStream() throws IOException {
+    public void testReadTextErrorFromErrorStream() throws Exception {
         final String error = "Explanation for error goes here.";
 
         HttpURLConnection connection = Mockito.mock(HttpURLConnection.class);
