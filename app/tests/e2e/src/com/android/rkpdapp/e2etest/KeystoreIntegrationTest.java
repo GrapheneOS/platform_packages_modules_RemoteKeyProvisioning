@@ -23,6 +23,8 @@ import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
 import static com.google.common.truth.TruthJUnit.assume;
 
+import static org.junit.Assert.assertThrows;
+
 import android.content.Context;
 import android.hardware.security.keymint.IRemotelyProvisionedComponent;
 import android.os.Process;
@@ -321,6 +323,35 @@ public class KeystoreIntegrationTest {
                     .isEqualTo(ResponseCode.OUT_OF_KEYS_PERMANENT_ERROR);
             assertThat(keyStoreException.getRetryPolicy()).isEqualTo(KeyStoreException.RETRY_NEVER);
             assertThat(keyStoreException.isTransientFailure()).isFalse();
+        }
+    }
+
+    @Test
+    public void testCancelDueToServiceTimeout() throws Exception {
+        FakeRkpServer.RequestHandler blocksForOneMinute = (session, bodySize) -> {
+            session.getInputStream().readNBytes(bodySize);
+            try {
+                Thread.sleep(60 * 1000);
+            } catch (InterruptedException e) {
+                assertWithMessage("sleep failed", e).fail();
+            }
+            return null;
+        };
+
+        try (SystemPropertySetter ignored = SystemPropertySetter.setRkpOnly(mInstanceName);
+             FakeRkpServer server = new FakeRkpServer(blocksForOneMinute)) {
+            Settings.setDeviceConfig(sContext, 1, Duration.ofDays(1), server.getUrl());
+
+            // keystore will time out well before a minute has passed
+            ProviderException e = assertThrows(ProviderException.class, this::createKeystoreKey);
+
+            assertThat(e).hasCauseThat().isInstanceOf(KeyStoreException.class);
+            KeyStoreException keyStoreException = (KeyStoreException) e.getCause();
+            assertThat(keyStoreException.getErrorCode())
+                    .isEqualTo(ResponseCode.OUT_OF_KEYS_TRANSIENT_ERROR);
+            assertThat(keyStoreException.getRetryPolicy())
+                    .isEqualTo(KeyStoreException.RETRY_WITH_EXPONENTIAL_BACKOFF);
+            assertThat(keyStoreException.isTransientFailure()).isTrue();
         }
     }
 
