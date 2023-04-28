@@ -222,6 +222,7 @@ public class KeystoreIntegrationTest {
         try {
             Settings.setDeviceConfig(sContext, Settings.EXTRA_SIGNED_KEYS_AVAILABLE_DEFAULT,
                     Duration.ofDays(1), "bad url");
+            Settings.setMaxRequestTime(sContext, 100);
             createKeystoreKeyBackedByRkp();
             assertWithMessage("Should have gotten a KeyStoreException").fail();
         } catch (ProviderException e) {
@@ -274,6 +275,7 @@ public class KeystoreIntegrationTest {
     public void testRetryableRkpError() throws Exception {
         try {
             Settings.setDeviceConfig(sContext, 1, Duration.ofDays(1), "bad url");
+            Settings.setMaxRequestTime(sContext, 100);
             createKeystoreKeyBackedByRkp();
             Assert.fail("Expected a keystore exception");
         } catch (ProviderException e) {
