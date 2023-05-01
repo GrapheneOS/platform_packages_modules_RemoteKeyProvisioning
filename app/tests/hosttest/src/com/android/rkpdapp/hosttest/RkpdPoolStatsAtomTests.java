@@ -41,15 +41,18 @@ public final class RkpdPoolStatsAtomTests extends AtomsHostTest {
         List<RkpdPoolStats> atoms = getAtoms(RkpdExtensionAtoms.rkpdPoolStats);
         assertThat(atoms).hasSize(2);
 
+        // Total count is controlled by the server.
+        final int totalKeyCount = atoms.get(0).getTotal();
+        assertThat(totalKeyCount).isAtLeast(1);
+
         assertThat(atoms.get(0).getRemotelyProvisionedComponent()).isEqualTo(DEFAULT_IRPC);
-        assertThat(atoms.get(0).getTotal()).isEqualTo(20);
         assertThat(atoms.get(0).getExpiring()).isEqualTo(0);
-        assertThat(atoms.get(0).getUnassigned()).isEqualTo(20);
+        assertThat(atoms.get(0).getUnassigned()).isEqualTo(totalKeyCount);
 
         assertThat(atoms.get(1).getRemotelyProvisionedComponent()).isEqualTo(DEFAULT_IRPC);
-        assertThat(atoms.get(1).getTotal()).isEqualTo(20);
+        assertThat(atoms.get(1).getTotal()).isEqualTo(totalKeyCount);
         assertThat(atoms.get(1).getExpiring()).isEqualTo(0);
-        assertThat(atoms.get(1).getUnassigned()).isEqualTo(19);
+        assertThat(atoms.get(1).getUnassigned()).isEqualTo(totalKeyCount - 1);
     }
 
     @Test
@@ -58,14 +61,17 @@ public final class RkpdPoolStatsAtomTests extends AtomsHostTest {
         List<RkpdPoolStats> atoms = getAtoms(RkpdExtensionAtoms.rkpdPoolStats);
         assertThat(atoms).hasSize(2);
 
+        // Total count is controlled by the server.
+        final int totalKeyCount = atoms.get(0).getTotal();
+        assertThat(totalKeyCount).isAtLeast(1);
+
         assertThat(atoms.get(0).getRemotelyProvisionedComponent()).isEqualTo(DEFAULT_IRPC);
-        assertThat(atoms.get(0).getTotal()).isEqualTo(20);
         assertThat(atoms.get(0).getExpiring()).isEqualTo(0);
-        assertThat(atoms.get(0).getUnassigned()).isEqualTo(20);
+        assertThat(atoms.get(0).getUnassigned()).isEqualTo(totalKeyCount);
 
         assertThat(atoms.get(1).getRemotelyProvisionedComponent()).isEqualTo(DEFAULT_IRPC);
-        assertThat(atoms.get(1).getTotal()).isEqualTo(17);
+        assertThat(atoms.get(1).getTotal()).isEqualTo(totalKeyCount - 1);
         assertThat(atoms.get(1).getExpiring()).isEqualTo(2);
-        assertThat(atoms.get(1).getUnassigned()).isEqualTo(15);
+        assertThat(atoms.get(1).getUnassigned()).isEqualTo(totalKeyCount - 1);
     }
 }

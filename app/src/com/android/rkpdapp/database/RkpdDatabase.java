@@ -31,6 +31,7 @@ import com.android.rkpdapp.ThreadPool;
 @Database(entities = {ProvisionedKey.class}, exportSchema = false, version = 1)
 @TypeConverters({InstantConverter.class})
 public abstract class RkpdDatabase extends RoomDatabase {
+    public static final String DB_NAME = "rkpd_database";
     /**
      * Provides the DAO object for easy queries.
      */
@@ -49,8 +50,7 @@ public abstract class RkpdDatabase extends RoomDatabase {
         synchronized (RkpdDatabase.class) {
             if (sInstance == null) {
                 sInstance = Room.databaseBuilder(context.getApplicationContext(),
-                                RkpdDatabase.class,
-                                "rkpd_database")
+                                RkpdDatabase.class, DB_NAME)
                         .setQueryExecutor(ThreadPool.EXECUTOR)
                         .build();
             }
