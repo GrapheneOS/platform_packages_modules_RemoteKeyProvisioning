@@ -32,6 +32,7 @@ import com.android.rkpdapp.interfaces.ServerInterface;
 import com.android.rkpdapp.interfaces.ServiceManagerInterface;
 import com.android.rkpdapp.interfaces.SystemInterface;
 import com.android.rkpdapp.metrics.ProvisioningAttempt;
+import com.android.rkpdapp.metrics.RkpdStatsLog;
 import com.android.rkpdapp.utils.Settings;
 
 import java.time.Instant;
@@ -107,6 +108,7 @@ public class PeriodicProvisioner extends Worker {
                 Log.i(TAG, "Starting provisioning for " + irpc);
                 try {
                     provisioner.provisionKeys(metrics, irpc, response);
+                    recordKeyPoolStatsAtom(irpc);
                     Log.i(TAG, "Successfully provisioned " + irpc);
                 } catch (CborException e) {
                     Log.e(TAG, "Error parsing CBOR for " + irpc, e);
@@ -118,5 +120,17 @@ public class PeriodicProvisioner extends Worker {
             }
             return result;
         }
+    }
+
+    private void recordKeyPoolStatsAtom(SystemInterface irpc) {
+        String halName = irpc.getServiceName();
+        final int numExpiring = mKeyDao.getTotalExpiringKeysForIrpc(halName,
+                Settings.getExpirationTime(mContext));
+        final int numUnassigned = mKeyDao.getTotalUnassignedKeysForIrpc(halName);
+        final int total = mKeyDao.getTotalKeysForIrpc(halName);
+        Log.i(TAG, "Logging atom metric for pool status, total: " + total + ", numExpiring: "
+                + numExpiring + ", numUnassigned: " + numUnassigned);
+        RkpdStatsLog.write(RkpdStatsLog.RKPD_POOL_STATS, irpc.getServiceName(), numExpiring,
+                numUnassigned, total);
     }
 }
