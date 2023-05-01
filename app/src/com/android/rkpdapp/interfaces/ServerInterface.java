@@ -29,6 +29,7 @@ import com.android.rkpdapp.metrics.ProvisioningAttempt;
 import com.android.rkpdapp.utils.CborUtils;
 import com.android.rkpdapp.utils.Settings;
 import com.android.rkpdapp.utils.StopWatch;
+import com.android.rkpdapp.utils.X509Utils;
 
 import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
@@ -40,6 +41,9 @@ import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.cert.X509Certificate;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -110,18 +114,31 @@ public class ServerInterface {
      */
     public List<byte[]> requestSignedCertificates(byte[] csr, byte[] challenge,
             ProvisioningAttempt metrics) throws RkpdException {
-        String connectionEndpoint = CERTIFICATE_SIGNING_URL
-                + String.join("&",
-                      CHALLENGE_PARAMETER + Base64.encodeToString(challenge, Base64.URL_SAFE),
-                      REQUEST_ID_PARAMETER + generateAndLogRequestId());
-        byte[] cborBytes = connectAndGetData(metrics, connectionEndpoint, csr,
-                Operation.SIGN_CERTS);
+        final String challengeParam = CHALLENGE_PARAMETER + Base64.encodeToString(challenge,
+                Base64.URL_SAFE | Base64.NO_WRAP);
+        final String fullUrl = CERTIFICATE_SIGNING_URL + String.join("&", challengeParam,
+                REQUEST_ID_PARAMETER + generateAndLogRequestId());
+        final byte[] cborBytes = connectAndGetData(metrics, fullUrl, csr, Operation.SIGN_CERTS);
         List<byte[]> certChains = CborUtils.parseSignedCertificates(cborBytes);
         if (certChains == null) {
             metrics.setStatus(ProvisioningAttempt.Status.INTERNAL_ERROR);
             throw new RkpdException(
                     RkpdException.ErrorCode.INTERNAL_ERROR,
                     "Response failed to parse.");
+        } else if (certChains.isEmpty()) {
+            metrics.setCertChainLength(0);
+            metrics.setRootCertFingerprint("");
+        } else {
+            try {
+                X509Certificate[] certs = X509Utils.formatX509Certs(certChains.get(0));
+                metrics.setCertChainLength(certs.length);
+                byte[] pubKey = certs[certs.length - 1].getPublicKey().getEncoded();
+                byte[] pubKeyDigest = MessageDigest.getInstance("SHA-256").digest(pubKey);
+                metrics.setRootCertFingerprint(Base64.encodeToString(pubKeyDigest, Base64.DEFAULT));
+            } catch (NoSuchAlgorithmException e) {
+                throw new RkpdException(RkpdException.ErrorCode.INTERNAL_ERROR,
+                        "Algorithm not found", e);
+            }
         }
         return certChains;
     }
