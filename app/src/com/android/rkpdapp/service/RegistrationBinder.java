@@ -33,6 +33,7 @@ import com.android.rkpdapp.database.ProvisionedKeyDao;
 import com.android.rkpdapp.interfaces.ServerInterface;
 import com.android.rkpdapp.interfaces.SystemInterface;
 import com.android.rkpdapp.metrics.ProvisioningAttempt;
+import com.android.rkpdapp.metrics.RkpdClientOperation;
 import com.android.rkpdapp.provisioner.Provisioner;
 import com.android.rkpdapp.utils.Settings;
 
@@ -216,45 +217,63 @@ public final class RegistrationBinder extends IRegistration.Stub {
                         + " is already associated with a getKey operation that is in-progress");
             }
 
-            mTasks.put(callback, mThreadPool.submit(() -> {
-                try {
-                    getKeyWorker(keyId, callback);
-                } catch (InterruptedException e) {
-                    Log.i(TAG, "getKey was interrupted");
-                    checkedCallback(callback::onCancel);
-                } catch (RkpdException e) {
-                    Log.e(TAG, "RKPD failed to provision keys", e);
-                    checkedCallback(() -> callback.onError(mapToGetKeyError(e), e.getMessage()));
-                } catch (Exception e) {
-                    // Do our best to inform the callback when the unexpected happens. Otherwise,
-                    // the caller is going to wait until they timeout without knowing something like
-                    // a RuntimeException occurred.
-                    Log.e(TAG, "Unexpected error provisioning keys", e);
-                    checkedCallback(() -> callback.onError(IGetKeyCallback.Error.ERROR_UNKNOWN,
-                            e.getMessage()));
-                } finally {
-                    synchronized (mTasksLock) {
-                        mTasks.remove(callback);
-                    }
-                }
-            }));
+            mTasks.put(callback, mThreadPool.submit(() -> getKeyThreadWorker(keyId, callback)));
+        }
+    }
+
+    private void getKeyThreadWorker(int keyId, IGetKeyCallback callback) {
+        // We don't use a try-with-resources here because the metric may need to be updated
+        // inside an exception handler, but close would have been called prior to that. Therefore,
+        // we explicitly close the metric explicitly in the "finally" block, after all handlers
+        // have had a chance to run.
+        RkpdClientOperation metric = RkpdClientOperation.getKey(mClientUid,
+                mSystemInterface.getServiceName());
+        try {
+            getKeyWorker(keyId, callback);
+            metric.setResult(RkpdClientOperation.Result.SUCCESS);
+        } catch (InterruptedException e) {
+            Log.i(TAG, "getKey was interrupted");
+            metric.setResult(RkpdClientOperation.Result.CANCELED);
+            checkedCallback(callback::onCancel);
+        } catch (RkpdException e) {
+            Log.e(TAG, "RKPD failed to provision keys", e);
+            final byte mappedError = mapToGetKeyError(e, metric);
+            checkedCallback(
+                    () -> callback.onError(mappedError, e.getMessage()));
+        } catch (Exception e) {
+            // Do our best to inform the callback when the unexpected happens. Otherwise,
+            // the caller is going to wait until they timeout without knowing something like
+            // a RuntimeException occurred.
+            Log.e(TAG, "Unexpected error provisioning keys", e);
+            checkedCallback(() -> callback.onError(IGetKeyCallback.Error.ERROR_UNKNOWN,
+                    e.getMessage()));
+        } finally {
+            metric.close();
+            synchronized (mTasksLock) {
+                mTasks.remove(callback);
+            }
         }
     }
 
     /** Maps an RkpdException into an IGetKeyCallback.Error value. */
-    private byte mapToGetKeyError(RkpdException e) {
+    private byte mapToGetKeyError(RkpdException e, RkpdClientOperation metric) {
         switch (e.getErrorCode()) {
             case NO_NETWORK_CONNECTIVITY:
+                metric.setResult(RkpdClientOperation.Result.ERROR_PENDING_INTERNET_CONNECTIVITY);
                 return IGetKeyCallback.Error.ERROR_PENDING_INTERNET_CONNECTIVITY;
 
             case DEVICE_NOT_REGISTERED:
+                metric.setResult(RkpdClientOperation.Result.ERROR_PERMANENT);
                 return IGetKeyCallback.Error.ERROR_PERMANENT;
+
+            case INTERNAL_ERROR:
+                metric.setResult(RkpdClientOperation.Result.ERROR_INTERNAL);
+                return IGetKeyCallback.Error.ERROR_UNKNOWN;
 
             case NETWORK_COMMUNICATION_ERROR:
             case HTTP_CLIENT_ERROR:
             case HTTP_SERVER_ERROR:
             case HTTP_UNKNOWN_ERROR:
-            case INTERNAL_ERROR:
             default:
                 return IGetKeyCallback.Error.ERROR_UNKNOWN;
         }
@@ -264,16 +283,20 @@ public final class RegistrationBinder extends IRegistration.Stub {
     public void cancelGetKey(IGetKeyCallback callback) throws RemoteException {
         Log.i(TAG, "cancelGetKey(" + callback.hashCode() + ")");
         synchronized (mTasksLock) {
-            Future<?> task = mTasks.get(callback);
+            try (RkpdClientOperation metric = RkpdClientOperation.cancelGetKey(mClientUid,
+                    mSystemInterface.getServiceName())) {
+                Future<?> task = mTasks.get(callback);
 
-            if (task == null) {
-                Log.w(TAG, "callback not found, task may have already completed");
-            } else if (task.isDone()) {
-                Log.w(TAG, "task already completed, not cancelling");
-            } else if (task.isCancelled()) {
-                Log.w(TAG, "task already cancelled, cannot cancel it any further");
-            } else {
-                task.cancel(true);
+                if (task == null) {
+                    Log.w(TAG, "callback not found, task may have already completed");
+                } else if (task.isDone()) {
+                    Log.w(TAG, "task already completed, not cancelling");
+                } else if (task.isCancelled()) {
+                    Log.w(TAG, "task already cancelled, cannot cancel it any further");
+                } else {
+                    task.cancel(true);
+                }
+                metric.setResult(RkpdClientOperation.Result.SUCCESS);
             }
         }
     }
@@ -283,14 +306,18 @@ public final class RegistrationBinder extends IRegistration.Stub {
             IStoreUpgradedKeyCallback callback) throws RemoteException {
         Log.i(TAG, "storeUpgradedKeyAsync");
         mThreadPool.execute(() -> {
-            try {
+            try (RkpdClientOperation metric = RkpdClientOperation.storeUpgradedKey(
+                    mClientUid, mSystemInterface.getServiceName())) {
                 int keysUpgraded = mProvisionedKeyDao.upgradeKeyBlob(mClientUid, oldKeyBlob,
                         newKeyBlob);
                 if (keysUpgraded == 1) {
+                    metric.setResult(RkpdClientOperation.Result.SUCCESS);
                     checkedCallback(callback::onSuccess);
                 } else if (keysUpgraded == 0) {
+                    metric.setResult(RkpdClientOperation.Result.ERROR_KEY_NOT_FOUND);
                     checkedCallback(() -> callback.onError("No keys matching oldKeyBlob found"));
                 } else {
+                    metric.setResult(RkpdClientOperation.Result.ERROR_INTERNAL);
                     Log.e(TAG, "Multiple keys matched the upgrade (" + keysUpgraded
                             + "). This should be impossible!");
                     checkedCallback(() -> callback.onError("Internal error"));
