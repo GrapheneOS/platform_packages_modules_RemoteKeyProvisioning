@@ -32,6 +32,7 @@ import com.android.rkpdapp.database.RkpdDatabase;
 import com.android.rkpdapp.interfaces.ServerInterface;
 import com.android.rkpdapp.interfaces.ServiceManagerInterface;
 import com.android.rkpdapp.interfaces.SystemInterface;
+import com.android.rkpdapp.metrics.RkpdClientOperation;
 import com.android.rkpdapp.provisioner.Provisioner;
 import com.android.rkpdapp.utils.Settings;
 
@@ -54,10 +55,12 @@ public class RemoteProvisioningService extends Service {
         @Override
         public void getRegistration(int callerUid, String irpcName,
                 IGetRegistrationCallback callback) {
-            try {
-                final Context context = getApplicationContext();
+            final Context context = getApplicationContext();
+            RkpdClientOperation metric = RkpdClientOperation.getRegistration(callerUid, irpcName);
+            try (metric) {
                 if (Settings.getDefaultUrl().isEmpty()) {
                     callback.onError("RKP is disabled. System configured with no default URL.");
+                    metric.setResult(RkpdClientOperation.Result.RKP_UNSUPPORTED);
                     return;
                 }
 
@@ -67,6 +70,7 @@ public class RemoteProvisioningService extends Service {
                 } catch (IllegalArgumentException e) {
                     Log.e(TAG, "Error getting HAL '" + irpcName + "'", e);
                     callback.onError("Invalid HAL name: " + irpcName);
+                    metric.setResult(RkpdClientOperation.Result.ERROR_INVALID_HAL);
                     return;
                 }
 
@@ -75,9 +79,11 @@ public class RemoteProvisioningService extends Service {
                 IRegistration.Stub registration = new RegistrationBinder(context, callerUid,
                         systemInterface, dao, new ServerInterface(context), provisioner,
                         ThreadPool.EXECUTOR);
+                metric.setResult(RkpdClientOperation.Result.SUCCESS);
                 callback.onSuccess(registration);
             } catch (RemoteException e) {
                 Log.e(TAG, "Error notifying callback binder", e);
+                metric.setResult(RkpdClientOperation.Result.ERROR_INTERNAL);
                 throw e.rethrowAsRuntimeException();
             }
         }
