@@ -64,8 +64,18 @@ public class ServerInterface {
     private final Context mContext;
 
     private enum Operation {
-        FETCH_GEEK,
-        SIGN_CERTS;
+        FETCH_GEEK(1),
+        SIGN_CERTS(2);
+
+        private final int mTrafficTag;
+
+        Operation(int trafficTag) {
+            mTrafficTag = trafficTag;
+        }
+
+        public int getTrafficTag() {
+            return mTrafficTag;
+        }
 
         public ProvisioningAttempt.Status getHttpErrorStatus() {
             if (Objects.equals(name(), FETCH_GEEK.name())) {
@@ -275,9 +285,9 @@ public class ServerInterface {
 
     private byte[] connectAndGetData(ProvisioningAttempt metrics, String endpoint, byte[] input,
             Operation operation) throws RkpdException, InterruptedException {
-        TrafficStats.setThreadStatsTag(0);
         int backoff_time = BACKOFF_TIME_MS;
         int attempt = 1;
+        final int oldTrafficTag = TrafficStats.getAndSetThreadStatsTag(operation.getTrafficTag());
         try (StopWatch retryTimer = new StopWatch(TAG)) {
             retryTimer.start();
             while (true) {
@@ -312,6 +322,8 @@ public class ServerInterface {
                     attempt += 1;
                 }
             }
+        } finally {
+            TrafficStats.setThreadStatsTag(oldTrafficTag);
         }
         Settings.incrementFailureCounter(mContext);
         throw makeNetworkError("Error getting data from server.", metrics);
