@@ -154,6 +154,7 @@ public class PeriodicProvisionerTests {
             SystemInterface mockHal = mock(SystemInterface.class);
             doReturn("test-irpc").when(mockHal).getServiceName();
             doReturn(new byte[1]).when(mockHal).generateCsr(any(), any(), any());
+            doReturn(5).when(mockHal).getBatchSize();
 
             ServiceManagerInterface.setInstances(new SystemInterface[]{mockHal});
             assertThat(mProvisioner.doWork()).isEqualTo(ListenableWorker.Result.success());
@@ -217,6 +218,7 @@ public class PeriodicProvisionerTests {
             SystemInterface mockHal = mock(SystemInterface.class);
             doReturn("test-irpc").when(mockHal).getServiceName();
             doReturn(new byte[1]).when(mockHal).generateCsr(any(), any(), any());
+            doReturn(20).when(mockHal).getBatchSize();
             ServiceManagerInterface.setInstances(new SystemInterface[]{mockHal});
             assertThat(mProvisioner.doWork()).isEqualTo(ListenableWorker.Result.success());
         }
@@ -233,10 +235,12 @@ public class PeriodicProvisionerTests {
             saveUrlInSettings(fakeRkpServer);
             SystemInterface firstHal = mock(SystemInterface.class);
             doReturn("first").when(firstHal).getServiceName();
+            doReturn(20).when(firstHal).getBatchSize();
             doThrow(new CborException("first hal failed")).when(firstHal).generateKey(any());
 
             SystemInterface secondHal = mock(SystemInterface.class);
             doReturn("second").when(secondHal).getServiceName();
+            doReturn(20).when(secondHal).getBatchSize();
             doThrow(new CborException("second hal failed")).when(secondHal).generateKey(any());
 
             ServiceManagerInterface.setInstances(new SystemInterface[]{firstHal, secondHal});
@@ -255,10 +259,12 @@ public class PeriodicProvisionerTests {
             saveUrlInSettings(fakeRkpServer);
             SystemInterface firstHal = mock(SystemInterface.class);
             doReturn("first").when(firstHal).getServiceName();
+            doReturn(20).when(firstHal).getBatchSize();
             doThrow(new CborException("first hal failed")).when(firstHal).generateKey(any());
 
             SystemInterface secondHal = mock(SystemInterface.class);
             doReturn("second").when(secondHal).getServiceName();
+            doReturn(20).when(secondHal).getBatchSize();
             doReturn(FAKE_RKP_KEY).when(secondHal).generateKey(any());
             doReturn(new byte[3]).when(secondHal).generateCsr(any(), any(), any());
 
@@ -278,11 +284,13 @@ public class PeriodicProvisionerTests {
             saveUrlInSettings(fakeRkpServer);
             SystemInterface firstHal = mock(SystemInterface.class);
             doReturn("first").when(firstHal).getServiceName();
+            doReturn(20).when(firstHal).getBatchSize();
             doReturn(FAKE_RKP_KEY).when(firstHal).generateKey(any());
             doReturn(new byte[42]).when(firstHal).generateCsr(any(), any(), any());
 
             SystemInterface secondHal = mock(SystemInterface.class);
             doReturn("second").when(secondHal).getServiceName();
+            doReturn(20).when(secondHal).getBatchSize();
             doThrow(new CborException("second hal failed")).when(secondHal).generateKey(any());
 
             ServiceManagerInterface.setInstances(new SystemInterface[]{firstHal, secondHal});
