@@ -16,6 +16,9 @@
 
 package com.android.rkpdapp.e2etest;
 
+import static android.security.keystore.KeyProperties.KEY_ALGORITHM_EC;
+import static android.security.keystore.KeyProperties.PURPOSE_SIGN;
+
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.TruthJUnit.assume;
 
@@ -23,11 +26,13 @@ import android.content.Context;
 import android.hardware.security.keymint.IRemotelyProvisionedComponent;
 import android.os.ServiceManager;
 import android.os.SystemProperties;
+import android.security.keystore.KeyGenParameterSpec;
 
 import androidx.test.core.app.ApplicationProvider;
 import androidx.work.ListenableWorker;
 import androidx.work.testing.TestWorkerBuilder;
 
+import com.android.rkpdapp.database.ProvisionedKey;
 import com.android.rkpdapp.database.ProvisionedKeyDao;
 import com.android.rkpdapp.database.RkpdDatabase;
 import com.android.rkpdapp.interfaces.ServiceManagerInterface;
@@ -45,13 +50,21 @@ import org.junit.rules.TestName;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
+import java.security.KeyPairGenerator;
+import java.security.KeyStore;
+import java.security.spec.ECGenParameterSpec;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.concurrent.Executors;
 
 @RunWith(Parameterized.class)
 public class RkpdHostTestHelperTests {
+    private static final String KEY_ALIAS = "RKPD_HOST_TEST_HELPER_KEY";
     private static Context sContext;
+    private final String mInstanceName;
     private final String mServiceName;
     private ProvisionedKeyDao mKeyDao;
+    private PeriodicProvisioner mProvisioner;
 
     @Rule
     public final TestName mName = new TestName();
@@ -62,6 +75,7 @@ public class RkpdHostTestHelperTests {
     }
 
     public RkpdHostTestHelperTests(String instanceName) {
+        mInstanceName = instanceName;
         mServiceName = IRemotelyProvisionedComponent.DESCRIPTOR + "/" + instanceName;
     }
 
@@ -82,13 +96,67 @@ public class RkpdHostTestHelperTests {
         mKeyDao.deleteAllKeys();
         SystemInterface systemInterface = ServiceManagerInterface.getInstance(mServiceName);
         ServiceManagerInterface.setInstances(new SystemInterface[] {systemInterface});
+
+        mProvisioner = TestWorkerBuilder.from(
+                sContext,
+                PeriodicProvisioner.class,
+                Executors.newSingleThreadExecutor()).build();
     }
 
     @After
-    public void tearDown() {
+    public void tearDown() throws Exception {
         Settings.clearPreferences(sContext);
         mKeyDao.deleteAllKeys();
+
+        KeyStore keyStore = KeyStore.getInstance("AndroidKeyStore");
+        keyStore.load(null);
+        keyStore.deleteEntry(KEY_ALIAS);
+
         ServiceManagerInterface.setInstances(null);
+    }
+
+    @Test
+    public void provisionThenUseKeyThenProvision() throws Exception {
+        assertThat(mProvisioner.doWork()).isEqualTo(ListenableWorker.Result.success());
+
+        KeyPairGenerator generator = KeyPairGenerator.getInstance(KEY_ALGORITHM_EC,
+                "AndroidKeyStore");
+        generator.initialize(
+                new KeyGenParameterSpec.Builder(KEY_ALIAS, PURPOSE_SIGN)
+                        .setAlgorithmParameterSpec(new ECGenParameterSpec("secp256r1"))
+                        .setAttestationChallenge((new byte[64]))
+                        .setIsStrongBoxBacked(mInstanceName.equals("strongbox"))
+                        .build());
+        generator.generateKeyPair();
+
+        assertThat(mProvisioner.doWork()).isEqualTo(ListenableWorker.Result.success());
+    }
+
+    @Test
+    public void provisionThenExpireThenProvisionAgain() throws Exception {
+        assertThat(mProvisioner.doWork()).isEqualTo(ListenableWorker.Result.success());
+
+        final Instant expiry = Instant.now().plus(Duration.ofHours(1));
+
+        // Expire an arbitrary number of keys, but not enough to cause provisioning to get
+        // more keys.
+        for (int i = 0; i < 3; ++i) {
+            ProvisionedKey key = mKeyDao.getOrAssignKey(mServiceName, expiry, 123, i);
+            assertThat(key).isNotNull();
+            key.expirationTime = Instant.now().minusSeconds(60);
+            mKeyDao.updateKey(key);
+        }
+
+        // Mark an arbitrary number of keys as expiring soon, but not enough to cause
+        // provisioning to get more keys.
+        for (int i = 3; i < 5; ++i) {
+            ProvisionedKey key = mKeyDao.getOrAssignKey(mServiceName, expiry, 123, i);
+            assertThat(key).isNotNull();
+            key.expirationTime = Instant.now().plusSeconds(60);
+            mKeyDao.updateKey(key);
+        }
+
+        assertThat(mProvisioner.doWork()).isEqualTo(ListenableWorker.Result.success());
     }
 
     @Test
@@ -96,18 +164,14 @@ public class RkpdHostTestHelperTests {
         // Similar to the PeriodicProvisioner round trip, except first we actually populate the
         // key pool to ensure that the PeriodicProvisioner just noops.
         // This test is purely to test out proper metrics.
-        PeriodicProvisioner provisioner = TestWorkerBuilder.from(
-                sContext,
-                PeriodicProvisioner.class,
-                Executors.newSingleThreadExecutor()).build();
-        assertThat(provisioner.doWork()).isEqualTo(ListenableWorker.Result.success());
+        assertThat(mProvisioner.doWork()).isEqualTo(ListenableWorker.Result.success());
         StatsProcessor.PoolStats pool = StatsProcessor.processPool(mKeyDao, mServiceName,
                 Settings.getExtraSignedKeysAvailable(sContext),
                 Settings.getExpirationTime(sContext));
 
         // The metrics host test will perform additional validation by ensuring correct metrics
         // are recorded.
-        assertThat(provisioner.doWork()).isEqualTo(ListenableWorker.Result.success());
+        assertThat(mProvisioner.doWork()).isEqualTo(ListenableWorker.Result.success());
         StatsProcessor.PoolStats updatedPool = StatsProcessor.processPool(mKeyDao, mServiceName,
                 Settings.getExtraSignedKeysAvailable(sContext),
                 Settings.getExpirationTime(sContext));

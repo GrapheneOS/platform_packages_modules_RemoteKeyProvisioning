@@ -16,7 +16,10 @@
 
 package com.android.rkpdapp.utils;
 
+import android.util.Base64;
 import android.util.Log;
+
+import com.android.rkpdapp.RkpdException;
 
 import java.io.ByteArrayInputStream;
 import java.math.BigInteger;
@@ -50,17 +53,24 @@ public class X509Utils {
      * Takes a byte array composed of DER encoded certificates and returns the X.509 certificates
      * contained within as an X509Certificate array.
      */
-    public static X509Certificate[] formatX509Certs(byte[] certStream)
-            throws CertificateException, InvalidAlgorithmParameterException,
-            NoSuchAlgorithmException, NoSuchProviderException {
-        CertificateFactory fact = CertificateFactory.getInstance("X.509");
-        ByteArrayInputStream in = new ByteArrayInputStream(certStream);
-        ArrayList<Certificate> certs = new ArrayList<>(fact.generateCertificates(in));
-        X509Certificate[] certChain = certs.toArray(new X509Certificate[0]);
-        if (isCertChainValid(certChain)) {
-            return certChain;
-        } else {
-            throw new CertificateException("Could not validate certificate chain.");
+    public static X509Certificate[] formatX509Certs(byte[] certStream) throws RkpdException {
+        try {
+            CertificateFactory fact = CertificateFactory.getInstance("X.509");
+            ByteArrayInputStream in = new ByteArrayInputStream(certStream);
+            ArrayList<Certificate> certs = new ArrayList<>(fact.generateCertificates(in));
+            X509Certificate[] certChain = certs.toArray(new X509Certificate[0]);
+            if (isCertChainValid(certChain)) {
+                return certChain;
+            } else {
+                throw new RkpdException(RkpdException.ErrorCode.INTERNAL_ERROR,
+                        "Could not validate certificate chain.");
+            }
+        } catch (CertificateException | NoSuchAlgorithmException | NoSuchProviderException
+                 | InvalidAlgorithmParameterException e) {
+            Log.e(TAG, "Unable to parse certificate chain."
+                    + Base64.encodeToString(certStream, Base64.DEFAULT), e);
+            throw new RkpdException(RkpdException.ErrorCode.INTERNAL_ERROR,
+                    "Failed to interpret DER encoded certificate chain", e);
         }
     }
 
