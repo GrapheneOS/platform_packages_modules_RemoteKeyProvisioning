@@ -118,7 +118,7 @@ public class Provisioner {
 
     private List<byte[]> fetchCertificates(ProvisioningAttempt metrics, List<RkpKey> keysGenerated,
             SystemInterface systemInterface, GeekResponse geekResponse)
-            throws RkpdException, CborException {
+            throws RkpdException, CborException, InterruptedException {
         int provisionedSoFar = 0;
         List<byte[]> certChains = new ArrayList<>(keysGenerated.size());
         while (provisionedSoFar != keysGenerated.size()) {
@@ -133,7 +133,7 @@ public class Provisioner {
     private List<byte[]> batchProvision(ProvisioningAttempt metrics,
             SystemInterface systemInterface,
             GeekResponse response, List<RkpKey> keysGenerated)
-            throws RkpdException, CborException {
+            throws RkpdException, CborException, InterruptedException {
         int batch_size = keysGenerated.size();
         if (batch_size < 1) {
             throw new RkpdException(RkpdException.ErrorCode.INTERNAL_ERROR,
