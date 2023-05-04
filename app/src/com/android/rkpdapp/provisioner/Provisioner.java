@@ -17,6 +17,7 @@
 package com.android.rkpdapp.provisioner;
 
 import android.content.Context;
+import android.os.RemoteException;
 import android.util.Log;
 
 import com.android.rkpdapp.GeekResponse;
@@ -47,7 +48,6 @@ import co.nstant.in.cbor.CborException;
  */
 public class Provisioner {
     private static final String TAG = "RkpdProvisioner";
-    private static final int SAFE_CSR_BATCH_SIZE = 20;
     private static final int FAILURE_MAXIMUM = 5;
 
     private final Context mContext;
@@ -118,14 +118,21 @@ public class Provisioner {
 
     private List<byte[]> fetchCertificates(ProvisioningAttempt metrics, List<RkpKey> keysGenerated,
             SystemInterface systemInterface, GeekResponse geekResponse)
-            throws RkpdException, CborException {
+            throws RkpdException, CborException, InterruptedException {
         int provisionedSoFar = 0;
         List<byte[]> certChains = new ArrayList<>(keysGenerated.size());
+        int maxBatchSize = 0;
+        try {
+            maxBatchSize = systemInterface.getBatchSize();
+        } catch (RemoteException e) {
+            throw new RkpdException(RkpdException.ErrorCode.INTERNAL_ERROR,
+                    "Error getting batch size from the system", e);
+        }
         while (provisionedSoFar != keysGenerated.size()) {
-            int batch_size = Math.min(keysGenerated.size() - provisionedSoFar, SAFE_CSR_BATCH_SIZE);
+            int batchSize = Math.min(keysGenerated.size() - provisionedSoFar, maxBatchSize);
             certChains.addAll(batchProvision(metrics, systemInterface, geekResponse,
-                    keysGenerated.subList(provisionedSoFar, batch_size + provisionedSoFar)));
-            provisionedSoFar += batch_size;
+                    keysGenerated.subList(provisionedSoFar, batchSize + provisionedSoFar)));
+            provisionedSoFar += batchSize;
         }
         return certChains;
     }
@@ -133,7 +140,7 @@ public class Provisioner {
     private List<byte[]> batchProvision(ProvisioningAttempt metrics,
             SystemInterface systemInterface,
             GeekResponse response, List<RkpKey> keysGenerated)
-            throws RkpdException, CborException {
+            throws RkpdException, CborException, InterruptedException {
         int batch_size = keysGenerated.size();
         if (batch_size < 1) {
             throw new RkpdException(RkpdException.ErrorCode.INTERNAL_ERROR,
