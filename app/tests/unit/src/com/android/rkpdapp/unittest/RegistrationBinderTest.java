@@ -130,7 +130,7 @@ public class RegistrationBinderTest {
     }
 
     @Before
-    public void setUp() throws RkpdException {
+    public void setUp() throws Exception {
         mContext = ApplicationProvider.getApplicationContext();
         mMockDao = mock(ProvisionedKeyDao.class);
         mRkpServer = mock(ServerInterface.class);
