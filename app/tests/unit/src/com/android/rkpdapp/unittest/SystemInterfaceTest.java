@@ -226,6 +226,53 @@ public class SystemInterfaceTest {
                 any(byte[].class));
     }
 
+    @Test
+    public void testGetVersion() throws Exception {
+        IRemotelyProvisionedComponent mockedComponent = mock(IRemotelyProvisionedComponent.class);
+        SystemInterface systemInterface = mockSystemInterface(CborUtils.EC_CURVE_25519,
+                123, mockedComponent);
+        assertThat(systemInterface.getVersion()).isEqualTo(123);
+    }
+
+    @Test
+    public void testValidBatchSizes() throws Exception {
+        // test all valid batch sizes
+        for (int i = 20; i <= 512; ++i) {
+            RpcHardwareInfo hwInfo = mock(RpcHardwareInfo.class);
+            hwInfo.supportedNumKeysInCsr = i;
+
+            IRemotelyProvisionedComponent irpc = mock(IRemotelyProvisionedComponent.class);
+            SystemInterface systemInterface = mockSystemInterface(hwInfo, irpc);
+            assertThat(systemInterface.getBatchSize()).isEqualTo(i);
+        }
+    }
+
+    @Test
+    public void testGetBatchSizeTooSmall() throws Exception {
+        for (int i : new int[]{ Integer.MIN_VALUE, -1234, -1, 0, 5, 19}) {
+            RpcHardwareInfo hwInfo = mock(RpcHardwareInfo.class);
+            hwInfo.supportedNumKeysInCsr = i;
+
+            IRemotelyProvisionedComponent mockedComponent = mock(
+                    IRemotelyProvisionedComponent.class);
+            SystemInterface systemInterface = mockSystemInterface(hwInfo, mockedComponent);
+            assertThat(systemInterface.getBatchSize()).isEqualTo(20);
+        }
+    }
+
+    @Test
+    public void testGetBatchSizeToolarge() throws Exception {
+        for (int i : new int[]{ 513, 10101, Integer.MAX_VALUE}) {
+            RpcHardwareInfo hwInfo = mock(RpcHardwareInfo.class);
+            hwInfo.supportedNumKeysInCsr = i;
+
+            IRemotelyProvisionedComponent mockedComponent = mock(
+                    IRemotelyProvisionedComponent.class);
+            SystemInterface systemInterface = mockSystemInterface(hwInfo, mockedComponent);
+            assertThat(systemInterface.getBatchSize()).isEqualTo(512);
+        }
+    }
+
     private byte[] generateEekChain(int curve, byte[] eek) throws Exception {
         if (curve == Utils.CURVE_ED25519) {
             Ed25519Sign.KeyPair kp = Ed25519Sign.KeyPair.newKeyPair();
@@ -299,7 +346,12 @@ public class SystemInterfaceTest {
         RpcHardwareInfo mockedHardwareInfo = mock(RpcHardwareInfo.class);
         mockedHardwareInfo.supportedEekCurve = supportedCurve;
         mockedHardwareInfo.versionNumber = interfaceVersion;
-        when(mockedComponent.getHardwareInfo()).thenReturn(mockedHardwareInfo);
+        return mockSystemInterface(mockedHardwareInfo, mockedComponent);
+    }
+
+    private SystemInterface mockSystemInterface(RpcHardwareInfo hwInfo,
+            IRemotelyProvisionedComponent mockedComponent) throws RemoteException {
+        when(mockedComponent.getHardwareInfo()).thenReturn(hwInfo);
         doAnswer(invocation -> {
             Object[] args = invocation.getArguments();
             ((MacedPublicKey) args[1]).macedKey = Base64.decode("g0BAWE2lAQIDJiABIVggUYCsz4+WjOwPU"
@@ -307,7 +359,7 @@ public class SystemInterfaceTest {
                     + "qw==", Base64.DEFAULT);
             return new byte[]{0x01};
         }).when(mockedComponent).generateEcdsaP256KeyPair(eq(false), any());
-        if (interfaceVersion == INTERFACE_VERSION_V2) {
+        if (hwInfo.versionNumber == INTERFACE_VERSION_V2) {
             doAnswer(invocation -> {
                 Object[] args = invocation.getArguments();
                 ((DeviceInfo) args[4]).deviceInfo = new byte[]{(byte) 0xA0};
