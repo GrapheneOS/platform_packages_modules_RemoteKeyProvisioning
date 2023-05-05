@@ -26,6 +26,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.notNull;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.argThat;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.contains;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
@@ -39,6 +40,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import android.content.Context;
+import android.os.Binder;
+import android.os.IBinder;
 
 import androidx.test.core.app.ApplicationProvider;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
@@ -127,7 +130,7 @@ public class RegistrationBinderTest {
     }
 
     @Before
-    public void setUp() throws RkpdException {
+    public void setUp() throws Exception {
         mContext = ApplicationProvider.getApplicationContext();
         mMockDao = mock(ProvisionedKeyDao.class);
         mRkpServer = mock(ServerInterface.class);
@@ -152,8 +155,10 @@ public class RegistrationBinderTest {
                 .getKeyForClientAndIrpc(IRPC_HAL, CLIENT_UID, KEY_ID);
 
         IGetKeyCallback callback = mock(IGetKeyCallback.class);
+        doReturn(new Binder()).when(callback).asBinder();
         mRegistration.getKey(KEY_ID, callback);
         completeAllTasks();
+        verify(callback, atLeastOnce()).asBinder();
         verify(callback).onSuccess(matches(FAKE_KEY));
         verifyNoMoreInteractions(callback);
     }
@@ -165,8 +170,10 @@ public class RegistrationBinderTest {
                 .getOrAssignKey(eq(IRPC_HAL), notNull(), eq(CLIENT_UID), eq(KEY_ID));
 
         IGetKeyCallback callback = mock(IGetKeyCallback.class);
+        doReturn(new Binder()).when(callback).asBinder();
         mRegistration.getKey(KEY_ID, callback);
         completeAllTasks();
+        verify(callback, atLeastOnce()).asBinder();
         verify(callback).onSuccess(matches(FAKE_KEY));
         verifyNoMoreInteractions(callback);
     }
@@ -178,7 +185,9 @@ public class RegistrationBinderTest {
                 .getOrAssignKey(eq(IRPC_HAL), notNull(), eq(CLIENT_UID), eq(KEY_ID));
 
         Instant minExpiry = Instant.now().plus(Settings.getExpiringBy(mContext));
-        mRegistration.getKey(KEY_ID, mock(IGetKeyCallback.class));
+        IGetKeyCallback callback = mock(IGetKeyCallback.class);
+        doReturn(new Binder()).when(callback).asBinder();
+        mRegistration.getKey(KEY_ID, callback);
         completeAllTasks();
         Instant maxExpiry = Instant.now().plus(Settings.getExpiringBy(mContext));
 
@@ -194,7 +203,9 @@ public class RegistrationBinderTest {
 
         Instant minExpiry = Instant.now().plus(Settings.getExpiringBy(mContext));
         Instant minFallbackExpiry = Instant.now().plus(RegistrationBinder.MIN_KEY_LIFETIME);
-        mRegistration.getKey(KEY_ID, mock(IGetKeyCallback.class));
+        IGetKeyCallback callback = mock(IGetKeyCallback.class);
+        doReturn(new Binder()).when(callback).asBinder();
+        mRegistration.getKey(KEY_ID, callback);
         completeAllTasks();
         Instant maxExpiry = Instant.now().plus(Settings.getExpiringBy(mContext));
         Instant maxFallbackExpiry = Instant.now().plus(RegistrationBinder.MIN_KEY_LIFETIME);
@@ -215,11 +226,13 @@ public class RegistrationBinderTest {
                 .getOrAssignKey(eq(IRPC_HAL), notNull(), eq(CLIENT_UID), eq(KEY_ID));
 
         IGetKeyCallback callback = mock(IGetKeyCallback.class);
+        doReturn(new Binder()).when(callback).asBinder();
         mRegistration.getKey(KEY_ID, callback);
         completeAllTasks();
         verify(callback).onSuccess(matches(FAKE_KEY));
         verify(callback).onProvisioningNeeded();
         verify(mMockProvisioner).provisionKeys(any(), any(), same(mFakeGeekResponse));
+        verify(callback, atLeastOnce()).asBinder();
         verifyNoMoreInteractions(callback);
     }
 
@@ -230,10 +243,12 @@ public class RegistrationBinderTest {
                 .provisionKeys(any(), any(), any());
 
         IGetKeyCallback callback = mock(IGetKeyCallback.class);
+        doReturn(new Binder()).when(callback).asBinder();
         mRegistration.getKey(KEY_ID, callback);
         completeAllTasks();
         verify(callback).onError(IGetKeyCallback.Error.ERROR_UNKNOWN, "PROVISIONING FAIL");
         verify(callback).onProvisioningNeeded();
+        verify(callback, atLeastOnce()).asBinder();
         verifyNoMoreInteractions(callback);
     }
 
@@ -244,6 +259,7 @@ public class RegistrationBinderTest {
                 .provisionKeys(any(), any(), any());
 
         IGetKeyCallback callback = mock(IGetKeyCallback.class);
+        doReturn(new Binder()).when(callback).asBinder();
         mRegistration.getKey(KEY_ID, callback);
         completeAllTasks();
         verify(callback).onError(IGetKeyCallback.Error.ERROR_UNKNOWN, "FAIL");
@@ -256,6 +272,7 @@ public class RegistrationBinderTest {
                 .provisionKeys(any(), any(), any());
 
         IGetKeyCallback callback = mock(IGetKeyCallback.class);
+        doReturn(new Binder()).when(callback).asBinder();
         mRegistration.getKey(KEY_ID, callback);
         completeAllTasks();
         verify(callback).onError(IGetKeyCallback.Error.ERROR_PENDING_INTERNET_CONNECTIVITY,
@@ -286,12 +303,14 @@ public class RegistrationBinderTest {
                     .provisionKeys(any(), any(), any());
 
             IGetKeyCallback callback = mock(IGetKeyCallback.class);
+            doReturn(new Binder()).when(callback).asBinder();
             mRegistration.getKey(KEY_ID, callback);
             // We cannot use completeAllTasks here because that shuts down the thread pool,
             // so use a timeout on verifying the callback instead.
             verify(callback, timeout(MAX_TIMEOUT.toMillis()))
                     .onError(getExpectedGetKeyError(errorCode), errorCode.toString());
             verify(callback).onProvisioningNeeded();
+            verify(callback, atLeastOnce()).asBinder();
             verifyNoMoreInteractions(callback);
         }
     }
@@ -303,7 +322,9 @@ public class RegistrationBinderTest {
                 .getKeyForClientAndIrpc(IRPC_HAL, CLIENT_UID, KEY_ID);
 
         Instant minExpiry = Instant.now().plus(RegistrationBinder.MIN_KEY_LIFETIME);
-        mRegistration.getKey(KEY_ID, mock(IGetKeyCallback.class));
+        IGetKeyCallback callback = mock(IGetKeyCallback.class);
+        doReturn(new Binder()).when(callback).asBinder();
+        mRegistration.getKey(KEY_ID, callback);
         completeAllTasks();
         Instant maxExpiry = Instant.now().plus(RegistrationBinder.MIN_KEY_LIFETIME);
 
@@ -315,11 +336,13 @@ public class RegistrationBinderTest {
         // This test ensures that getKey will handle the case in which provisioner doesn't error
         // out, but it also does not actually provision any keys.
         IGetKeyCallback callback = mock(IGetKeyCallback.class);
+        doReturn(new Binder()).when(callback).asBinder();
         mRegistration.getKey(KEY_ID, callback);
         completeAllTasks();
         verify(callback).onError(IGetKeyCallback.Error.ERROR_UNKNOWN,
                 "Provisioning failed, no keys available");
         verify(callback).onProvisioningNeeded();
+        verify(callback, atLeastOnce()).asBinder();
         verify(mMockProvisioner).provisionKeys(any(), any(), any());
         verify(mRkpServer).fetchGeekAndUpdate(any());
         verifyNoMoreInteractions(callback);
@@ -329,11 +352,13 @@ public class RegistrationBinderTest {
     public void getKeyDisableProvisioningIsHonored() throws Exception {
         mFakeGeekResponse.numExtraAttestationKeys = 0;
         IGetKeyCallback callback = mock(IGetKeyCallback.class);
+        doReturn(new Binder()).when(callback).asBinder();
         mRegistration.getKey(KEY_ID, callback);
         completeAllTasks();
         verify(callback).onError(IGetKeyCallback.Error.ERROR_UNKNOWN,
                 "Provisioning failed, no keys available");
         verify(callback).onProvisioningNeeded();
+        verify(callback, atLeastOnce()).asBinder();
         verify(mRkpServer).fetchGeekAndUpdate(any());
         verify(mMockProvisioner, never()).provisionKeys(any(), any(), any());
         verifyNoMoreInteractions(callback);
@@ -349,6 +374,7 @@ public class RegistrationBinderTest {
                 .isProvisioningNeeded(notNull(), eq(IRPC_HAL));
 
         IGetKeyCallback callback = mock(IGetKeyCallback.class);
+        doReturn(new Binder()).when(callback).asBinder();
         mRegistration.getKey(KEY_ID, callback);
 
         // We cannot complete all tasks until after the get key worker task completes, because
@@ -371,6 +397,7 @@ public class RegistrationBinderTest {
                 .isProvisioningNeeded(notNull(), eq(IRPC_HAL));
 
         IGetKeyCallback callback = mock(IGetKeyCallback.class);
+        doReturn(new Binder()).when(callback).asBinder();
         mRegistration.getKey(KEY_ID, callback);
 
         // We cannot complete all tasks until after the get key worker task completes, because
@@ -384,12 +411,19 @@ public class RegistrationBinderTest {
 
     @Test
     public void getKeyHandlesCancelBeforeProvisioning() throws Exception {
+        final IBinder theBinder = new Binder();
         IGetKeyCallback callback = mock(IGetKeyCallback.class);
+        doReturn(theBinder).when(callback).asBinder();
         AtomicBoolean allowCancel = new AtomicBoolean(true);
         doAnswer(
                 answer((hal, minExpiry, uid, keyId) -> {
                     if (allowCancel.getAndSet(false)) {
-                        mRegistration.cancelGetKey(callback);
+                        // Use a different callback object that wraps the same binder to ensure
+                        // that the underlying code is matching based on binder, not the callback.
+                        IGetKeyCallback differentCallback = mock(IGetKeyCallback.class);
+                        doReturn(theBinder).when(differentCallback).asBinder();
+                        mRegistration.cancelGetKey(differentCallback);
+                        verify(differentCallback, atLeastOnce()).asBinder();
                     }
                     return null;
                 }))
@@ -399,6 +433,7 @@ public class RegistrationBinderTest {
 
         completeAllTasks();
         verify(callback).onCancel();
+        verify(callback, atLeastOnce()).asBinder();
         verifyNoMoreInteractions(mMockProvisioner);
         verifyNoMoreInteractions(callback);
     }
@@ -409,24 +444,29 @@ public class RegistrationBinderTest {
         doAnswer(answerVoid((hal, dao, metrics) -> mRegistration.cancelGetKey(callback)))
                 .when(mMockProvisioner)
                 .provisionKeys(any(), any(), any());
+        doReturn(new Binder()).when(callback).asBinder();
         mRegistration.getKey(KEY_ID, callback);
 
         completeAllTasks();
         verify(callback).onCancel();
         verify(callback).onProvisioningNeeded();
+        verify(callback, atLeastOnce()).asBinder();
         verifyNoMoreInteractions(callback);
     }
 
     @Test
     public void getKeyHandlesCancelOfInvalidCallback() throws Exception {
         IGetKeyCallback callback = mock(IGetKeyCallback.class);
+        doReturn(new Binder()).when(callback).asBinder();
         mRegistration.cancelGetKey(callback);
+        verify(callback, atLeastOnce()).asBinder();
         verifyNoMoreInteractions(callback);
     }
 
     @Test
     public void getKeyHandlesInterruptedException() throws Exception {
         IGetKeyCallback callback = mock(IGetKeyCallback.class);
+        doReturn(new Binder()).when(callback).asBinder();
         doThrow(new InterruptedException())
                 .when(mMockProvisioner)
                 .provisionKeys(any(), any(), any());
@@ -435,6 +475,7 @@ public class RegistrationBinderTest {
         completeAllTasks();
         verify(callback).onCancel();
         verify(callback).onProvisioningNeeded();
+        verify(callback, atLeastOnce()).asBinder();
         verifyNoMoreInteractions(callback);
     }
 
@@ -452,6 +493,7 @@ public class RegistrationBinderTest {
                 .getKeyForClientAndIrpc(IRPC_HAL, CLIENT_UID, KEY_ID);
 
         IGetKeyCallback callback = mock(IGetKeyCallback.class);
+        doReturn(new Binder()).when(callback).asBinder();
         mRegistration.getKey(KEY_ID, callback);
         assertThrows(IllegalArgumentException.class, () -> mRegistration.getKey(KEY_ID, callback));
         getKeyBlocker.countDown();
@@ -471,9 +513,11 @@ public class RegistrationBinderTest {
                 .getKeyForClientAndIrpc(IRPC_HAL, CLIENT_UID, KEY_ID);
 
         IGetKeyCallback successfulCallback = mock(IGetKeyCallback.class);
+        doReturn(new Binder()).when(successfulCallback).asBinder();
         mRegistration.getKey(KEY_ID, successfulCallback);
 
         IGetKeyCallback cancelMe = mock(IGetKeyCallback.class);
+        doReturn(new Binder()).when(cancelMe).asBinder();
         mRegistration.getKey(KEY_ID, cancelMe);
 
         assertThat(getKeyEnteredTwice.await(MAX_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS))
@@ -484,9 +528,11 @@ public class RegistrationBinderTest {
 
         completeAllTasks();
         verify(successfulCallback).onSuccess(matches(FAKE_KEY));
+        verify(successfulCallback, atLeastOnce()).asBinder();
         verifyNoMoreInteractions(successfulCallback);
 
         verify(cancelMe).onCancel();
+        verify(cancelMe, atLeastOnce()).asBinder();
         verifyNoMoreInteractions(cancelMe);
     }
 
