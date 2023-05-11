@@ -22,6 +22,7 @@ import static com.google.common.truth.TruthJUnit.assume;
 
 import android.content.Context;
 import android.hardware.security.keymint.IRemotelyProvisionedComponent;
+import android.os.IBinder;
 import android.os.Process;
 import android.os.ServiceManager;
 import android.os.SystemProperties;
@@ -105,6 +106,11 @@ public class RegistrationBinderStressTest {
             @Override
             public void onError(byte error, String description) {
                 result.complete(description);
+            }
+
+            @Override
+            public IBinder asBinder() {
+                return this;
             }
         });
         try {
