@@ -17,9 +17,9 @@ lunch $1
 m RkpRegistrationCheck
 
 adb push $ANDROID_PRODUCT_OUT/system/framework/RkpRegistrationCheck.jar \
-  /storage/self/primary
+  /data/local/tmp
 
-adb shell "CLASSPATH=/storage/self/primary/RkpRegistrationCheck.jar \
+adb shell "CLASSPATH=/data/local/tmp/RkpRegistrationCheck.jar \
   exec app_process /system/bin com.android.rkpdapp.RkpRegistrationCheck"
 
-adb shell "rm /storage/self/primary/RkpRegistrationCheck.jar"
+adb shell "rm /data/local/tmp/RkpRegistrationCheck.jar"
