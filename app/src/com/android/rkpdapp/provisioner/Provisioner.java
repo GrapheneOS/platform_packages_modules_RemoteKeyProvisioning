@@ -49,6 +49,7 @@ import co.nstant.in.cbor.CborException;
 public class Provisioner {
     private static final String TAG = "RkpdProvisioner";
     private static final int FAILURE_MAXIMUM = 5;
+    private static final Object provisionKeysLock = new Object();
 
     private final Context mContext;
     private final ProvisionedKeyDao mKeyDao;
@@ -74,34 +75,36 @@ public class Provisioner {
      */
     public void provisionKeys(ProvisioningAttempt metrics, SystemInterface systemInterface,
             GeekResponse geekResponse) throws CborException, RkpdException, InterruptedException {
-        try {
-            int keysRequired = calculateKeysRequired(metrics, systemInterface.getServiceName());
-            Log.i(TAG, "Requested number of keys for provisioning: " + keysRequired);
-            if (keysRequired == 0) {
-                metrics.setStatus(ProvisioningAttempt.Status.NO_PROVISIONING_NEEDED);
-                return;
-            }
+        synchronized (provisionKeysLock) {
+            try {
+                int keysRequired = calculateKeysRequired(metrics, systemInterface.getServiceName());
+                Log.i(TAG, "Requested number of keys for provisioning: " + keysRequired);
+                if (keysRequired == 0) {
+                    metrics.setStatus(ProvisioningAttempt.Status.NO_PROVISIONING_NEEDED);
+                    return;
+                }
 
-            List<RkpKey> keysGenerated = generateKeys(metrics, keysRequired, systemInterface);
-            checkForInterrupts();
-            List<byte[]> certChains = fetchCertificates(metrics, keysGenerated, systemInterface,
-                    geekResponse);
-            checkForInterrupts();
-            List<ProvisionedKey> keys = associateCertsWithKeys(certChains, keysGenerated);
+                List<RkpKey> keysGenerated = generateKeys(metrics, keysRequired, systemInterface);
+                checkForInterrupts();
+                List<byte[]> certChains = fetchCertificates(metrics, keysGenerated, systemInterface,
+                        geekResponse);
+                checkForInterrupts();
+                List<ProvisionedKey> keys = associateCertsWithKeys(certChains, keysGenerated);
 
-            mKeyDao.insertKeys(keys);
-            Log.i(TAG, "Total provisioned keys: " + keys.size());
-            metrics.setStatus(ProvisioningAttempt.Status.KEYS_SUCCESSFULLY_PROVISIONED);
-        } catch (InterruptedException e) {
-            metrics.setStatus(ProvisioningAttempt.Status.INTERRUPTED);
-            throw e;
-        } catch (RkpdException e) {
-            if (Settings.getFailureCounter(mContext) > FAILURE_MAXIMUM) {
-                Log.e(TAG, "Too many failures, resetting defaults.");
-                Settings.resetDefaultConfig(mContext);
+                mKeyDao.insertKeys(keys);
+                Log.i(TAG, "Total provisioned keys: " + keys.size());
+                metrics.setStatus(ProvisioningAttempt.Status.KEYS_SUCCESSFULLY_PROVISIONED);
+            } catch (InterruptedException e) {
+                metrics.setStatus(ProvisioningAttempt.Status.INTERRUPTED);
+                throw e;
+            } catch (RkpdException e) {
+                if (Settings.getFailureCounter(mContext) > FAILURE_MAXIMUM) {
+                    Log.e(TAG, "Too many failures, resetting defaults.");
+                    Settings.resetDefaultConfig(mContext);
+                }
+                // Rethrow to provide failure signal to caller
+                throw e;
             }
-            // Rethrow to provide failure signal to caller
-            throw e;
         }
     }
 
