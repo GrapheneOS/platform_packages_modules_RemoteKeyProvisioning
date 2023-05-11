@@ -17,9 +17,7 @@
 package com.android.rkpdapp;
 
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.Executors;
 
 /**
  * This class provides a global thread pool to RKPD app.
@@ -35,8 +33,5 @@ public class ThreadPool {
      * Each thread has an unbounded queue. This allows RKPD to serve requests
      * asynchronously.
      */
-    public static final ExecutorService EXECUTOR =
-            new ThreadPoolExecutor(/*corePoolSize=*/ 0, /*maximumPoolSize=*/ NUMBER_OF_THREADS,
-                    /*keepAliveTime=*/ 30L, /*unit=*/ TimeUnit.SECONDS,
-                    /*workQueue=*/ new LinkedBlockingQueue<Runnable>());
+    public static final ExecutorService EXECUTOR = Executors.newFixedThreadPool(NUMBER_OF_THREADS);
 }
