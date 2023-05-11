@@ -25,6 +25,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.RemoteException;
 import android.os.ServiceManager;
+import android.os.ServiceSpecificException;
 import android.os.SystemProperties;
 import android.util.Base64;
 import android.util.Log;
@@ -72,7 +73,8 @@ public class RkpRegistrationCheck {
     private final String mRequestId = UUID.randomUUID().toString();
     private final String mInstanceName;
 
-    private static class NotRegisteredException extends Exception { }
+    private static class NotRegisteredException extends Exception {
+    }
 
     private static class FetchEekResponse {
         private static final int EEK_AND_CURVE_INDEX = 0;
@@ -130,6 +132,7 @@ public class RkpRegistrationCheck {
         if (!isValidInstance()) {
             System.err.println("Skipping registration check for '" + mInstanceName + "'.");
             System.err.println("The HAL does not exist.");
+            return;
         }
 
         try {
@@ -144,11 +147,17 @@ public class RkpRegistrationCheck {
                 Log.i(TAG, "  " + c.toString());
             }
             System.out.println("SUCCESS: Device key for '" + mInstanceName + "' is registered");
+        } catch (ServiceSpecificException e) {
+            Log.e(TAG, e.getMessage(), e);
+            System.err.println("Error getting CSR for '" + mInstanceName + "': '" + e
+                    + "', skipping.");
         } catch (NotRegisteredException e) {
+            Log.e(TAG, e.getMessage(), e);
             System.out.println("FAIL: Device key for '" + mInstanceName + "' is NOT registered");
         } catch (IOException | CborException | RemoteException | CertificateException e) {
-            System.err.println("Error checking device registration: " + e);
-            e.printStackTrace();
+            Log.e(TAG, e.getMessage(), e);
+            System.err.println("Error checking device registration for '" + mInstanceName
+                    + "': '" + e + "', skipping.");
         }
     }
 
@@ -244,6 +253,8 @@ public class RkpRegistrationCheck {
             os.write(input, 0, input.length);
         }
 
+        Log.i(TAG, "HTTP status: " + con.getResponseCode());
+
         if (con.getResponseCode() == 444) {
             throw new NotRegisteredException();
         }
@@ -275,7 +286,7 @@ public class RkpRegistrationCheck {
         RpcHardwareInfo hwInfo = irpc.getHardwareInfo();
 
         MacedPublicKey[] macedKeysToSign = new MacedPublicKey[]{new MacedPublicKey()};
-        byte[] privateKey = irpc.generateEcdsaP256KeyPair(false, macedKeysToSign[0]);
+        irpc.generateEcdsaP256KeyPair(false, macedKeysToSign[0]);
 
         if (hwInfo.versionNumber < 3) {
             Log.i(TAG, "Generating CSRv1");
@@ -284,15 +295,7 @@ public class RkpRegistrationCheck {
             byte[] geekChain = eekResponse.getEekChain(hwInfo.supportedEekCurve);
             byte[] csrTag = irpc.generateCertificateRequest(false, macedKeysToSign, geekChain,
                     eekResponse.getChallenge(), deviceInfo, protectedData);
-            Array macedKeys = new Array().add(decodeCbor(privateKey));
-            Map protectedHeaders = new Map().put(
-                    new UnsignedInteger(COSE_HEADER_ALGORITHM),
-                    new UnsignedInteger(COSE_ALGORITHM_HMAC_256));
-            Array mac0Message = new Array()
-                    .add(new ByteString(encodeCbor(protectedHeaders)))
-                    .add(new Map())
-                    .add(new ByteString(encodeCbor(macedKeys)))
-                    .add(new ByteString(csrTag));
+            Array mac0Message = buildMac0MessageForV1Csr(macedKeysToSign[0], csrTag);
             return encodeCbor(new CborBuilder()
                     .addArray()
                     .addArray()
@@ -312,6 +315,23 @@ public class RkpRegistrationCheck {
             array.add(unverifiedDeviceInfo);
             return encodeCbor(array);
         }
+    }
+
+    Array buildMac0MessageForV1Csr(MacedPublicKey macedKeyToSign, byte[] csrTag)
+            throws CborException {
+        DataItem macedPayload = ((Array) decodeCbor(
+                macedKeyToSign.macedKey)).getDataItems().get(2);
+        Map macedCoseKey = (Map) decodeCbor(((ByteString) macedPayload).getBytes());
+        byte[] macedKeys = encodeCbor(new Array().add(macedCoseKey));
+
+        Map protectedHeaders = new Map().put(
+                new UnsignedInteger(COSE_HEADER_ALGORITHM),
+                new UnsignedInteger(COSE_ALGORITHM_HMAC_256));
+        return new Array()
+                .add(new ByteString(encodeCbor(protectedHeaders)))
+                .add(new Map())
+                .add(new ByteString(macedKeys))
+                .add(new ByteString(csrTag));
     }
 
     static DataItem decodeCbor(byte[] encodedBytes) throws CborException {
