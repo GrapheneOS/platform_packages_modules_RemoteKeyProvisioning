@@ -182,13 +182,13 @@ public class SystemInterface {
 
         int batchSize = mBinder.getHardwareInfo().supportedNumKeysInCsr;
 
-        if (batchSize <= RpcHardwareInfo.MIN_SUPPORTED_NUM_KEYS_IN_CSR) {
+        if (batchSize < RpcHardwareInfo.MIN_SUPPORTED_NUM_KEYS_IN_CSR) {
             Log.w(TAG, "HAL returned a batch size that's too small (" + batchSize
                     + "), defaulting to " + RpcHardwareInfo.MIN_SUPPORTED_NUM_KEYS_IN_CSR);
             return RpcHardwareInfo.MIN_SUPPORTED_NUM_KEYS_IN_CSR;
         }
 
-        if (batchSize >= maxBatchSize) {
+        if (batchSize > maxBatchSize) {
             Log.w(TAG, "HAL returned a batch size that's too large (" + batchSize
                     + "), defaulting to " + maxBatchSize);
             return maxBatchSize;
