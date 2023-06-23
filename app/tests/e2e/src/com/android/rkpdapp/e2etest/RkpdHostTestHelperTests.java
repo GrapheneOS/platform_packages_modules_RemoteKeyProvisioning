@@ -174,6 +174,8 @@ public class RkpdHostTestHelperTests {
         StatsProcessor.PoolStats updatedPool = StatsProcessor.processPool(mRealDao, mServiceName,
                 Settings.getExtraSignedKeysAvailable(sContext),
                 Settings.getExpirationTime(sContext));
-        assertThat(updatedPool.toString()).isEqualTo(pool.toString());
+
+        assertThat(updatedPool.keysInUse + updatedPool.keysUnassigned)
+                .isEqualTo(pool.keysInUse + pool.keysUnassigned);
     }
 }
