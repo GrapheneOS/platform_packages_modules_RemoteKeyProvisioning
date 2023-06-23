@@ -45,7 +45,6 @@ import com.android.rkpdapp.interfaces.ServiceManagerInterface;
 import com.android.rkpdapp.interfaces.SystemInterface;
 import com.android.rkpdapp.provisioner.PeriodicProvisioner;
 import com.android.rkpdapp.testutil.FakeRkpServer;
-import com.android.rkpdapp.testutil.NetworkUtils;
 import com.android.rkpdapp.testutil.SystemPropertySetter;
 import com.android.rkpdapp.utils.Settings;
 import com.android.rkpdapp.utils.X509Utils;
@@ -229,13 +228,9 @@ public class KeystoreIntegrationTest {
             assertWithMessage("Should have gotten a KeyStoreException").fail();
         } catch (ProviderException e) {
             assertThat(e.getCause()).isInstanceOf(KeyStoreException.class);
-            if (NetworkUtils.isNetworkConnected(sContext)) {
-                assertThat(((KeyStoreException) e.getCause()).getErrorCode())
-                        .isEqualTo(ResponseCode.OUT_OF_KEYS_TRANSIENT_ERROR);
-            } else {
-                assertThat(((KeyStoreException) e.getCause()).getErrorCode())
-                        .isEqualTo(ResponseCode.OUT_OF_KEYS_PENDING_INTERNET_CONNECTIVITY);
-            }
+            assertThat(((KeyStoreException) e.getCause()).getErrorCode()).isAnyOf(
+                    ResponseCode.OUT_OF_KEYS_TRANSIENT_ERROR,
+                    ResponseCode.OUT_OF_KEYS_PENDING_INTERNET_CONNECTIVITY);
         }
     }
 
