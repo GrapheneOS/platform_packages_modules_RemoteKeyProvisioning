@@ -51,6 +51,7 @@ import com.android.rkpdapp.testutil.SystemPropertySetter;
 import com.android.rkpdapp.utils.Settings;
 
 import org.junit.After;
+import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -75,6 +76,9 @@ public class PeriodicProvisionerTests {
     @Before
     public void setUp() {
         mContext = ApplicationProvider.getApplicationContext();
+
+        Assume.assumeFalse(Settings.getDefaultUrl().isEmpty());
+
         RkpdDatabase.getDatabase(mContext).provisionedKeyDao().deleteAllKeys();
         mProvisioner = TestWorkerBuilder.from(
                 mContext,
