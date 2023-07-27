@@ -58,6 +58,7 @@ public class RemoteProvisioningServiceTest {
         service.attach(mContext, ActivityThread.currentActivityThread(),
                 "RemoteProvisioningService", null, mock(Application.class), null);
         mBinder = IRemoteProvisioning.Stub.asInterface(service.onBind(null));
+        Settings.clearPreferences(mContext);
     }
 
     @After
