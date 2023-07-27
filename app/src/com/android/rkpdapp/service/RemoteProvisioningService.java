@@ -58,7 +58,7 @@ public class RemoteProvisioningService extends Service {
             final Context context = getApplicationContext();
             RkpdClientOperation metric = RkpdClientOperation.getRegistration(callerUid, irpcName);
             try (metric) {
-                if (Settings.getDefaultUrl().isEmpty()) {
+                if (Settings.getUrl(context).isEmpty()) {
                     callback.onError("RKP is disabled. System configured with no default URL.");
                     metric.setResult(RkpdClientOperation.Result.RKP_UNSUPPORTED);
                     return;
