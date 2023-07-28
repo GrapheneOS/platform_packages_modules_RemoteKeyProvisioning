@@ -89,7 +89,7 @@ public class PeriodicProvisionerTests {
                 .setExecutor(new SynchronousExecutor())
                 .build();
         WorkManagerTestInitHelper.initializeTestWorkManager(mContext, config);
-
+        Settings.clearPreferences(mContext);
     }
 
     @After
