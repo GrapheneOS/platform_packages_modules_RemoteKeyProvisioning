@@ -37,7 +37,7 @@ apex {
         "com.android.rkpd-systemserverclasspath-fragment",
     ],
     updatable: true,
-    min_sdk_version: "UpsideDownCake",
+    min_sdk_version: "33",
     apps: ["rkpdapp"],
     compile_multilib: "both",
 }
