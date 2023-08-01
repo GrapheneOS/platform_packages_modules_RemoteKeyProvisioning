@@ -40,7 +40,7 @@ android_test {
         "device-tests",
         "mts-rkpd",
     ],
-    min_sdk_version: "UpsideDownCake",
+    min_sdk_version: "33",
     instrumentation_for: "rkpdapp",
 }
 
