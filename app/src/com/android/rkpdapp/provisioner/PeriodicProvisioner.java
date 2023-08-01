@@ -71,7 +71,7 @@ public class PeriodicProvisioner extends Worker {
             return Result.success();
         }
 
-        if (Settings.getDefaultUrl().isEmpty()) {
+        if (Settings.getUrl(mContext).isEmpty()) {
             Log.i(TAG, "Stopping periodic provisioner: system has no configured server endpoint");
             WorkManager.getInstance(mContext).cancelWorkById(getId());
             return Result.success();
