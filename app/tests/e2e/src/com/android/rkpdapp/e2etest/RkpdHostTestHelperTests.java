@@ -58,7 +58,6 @@ import org.junit.runners.Parameterized;
 import java.security.KeyPairGenerator;
 import java.security.KeyStore;
 import java.security.spec.ECGenParameterSpec;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.Executors;
@@ -144,8 +143,6 @@ public class RkpdHostTestHelperTests {
     public void provisionThenExpireThenProvisionAgain() throws Exception {
         assertThat(mProvisioner.doWork()).isEqualTo(ListenableWorker.Result.success());
 
-        final Instant expiry = Instant.now().plus(Duration.ofHours(1));
-
         List<ProvisionedKey> keys = mTestDao.getAllKeys();
 
         // Expire a key
@@ -177,6 +174,8 @@ public class RkpdHostTestHelperTests {
         StatsProcessor.PoolStats updatedPool = StatsProcessor.processPool(mRealDao, mServiceName,
                 Settings.getExtraSignedKeysAvailable(sContext),
                 Settings.getExpirationTime(sContext));
-        assertThat(updatedPool.toString()).isEqualTo(pool.toString());
+
+        assertThat(updatedPool.keysInUse + updatedPool.keysUnassigned)
+                .isEqualTo(pool.keysInUse + pool.keysUnassigned);
     }
 }

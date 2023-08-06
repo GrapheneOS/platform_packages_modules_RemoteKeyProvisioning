@@ -20,6 +20,7 @@ import android.content.Context;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.TrafficStats;
+import android.net.Uri;
 import android.util.Base64;
 import android.util.Log;
 
@@ -37,6 +38,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
 import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.nio.charset.Charset;
@@ -58,14 +60,24 @@ public class ServerInterface {
 
     private static final String TAG = "RkpdServerInterface";
     private static final String GEEK_URL = ":fetchEekChain";
-    private static final String CERTIFICATE_SIGNING_URL = ":signCertificates?";
-    private static final String CHALLENGE_PARAMETER = "challenge=";
-    private static final String REQUEST_ID_PARAMETER = "request_id=";
+    private static final String CERTIFICATE_SIGNING_URL = ":signCertificates";
+    private static final String CHALLENGE_PARAMETER = "challenge";
+    private static final String REQUEST_ID_PARAMETER = "request_id";
     private final Context mContext;
 
     private enum Operation {
-        FETCH_GEEK,
-        SIGN_CERTS;
+        FETCH_GEEK(1),
+        SIGN_CERTS(2);
+
+        private final int mTrafficTag;
+
+        Operation(int trafficTag) {
+            mTrafficTag = trafficTag;
+        }
+
+        public int getTrafficTag() {
+            return mTrafficTag;
+        }
 
         public ProvisioningAttempt.Status getHttpErrorStatus() {
             if (Objects.equals(name(), FETCH_GEEK.name())) {
@@ -114,11 +126,9 @@ public class ServerInterface {
      */
     public List<byte[]> requestSignedCertificates(byte[] csr, byte[] challenge,
             ProvisioningAttempt metrics) throws RkpdException, InterruptedException {
-        final String challengeParam = CHALLENGE_PARAMETER + Base64.encodeToString(challenge,
-                Base64.URL_SAFE | Base64.NO_WRAP);
-        final String fullUrl = CERTIFICATE_SIGNING_URL + String.join("&", challengeParam,
-                REQUEST_ID_PARAMETER + generateAndLogRequestId());
-        final byte[] cborBytes = connectAndGetData(metrics, fullUrl, csr, Operation.SIGN_CERTS);
+        final byte[] cborBytes =
+                connectAndGetData(metrics, generateSignCertsUrl(challenge),
+                                  csr, Operation.SIGN_CERTS);
         List<byte[]> certChains = CborUtils.parseSignedCertificates(cborBytes);
         if (certChains == null) {
             metrics.setStatus(ProvisioningAttempt.Status.INTERNAL_ERROR);
@@ -143,6 +153,22 @@ public class ServerInterface {
         return certChains;
     }
 
+    private URL generateSignCertsUrl(byte[] challenge) throws RkpdException {
+        try {
+            return new URL(Uri.parse(Settings.getUrl(mContext)).buildUpon()
+                    .appendEncodedPath(CERTIFICATE_SIGNING_URL)
+                    .appendQueryParameter(CHALLENGE_PARAMETER,
+                            Base64.encodeToString(challenge, Base64.URL_SAFE | Base64.NO_WRAP))
+                    .appendQueryParameter(REQUEST_ID_PARAMETER, generateAndLogRequestId())
+                    .build()
+                    .toString()
+                    // Needed due to the `:` in the URL endpoint.
+                    .replaceFirst("%3A", ":"));
+        } catch (MalformedURLException e) {
+            throw new RkpdException(RkpdException.ErrorCode.HTTP_CLIENT_ERROR, "Bad URL", e);
+        }
+    }
+
     private String generateAndLogRequestId() {
         String reqId = UUID.randomUUID().toString();
         Log.i(TAG, "request_id: " + reqId);
@@ -163,7 +189,8 @@ public class ServerInterface {
     public GeekResponse fetchGeek(ProvisioningAttempt metrics)
             throws RkpdException, InterruptedException {
         byte[] input = CborUtils.buildProvisioningInfo(mContext);
-        byte[] cborBytes = connectAndGetData(metrics, GEEK_URL, input, Operation.FETCH_GEEK);
+        byte[] cborBytes =
+                connectAndGetData(metrics, generateFetchGeekUrl(), input, Operation.FETCH_GEEK);
         GeekResponse resp = CborUtils.parseGeekResponse(cborBytes);
         if (resp == null) {
             metrics.setStatus(ProvisioningAttempt.Status.FETCH_GEEK_HTTP_ERROR);
@@ -172,6 +199,19 @@ public class ServerInterface {
                     "Response failed to parse.");
         }
         return resp;
+    }
+
+    private URL generateFetchGeekUrl() throws RkpdException {
+        try {
+            return new URL(Uri.parse(Settings.getUrl(mContext)).buildUpon()
+                            .appendPath(GEEK_URL)
+                            .build()
+                            .toString()
+                            // Needed due to the `:` in the URL endpoint.
+                            .replaceFirst("%3A", ":"));
+        } catch (MalformedURLException e) {
+            throw new RkpdException(RkpdException.ErrorCode.INTERNAL_ERROR, "Bad URL", e);
+        }
     }
 
     private void checkDataBudget(ProvisioningAttempt metrics)
@@ -273,19 +313,18 @@ public class ServerInterface {
         }
     }
 
-    private byte[] connectAndGetData(ProvisioningAttempt metrics, String endpoint, byte[] input,
+    private byte[] connectAndGetData(ProvisioningAttempt metrics, URL url, byte[] input,
             Operation operation) throws RkpdException, InterruptedException {
-        TrafficStats.setThreadStatsTag(0);
         int backoff_time = BACKOFF_TIME_MS;
         int attempt = 1;
+        final int oldTrafficTag = TrafficStats.getAndSetThreadStatsTag(operation.getTrafficTag());
         try (StopWatch retryTimer = new StopWatch(TAG)) {
             retryTimer.start();
             while (true) {
                 checkDataBudget(metrics);
                 try {
                     Log.v(TAG, "Requesting data from server. Attempt " + attempt);
-                    return requestData(metrics, new URL(Settings.getUrl(mContext) + endpoint),
-                            input);
+                    return requestData(metrics, url, input);
                 } catch (SocketTimeoutException e) {
                     metrics.setStatus(operation.getTimedOutStatus());
                     Log.e(TAG, "Server timed out. " + e.getMessage());
@@ -312,6 +351,8 @@ public class ServerInterface {
                     attempt += 1;
                 }
             }
+        } finally {
+            TrafficStats.setThreadStatsTag(oldTrafficTag);
         }
         Settings.incrementFailureCounter(mContext);
         throw makeNetworkError("Error getting data from server.", metrics);
