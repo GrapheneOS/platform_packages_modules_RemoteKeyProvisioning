@@ -36,6 +36,8 @@ import com.android.rkpdapp.metrics.RkpdStatsLog;
 import com.android.rkpdapp.utils.Settings;
 
 import java.time.Instant;
+import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import co.nstant.in.cbor.CborException;
 
@@ -103,8 +105,8 @@ public class PeriodicProvisioner extends Worker {
 
             Log.i(TAG, "Total services found implementing IRPC: " + irpcs.length);
             Provisioner provisioner = new Provisioner(mContext, mKeyDao);
-            Result result = Result.success();
-            for (SystemInterface irpc : irpcs) {
+            final AtomicBoolean result = new AtomicBoolean(true);
+            Arrays.stream(irpcs).parallel().forEach(irpc -> {
                 Log.i(TAG, "Starting provisioning for " + irpc);
                 try {
                     provisioner.provisionKeys(metrics, irpc, response);
@@ -112,13 +114,13 @@ public class PeriodicProvisioner extends Worker {
                     Log.i(TAG, "Successfully provisioned " + irpc);
                 } catch (CborException e) {
                     Log.e(TAG, "Error parsing CBOR for " + irpc, e);
-                    result = Result.failure();
+                    result.set(false);
                 } catch (InterruptedException | RkpdException e) {
                     Log.e(TAG, "Error provisioning keys for " + irpc, e);
-                    result = Result.failure();
+                    result.set(false);
                 }
-            }
-            return result;
+            });
+            return result.get() ? Result.success() : Result.failure();
         }
     }
 
