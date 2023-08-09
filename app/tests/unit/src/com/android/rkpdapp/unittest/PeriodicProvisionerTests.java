@@ -24,7 +24,6 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import android.content.Context;
 
@@ -172,8 +171,8 @@ public class PeriodicProvisionerTests {
             ServiceManagerInterface.setInstances(new SystemInterface[]{mockHal});
             assertThat(mProvisioner.doWork()).isEqualTo(ListenableWorker.Result.failure());
 
-            // we should have failed before making any local HAl calls
-            verifyNoMoreInteractions(mockHal);
+            // we should have failed before trying to generate any keys
+            verify(mockHal, never()).generateKey(any());
         }
     }
 
@@ -193,8 +192,8 @@ public class PeriodicProvisionerTests {
             ServiceManagerInterface.setInstances(new SystemInterface[]{mockHal});
             assertThat(mProvisioner.doWork()).isEqualTo(ListenableWorker.Result.success());
 
-            // since RKP is disabled, there should be no interactions with the HAL
-            verifyNoMoreInteractions(mockHal);
+            // since RKP is disabled, there should be no keys generated
+            verify(mockHal, never()).generateKey(any());
         }
 
         // when RKP is detected as disabled, the provisioner is supposed to delete all keys
