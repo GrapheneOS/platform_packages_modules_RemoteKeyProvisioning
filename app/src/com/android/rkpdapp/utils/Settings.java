@@ -236,6 +236,11 @@ public class Settings {
      * servers.
      */
     public static String getUrl(Context context) {
+        String override = android.ext.settings.RemoteKeyProvisioningSettings.getServerUrlOverride(context);
+        if (override != null) {
+            return override;
+        }
+
         SharedPreferences sharedPref = getSharedPreferences(context);
         return sharedPref.getString(KEY_URL, getDefaultUrl());
     }
