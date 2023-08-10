@@ -18,6 +18,7 @@ package com.android.rkpdapp.utils;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.ext.settings.RemoteKeyProvisioningSettings;
 import android.os.SystemProperties;
 import android.util.Log;
 
@@ -227,6 +228,11 @@ public class Settings {
      * servers.
      */
     public static String getUrl(Context context) {
+        String override = RemoteKeyProvisioningSettings.getServerUrlOverride(context);
+        if (override != null) {
+            return override;
+        }
+
         SharedPreferences sharedPref = getSharedPreferences(context);
         return sharedPref.getString(KEY_URL, getDefaultUrl());
     }
