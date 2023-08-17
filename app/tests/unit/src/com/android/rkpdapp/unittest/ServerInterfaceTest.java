@@ -81,7 +81,8 @@ public class ServerInterfaceTest {
                     ProvisioningAttempt.createScheduledAttemptMetrics(sContext));
             assertWithMessage("Expected RkpdException.").fail();
         } catch (RkpdException e) {
-            // should throw this
+            assertThat(e.getErrorCode()).isEqualTo(RkpdException.ErrorCode.HTTP_SERVER_ERROR);
+            assertThat(e).hasMessageThat().contains("HTTP error status encountered");
         }
     }
 
@@ -183,6 +184,7 @@ public class ServerInterfaceTest {
                 FakeRkpServer.Response.SIGN_CERTS_USER_UNAUTHORIZED)) {
             Settings.setDeviceConfig(sContext, 2 /* extraKeys */,
                     TIME_TO_REFRESH_HOURS /* expiringBy */, server.getUrl());
+            Settings.setMaxRequestTime(sContext, 100);
             ProvisioningAttempt metrics = ProvisioningAttempt.createScheduledAttemptMetrics(
                     sContext);
             mServerInterface.requestSignedCertificates(new byte[0], new byte[0], metrics);
