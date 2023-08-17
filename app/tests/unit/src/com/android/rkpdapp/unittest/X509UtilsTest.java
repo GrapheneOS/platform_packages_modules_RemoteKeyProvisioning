@@ -39,6 +39,9 @@ import java.security.KeyPair;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Date;
 
 @RunWith(AndroidJUnit4.class)
 public class X509UtilsTest {
@@ -131,6 +134,36 @@ public class X509UtilsTest {
         assertThat(X509Utils.isSelfSignedCertificate(rootCert)).isTrue();
         assertThat(X509Utils.isSelfSignedCertificate(testCert)).isFalse();
         assertThat(X509Utils.isCertChainValid(certChain)).isFalse();
+    }
+
+    @Test
+    public void testCertChainExpirationTimeWhenRootExpiresLater() throws Exception {
+        KeyPair root = generateEcdsaKeyPair();
+        KeyPair leaf = generateEcdsaKeyPair();
+        X509Certificate[] certs = new X509Certificate[2];
+
+        // root cert expires later.
+        certs[0] = signPublicKey(root, leaf.getPublic(), Instant.now().plus(Duration.ofDays(2)));
+        certs[1] = signPublicKey(root, root.getPublic(), Instant.now().plus(Duration.ofDays(1)));
+
+        Date expirationTime = X509Utils.getExpirationTimeForCertificateChain(certs);
+        assertThat(expirationTime).isEqualTo(certs[1].getNotAfter());
+        assertThat(expirationTime).isNotEqualTo(certs[0].getNotAfter());
+    }
+
+    @Test
+    public void testCertChainExpirationTimeWhenLeafExpiresLater() throws Exception {
+        KeyPair root = generateEcdsaKeyPair();
+        KeyPair leaf = generateEcdsaKeyPair();
+        X509Certificate[] certs = new X509Certificate[2];
+
+        // leaf cert expires later.
+        certs[0] = signPublicKey(root, leaf.getPublic(), Instant.now().plus(Duration.ofDays(1)));
+        certs[1] = signPublicKey(root, root.getPublic(), Instant.now().plus(Duration.ofDays(2)));
+
+        Date expirationTime = X509Utils.getExpirationTimeForCertificateChain(certs);
+        assertThat(expirationTime).isEqualTo(certs[0].getNotAfter());
+        assertThat(expirationTime).isNotEqualTo(certs[1].getNotAfter());
     }
 
     private X509Certificate generateCertificateFromEncodedBytes(String encodedCert)
