@@ -124,7 +124,7 @@ public class Provisioner {
             throws RkpdException, CborException, InterruptedException {
         int provisionedSoFar = 0;
         List<byte[]> certChains = new ArrayList<>(keysGenerated.size());
-        int maxBatchSize = 0;
+        int maxBatchSize;
         try {
             maxBatchSize = systemInterface.getBatchSize();
         } catch (RemoteException e) {
@@ -162,9 +162,11 @@ public class Provisioner {
             List<RkpKey> keysGenerated) throws RkpdException {
         List<ProvisionedKey> provisionedKeys = new ArrayList<>();
         for (byte[] chain : certChains) {
-            X509Certificate cert = X509Utils.formatX509Certs(chain)[0];
-            long expirationDate = cert.getNotAfter().getTime();
-            byte[] rawPublicKey = X509Utils.getAndFormatRawPublicKey(cert);
+            X509Certificate[] certChain = X509Utils.formatX509Certs(chain);
+            X509Certificate leafCertificate = certChain[0];
+            long expirationDate = X509Utils.getExpirationTimeForCertificateChain(certChain)
+                    .getTime();
+            byte[] rawPublicKey = X509Utils.getAndFormatRawPublicKey(leafCertificate);
             if (rawPublicKey == null) {
                 Log.e(TAG, "Skipping malformed public key.");
                 continue;
