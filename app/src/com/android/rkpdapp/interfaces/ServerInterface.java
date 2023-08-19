@@ -57,6 +57,7 @@ public class ServerInterface {
 
     private static final int TIMEOUT_MS = 20000;
     private static final int BACKOFF_TIME_MS = 100;
+    private static final int SHORT_RETRY_COUNT = 2;
 
     private static final String TAG = "RkpdServerInterface";
     private static final String GEEK_URL = ":fetchEekChain";
@@ -315,11 +316,15 @@ public class ServerInterface {
 
     private byte[] connectAndGetData(ProvisioningAttempt metrics, URL url, byte[] input,
             Operation operation) throws RkpdException, InterruptedException {
+        final int oldTrafficTag = TrafficStats.getAndSetThreadStatsTag(operation.getTrafficTag());
         int backoff_time = BACKOFF_TIME_MS;
         int attempt = 1;
-        final int oldTrafficTag = TrafficStats.getAndSetThreadStatsTag(operation.getTrafficTag());
+        RkpdException lastSeenRkpdException = null;
         try (StopWatch retryTimer = new StopWatch(TAG)) {
             retryTimer.start();
+            // Retry logic.
+            // Provide longer retries (up to 10s) for RkpdExceptions
+            // Provide shorter retries (once) for everything else.
             while (true) {
                 checkDataBudget(metrics);
                 try {
@@ -330,29 +335,31 @@ public class ServerInterface {
                     Log.e(TAG, "Server timed out. " + e.getMessage());
                 } catch (IOException e) {
                     metrics.setStatus(operation.getIoExceptionStatus());
-                    Log.e(TAG, "Failed to complete request from server." + e.getMessage());
+                    Log.e(TAG, "Failed to complete request from server. " + e.getMessage());
                 } catch (RkpdException e) {
+                    lastSeenRkpdException = e;
                     if (e.getErrorCode() == RkpdException.ErrorCode.DEVICE_NOT_REGISTERED) {
                         metrics.setStatus(
                                 ProvisioningAttempt.Status.SIGN_CERTS_DEVICE_NOT_REGISTERED);
                         throw e;
                     } else {
                         metrics.setStatus(operation.getHttpErrorStatus());
-                        if (e.getErrorCode() == RkpdException.ErrorCode.HTTP_CLIENT_ERROR) {
-                            throw e;
-                        }
                     }
                 }
-                if (retryTimer.getElapsedMillis() > Settings.getMaxRequestTime(mContext)) {
+                // Only RkpdExceptions should get longer retries.
+                if (retryTimer.getElapsedMillis() > Settings.getMaxRequestTime(mContext)
+                        || (attempt >= SHORT_RETRY_COUNT && lastSeenRkpdException == null)) {
                     break;
-                } else {
-                    Thread.sleep(backoff_time);
-                    backoff_time *= 2;
-                    attempt += 1;
                 }
+                Thread.sleep(backoff_time);
+                backoff_time *= 2;
+                attempt += 1;
             }
         } finally {
             TrafficStats.setThreadStatsTag(oldTrafficTag);
+        }
+        if (lastSeenRkpdException != null) {
+            throw lastSeenRkpdException;
         }
         Settings.incrementFailureCounter(mContext);
         throw makeNetworkError("Error getting data from server.", metrics);
