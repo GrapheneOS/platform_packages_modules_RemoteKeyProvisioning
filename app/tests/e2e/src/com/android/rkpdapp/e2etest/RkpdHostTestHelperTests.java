@@ -88,15 +88,15 @@ public class RkpdHostTestHelperTests {
     @BeforeClass
     public static void init() {
         sContext = ApplicationProvider.getApplicationContext();
-
-        assume()
-                .withMessage("The RKP server hostname is not configured -- assume RKP disabled.")
-                .that(SystemProperties.get("remote_provisioning.hostname"))
-                .isNotEmpty();
     }
 
     @Before
     public void setUp() throws Exception {
+        assume()
+                .withMessage("The RKP server hostname is not configured -- assume RKP disabled.")
+                .that(SystemProperties.get("remote_provisioning.hostname"))
+                .isNotEmpty();
+
         Settings.clearPreferences(sContext);
         mRealDao = RkpdDatabase.getDatabase(sContext).provisionedKeyDao();
         mRealDao.deleteAllKeys();
@@ -113,7 +113,10 @@ public class RkpdHostTestHelperTests {
     @After
     public void tearDown() throws Exception {
         Settings.clearPreferences(sContext);
-        mRealDao.deleteAllKeys();
+
+        if (mRealDao != null) {
+            mRealDao.deleteAllKeys();
+        }
 
         KeyStore keyStore = KeyStore.getInstance("AndroidKeyStore");
         keyStore.load(null);
