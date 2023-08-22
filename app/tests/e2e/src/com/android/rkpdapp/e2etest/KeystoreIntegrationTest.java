@@ -107,15 +107,15 @@ public class KeystoreIntegrationTest {
     @BeforeClass
     public static void init() {
         sContext = ApplicationProvider.getApplicationContext();
-
-        assume()
-                .withMessage("The RKP server hostname is not configured -- assume RKP disabled.")
-                .that(SystemProperties.get("remote_provisioning.hostname"))
-                .isNotEmpty();
     }
 
     @Before
     public void setUp() throws Exception {
+        assume()
+                .withMessage("The RKP server hostname is not configured -- assume RKP disabled.")
+                .that(SystemProperties.get("remote_provisioning.hostname"))
+                .isNotEmpty();
+
         Settings.clearPreferences(sContext);
 
         mKeyDao = RkpdDatabase.getDatabase(sContext).provisionedKeyDao();
@@ -131,8 +131,10 @@ public class KeystoreIntegrationTest {
     public void tearDown() throws Exception {
         Settings.clearPreferences(sContext);
 
-        mKeyStore.deleteEntry(getTestKeyAlias());
-        mKeyDao.deleteAllKeys();
+        if (mKeyDao != null) {
+            mKeyStore.deleteEntry(getTestKeyAlias());
+            mKeyDao.deleteAllKeys();
+        }
 
         ServiceManagerInterface.setInstances(null);
     }
