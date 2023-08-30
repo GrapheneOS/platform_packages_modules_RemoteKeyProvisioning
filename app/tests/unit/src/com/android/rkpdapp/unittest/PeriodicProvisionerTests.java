@@ -45,6 +45,7 @@ import com.android.rkpdapp.database.RkpdDatabase;
 import com.android.rkpdapp.interfaces.ServiceManagerInterface;
 import com.android.rkpdapp.interfaces.SystemInterface;
 import com.android.rkpdapp.provisioner.PeriodicProvisioner;
+import com.android.rkpdapp.service.RegistrationBinder;
 import com.android.rkpdapp.testutil.FakeRkpServer;
 import com.android.rkpdapp.testutil.SystemPropertySetter;
 import com.android.rkpdapp.utils.Settings;
@@ -208,9 +209,12 @@ public class PeriodicProvisionerTests {
     public void provisioningExpiresOldKeys() throws Exception {
         ProvisionedKeyDao dao = RkpdDatabase.getDatabase(mContext).provisionedKeyDao();
         ProvisionedKey oldKey = new ProvisionedKey(new byte[1], "fake-irpc", new byte[2],
-                new byte[3], Instant.now().minusSeconds(120));
+                new byte[3],
+                Instant.now().minus(RegistrationBinder.MIN_KEY_LIFETIME.multipliedBy(2)));
+        // Add 2 hours so that this key does not get deleted in case getKeyWorker comes alive.
         ProvisionedKey freshKey = new ProvisionedKey(new byte[11], "fake-irpc", new byte[12],
-                new byte[13], Instant.now().plusSeconds(120));
+                new byte[13],
+                Instant.now().plus(RegistrationBinder.MIN_KEY_LIFETIME.multipliedBy(2)));
         dao.insertKeys(List.of(oldKey, freshKey));
         assertThat(dao.getTotalKeysForIrpc("fake-irpc")).isEqualTo(2);
 
