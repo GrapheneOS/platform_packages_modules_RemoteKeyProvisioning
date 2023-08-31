@@ -18,7 +18,7 @@ package com.android.rkpdapp.interfaces;
 
 import android.content.Context;
 import android.net.ConnectivityManager;
-import android.net.NetworkInfo;
+import android.net.NetworkCapabilities;
 import android.net.TrafficStats;
 import android.net.Uri;
 import android.util.Base64;
@@ -227,15 +227,25 @@ public class ServerInterface {
 
     private RkpdException makeNetworkError(String message,
             ProvisioningAttempt metrics) {
-        ConnectivityManager cm = mContext.getSystemService(ConnectivityManager.class);
-        NetworkInfo networkInfo = cm.getActiveNetworkInfo();
-        if (networkInfo != null && networkInfo.isConnected()) {
+        if (isNetworkConnected(mContext)) {
             return new RkpdException(
                     RkpdException.ErrorCode.NETWORK_COMMUNICATION_ERROR, message);
         }
         metrics.setStatus(ProvisioningAttempt.Status.NO_NETWORK_CONNECTIVITY);
         return new RkpdException(
                 RkpdException.ErrorCode.NO_NETWORK_CONNECTIVITY, message);
+    }
+
+    /**
+     * Checks whether network is connected.
+     * @return true if connected else false.
+     */
+    public static boolean isNetworkConnected(Context context) {
+        ConnectivityManager cm = context.getSystemService(ConnectivityManager.class);
+        NetworkCapabilities capabilities = cm.getNetworkCapabilities(cm.getActiveNetwork());
+        return capabilities != null
+                && capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                && capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED);
     }
 
     /**
