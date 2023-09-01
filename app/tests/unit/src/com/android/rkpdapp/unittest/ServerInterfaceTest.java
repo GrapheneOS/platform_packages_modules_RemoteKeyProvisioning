@@ -21,7 +21,7 @@ import static com.google.common.truth.Truth.assertWithMessage;
 
 import android.content.Context;
 import android.net.ConnectivityManager;
-import android.net.NetworkInfo;
+import android.net.NetworkCapabilities;
 import android.util.Base64;
 
 import androidx.test.core.app.ApplicationProvider;
@@ -391,12 +391,16 @@ public class ServerInterfaceTest {
 
     private void mockConnectivityFailure(ConnectivityState state) {
         ConnectivityManager mockedConnectivityManager = Mockito.mock(ConnectivityManager.class);
-        NetworkInfo mockedNetwork = Mockito.mock(NetworkInfo.class);
 
         Mockito.when(sContext.getSystemService(ConnectivityManager.class))
                 .thenReturn(mockedConnectivityManager);
-        Mockito.when(mockedConnectivityManager.getActiveNetworkInfo()).thenReturn(mockedNetwork);
-        Mockito.when(mockedNetwork.isConnected()).thenReturn(state == ConnectivityState.CONNECTED);
+        NetworkCapabilities.Builder builder = new NetworkCapabilities.Builder();
+        builder.addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET);
+        if (state == ConnectivityState.CONNECTED) {
+            builder.addCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED);
+        }
+        Mockito.when(mockedConnectivityManager.getNetworkCapabilities(Mockito.any()))
+                .thenReturn(builder.build());
     }
 
     private enum ConnectivityState {
