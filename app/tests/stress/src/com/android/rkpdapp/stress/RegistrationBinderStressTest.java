@@ -82,8 +82,10 @@ public class RegistrationBinderStressTest {
     }
 
     private RegistrationBinder createRegistrationBinder() {
+        boolean isAsync = false;
         return new RegistrationBinder(mContext, Process.myUid(), mIrpcHal, mKeyDao,
-                new ServerInterface(mContext), new Provisioner(mContext, mKeyDao), mExecutor);
+                new ServerInterface(mContext, isAsync), new Provisioner(mContext, mKeyDao, isAsync),
+                mExecutor);
     }
 
     private void getKeyHelper(int keyId) {
