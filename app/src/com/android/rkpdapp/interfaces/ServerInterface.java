@@ -55,7 +55,8 @@ import java.util.UUID;
  */
 public class ServerInterface {
 
-    private static final int TIMEOUT_MS = 20000;
+    private static final int ASYNC_TIMEOUT_MS = 20000;
+    private static final int SYNC_TIMEOUT_MS = 2000;
     private static final int BACKOFF_TIME_MS = 100;
     private static final int SHORT_RETRY_COUNT = 2;
 
@@ -65,6 +66,7 @@ public class ServerInterface {
     private static final String CHALLENGE_PARAMETER = "challenge";
     private static final String REQUEST_ID_PARAMETER = "request_id";
     private final Context mContext;
+    private final boolean mIsAsync;
 
     private enum Operation {
         FETCH_GEEK(1),
@@ -108,8 +110,13 @@ public class ServerInterface {
         }
     }
 
-    public ServerInterface(Context context) {
+    public ServerInterface(Context context, boolean isAsync) {
         this.mContext = context;
+        this.mIsAsync = isAsync;
+    }
+
+    private int getTimeoutMs() {
+        return mIsAsync ? ASYNC_TIMEOUT_MS : SYNC_TIMEOUT_MS;
     }
 
     /**
@@ -381,8 +388,8 @@ public class ServerInterface {
         try (StopWatch serverWaitTimer = metrics.startServerWait()) {
             HttpURLConnection con = (HttpURLConnection) url.openConnection();
             con.setRequestMethod("POST");
-            con.setConnectTimeout(TIMEOUT_MS);
-            con.setReadTimeout(TIMEOUT_MS);
+            con.setConnectTimeout(getTimeoutMs());
+            con.setReadTimeout(getTimeoutMs());
             con.setDoOutput(true);
 
             try (OutputStream os = con.getOutputStream()) {
