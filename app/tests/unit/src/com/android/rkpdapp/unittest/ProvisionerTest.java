@@ -73,7 +73,7 @@ public class ProvisionerTest {
         ProvisionedKeyDao keyDao = RkpdDatabase.getDatabase(sContext).provisionedKeyDao();
         keyDao.deleteAllKeys();
 
-        mProvisioner = new Provisioner(sContext, keyDao);
+        mProvisioner = new Provisioner(sContext, keyDao, false);
     }
 
     @After
