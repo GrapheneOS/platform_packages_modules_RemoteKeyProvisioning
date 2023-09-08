@@ -53,10 +53,13 @@ public class Provisioner {
 
     private final Context mContext;
     private final ProvisionedKeyDao mKeyDao;
+    private final boolean mIsAsync;
 
-    public Provisioner(final Context applicationContext, ProvisionedKeyDao keyDao) {
+    public Provisioner(final Context applicationContext, ProvisionedKeyDao keyDao,
+            boolean isAsync) {
         mContext = applicationContext;
         mKeyDao = keyDao;
+        mIsAsync = isAsync;
     }
 
     /**
@@ -154,7 +157,7 @@ public class Provisioner {
             throw new RkpdException(RkpdException.ErrorCode.INTERNAL_ERROR,
                     "Failed to serialize payload");
         }
-        return new ServerInterface(mContext).requestSignedCertificates(certRequest,
+        return new ServerInterface(mContext, mIsAsync).requestSignedCertificates(certRequest,
                 response.getChallenge(), metrics);
     }
 

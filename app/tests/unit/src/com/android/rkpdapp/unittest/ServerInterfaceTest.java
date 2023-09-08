@@ -61,7 +61,7 @@ public class ServerInterfaceTest {
     @Before
     public void setUp() {
         Settings.clearPreferences(sContext);
-        mServerInterface = new ServerInterface(sContext);
+        mServerInterface = new ServerInterface(sContext, false);
     }
 
     @After
