@@ -109,8 +109,8 @@ public class SystemInterfaceTest {
         try {
             ServiceManagerInterface.getInstance("non-existent");
             fail("Getting the declared service 'non-existent' should fail due to SEPolicy.");
-        } catch (RuntimeException e) {
-            assertThat(e).isInstanceOf(SecurityException.class);
+        } catch (IllegalArgumentException | SecurityException e) {
+            // Pre-android V, we'd get SecurityException. Post-V we get IllegalArgumentException
         }
     }
 
