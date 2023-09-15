@@ -55,10 +55,9 @@ import java.util.UUID;
  */
 public class ServerInterface {
 
-    private static final int ASYNC_TIMEOUT_MS = 20000;
-    private static final int SYNC_TIMEOUT_MS = 500;
+    private static final int SYNC_CONNECT_TIMEOUT_MS = 1000;
+    private static final int TIMEOUT_MS = 20000;
     private static final int BACKOFF_TIME_MS = 100;
-    private static final int SHORT_RETRY_COUNT = 2;
 
     private static final String TAG = "RkpdServerInterface";
     private static final String GEEK_URL = ":fetchEekChain";
@@ -115,8 +114,8 @@ public class ServerInterface {
         this.mIsAsync = isAsync;
     }
 
-    private int getTimeoutMs() {
-        return mIsAsync ? ASYNC_TIMEOUT_MS : SYNC_TIMEOUT_MS;
+    private int getConnectTimeoutMs() {
+        return mIsAsync ? TIMEOUT_MS : SYNC_CONNECT_TIMEOUT_MS;
     }
 
     /**
@@ -186,7 +185,7 @@ public class ServerInterface {
     /**
      * Calls out to the specified backend servers to retrieve an Endpoint Encryption Key and
      * corresponding certificate chain to provide to KeyMint. This public key will be used to
-     * perform an ECDH computation, using the shared secret to encrypt privacy sensitive components
+     * perform an ECDH computation, using the shared secret to encrypt privacy-sensitive components
      * in the bundle that the server needs from the device in order to provision certificates.
      *
      * A challenge is also returned from the server so that it can check freshness of the follow-up
@@ -365,7 +364,7 @@ public class ServerInterface {
                 }
                 // Only RkpdExceptions should get longer retries.
                 if (retryTimer.getElapsedMillis() > Settings.getMaxRequestTime(mContext)
-                        || (attempt >= SHORT_RETRY_COUNT && lastSeenRkpdException == null)) {
+                        || lastSeenRkpdException == null) {
                     break;
                 }
                 Thread.sleep(backoff_time);
@@ -388,8 +387,8 @@ public class ServerInterface {
         try (StopWatch serverWaitTimer = metrics.startServerWait()) {
             HttpURLConnection con = (HttpURLConnection) url.openConnection();
             con.setRequestMethod("POST");
-            con.setConnectTimeout(getTimeoutMs());
-            con.setReadTimeout(getTimeoutMs());
+            con.setConnectTimeout(getConnectTimeoutMs());
+            con.setReadTimeout(TIMEOUT_MS);
             con.setDoOutput(true);
 
             try (OutputStream os = con.getOutputStream()) {
