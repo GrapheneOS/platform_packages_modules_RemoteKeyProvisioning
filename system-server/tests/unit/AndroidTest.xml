@@ -32,5 +32,6 @@
             class="com.android.tradefed.testtype.suite.module.MainlineTestModuleController">
         <option name="enable" value="true" />
         <option name="mainline-module-package-name" value="com.android.rkpd" />
+        <option name="mainline-module-package-name" value="com.google.android.rkpd" />
     </object>
 </configuration>
