@@ -144,6 +144,12 @@ public class Utils {
 
     public static X509Certificate signPublicKey(KeyPair issuerKeyPair, PublicKey publicKeyToSign)
             throws Exception {
+        return signPublicKey(issuerKeyPair, publicKeyToSign,
+                Instant.now().plus(Duration.ofDays(1)));
+    }
+
+    public static X509Certificate signPublicKey(KeyPair issuerKeyPair, PublicKey publicKeyToSign,
+            Instant expirationInstant) throws Exception {
         X500Principal issuer = new X500Principal("CN=TEE");
         BigInteger serial = BigInteger.ONE;
         X500Principal subject = new X500Principal("CN=TEE");
@@ -153,7 +159,7 @@ public class Utils {
         certificateBuilder.setIssuerDN(issuer);
         certificateBuilder.setSerialNumber(serial);
         certificateBuilder.setNotBefore(Date.from(now));
-        certificateBuilder.setNotAfter(Date.from(now.plus(Duration.ofDays(1))));
+        certificateBuilder.setNotAfter(Date.from(expirationInstant));
         certificateBuilder.setSignatureAlgorithm("SHA256WITHECDSA");
         certificateBuilder.setSubjectDN(subject);
         certificateBuilder.setPublicKey(publicKeyToSign);

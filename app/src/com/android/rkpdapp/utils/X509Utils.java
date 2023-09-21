@@ -40,6 +40,7 @@ import java.security.cert.X509Certificate;
 import java.security.interfaces.ECPublicKey;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.Set;
 
 /**
@@ -157,5 +158,17 @@ public class X509Utils {
             Log.e(TAG, "Error verifying self signed certificate", e);
             return false;
         }
+    }
+
+    /**
+     * Gets the date when the entire cert chain expires. This can be calculated by
+     * checking the individual certificate times and returning the minimum of all.
+     * @return Expiration time for the certificate chain
+     */
+    public static Date getExpirationTimeForCertificateChain(X509Certificate[] certChain) {
+        return Arrays.stream(certChain)
+                .map(X509Certificate::getNotAfter)
+                .min(Date::compareTo)
+                .orElse(null);
     }
 }

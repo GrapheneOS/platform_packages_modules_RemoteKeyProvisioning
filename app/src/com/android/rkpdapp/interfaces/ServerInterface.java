@@ -18,7 +18,7 @@ package com.android.rkpdapp.interfaces;
 
 import android.content.Context;
 import android.net.ConnectivityManager;
-import android.net.NetworkInfo;
+import android.net.NetworkCapabilities;
 import android.net.TrafficStats;
 import android.net.Uri;
 import android.util.Base64;
@@ -55,6 +55,7 @@ import java.util.UUID;
  */
 public class ServerInterface {
 
+    private static final int SYNC_CONNECT_TIMEOUT_MS = 1000;
     private static final int TIMEOUT_MS = 20000;
     private static final int BACKOFF_TIME_MS = 100;
 
@@ -64,6 +65,7 @@ public class ServerInterface {
     private static final String CHALLENGE_PARAMETER = "challenge";
     private static final String REQUEST_ID_PARAMETER = "request_id";
     private final Context mContext;
+    private final boolean mIsAsync;
 
     private enum Operation {
         FETCH_GEEK(1),
@@ -107,8 +109,13 @@ public class ServerInterface {
         }
     }
 
-    public ServerInterface(Context context) {
+    public ServerInterface(Context context, boolean isAsync) {
         this.mContext = context;
+        this.mIsAsync = isAsync;
+    }
+
+    private int getConnectTimeoutMs() {
+        return mIsAsync ? TIMEOUT_MS : SYNC_CONNECT_TIMEOUT_MS;
     }
 
     /**
@@ -178,7 +185,7 @@ public class ServerInterface {
     /**
      * Calls out to the specified backend servers to retrieve an Endpoint Encryption Key and
      * corresponding certificate chain to provide to KeyMint. This public key will be used to
-     * perform an ECDH computation, using the shared secret to encrypt privacy sensitive components
+     * perform an ECDH computation, using the shared secret to encrypt privacy-sensitive components
      * in the bundle that the server needs from the device in order to provision certificates.
      *
      * A challenge is also returned from the server so that it can check freshness of the follow-up
@@ -226,15 +233,25 @@ public class ServerInterface {
 
     private RkpdException makeNetworkError(String message,
             ProvisioningAttempt metrics) {
-        ConnectivityManager cm = mContext.getSystemService(ConnectivityManager.class);
-        NetworkInfo networkInfo = cm.getActiveNetworkInfo();
-        if (networkInfo != null && networkInfo.isConnected()) {
+        if (isNetworkConnected(mContext)) {
             return new RkpdException(
                     RkpdException.ErrorCode.NETWORK_COMMUNICATION_ERROR, message);
         }
         metrics.setStatus(ProvisioningAttempt.Status.NO_NETWORK_CONNECTIVITY);
         return new RkpdException(
                 RkpdException.ErrorCode.NO_NETWORK_CONNECTIVITY, message);
+    }
+
+    /**
+     * Checks whether network is connected.
+     * @return true if connected else false.
+     */
+    public static boolean isNetworkConnected(Context context) {
+        ConnectivityManager cm = context.getSystemService(ConnectivityManager.class);
+        NetworkCapabilities capabilities = cm.getNetworkCapabilities(cm.getActiveNetwork());
+        return capabilities != null
+                && capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                && capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED);
     }
 
     /**
@@ -315,11 +332,15 @@ public class ServerInterface {
 
     private byte[] connectAndGetData(ProvisioningAttempt metrics, URL url, byte[] input,
             Operation operation) throws RkpdException, InterruptedException {
+        final int oldTrafficTag = TrafficStats.getAndSetThreadStatsTag(operation.getTrafficTag());
         int backoff_time = BACKOFF_TIME_MS;
         int attempt = 1;
-        final int oldTrafficTag = TrafficStats.getAndSetThreadStatsTag(operation.getTrafficTag());
+        RkpdException lastSeenRkpdException = null;
         try (StopWatch retryTimer = new StopWatch(TAG)) {
             retryTimer.start();
+            // Retry logic.
+            // Provide longer retries (up to 10s) for RkpdExceptions
+            // Provide shorter retries (once) for everything else.
             while (true) {
                 checkDataBudget(metrics);
                 try {
@@ -330,29 +351,31 @@ public class ServerInterface {
                     Log.e(TAG, "Server timed out. " + e.getMessage());
                 } catch (IOException e) {
                     metrics.setStatus(operation.getIoExceptionStatus());
-                    Log.e(TAG, "Failed to complete request from server." + e.getMessage());
+                    Log.e(TAG, "Failed to complete request from server. " + e.getMessage());
                 } catch (RkpdException e) {
+                    lastSeenRkpdException = e;
                     if (e.getErrorCode() == RkpdException.ErrorCode.DEVICE_NOT_REGISTERED) {
                         metrics.setStatus(
                                 ProvisioningAttempt.Status.SIGN_CERTS_DEVICE_NOT_REGISTERED);
                         throw e;
                     } else {
                         metrics.setStatus(operation.getHttpErrorStatus());
-                        if (e.getErrorCode() == RkpdException.ErrorCode.HTTP_CLIENT_ERROR) {
-                            throw e;
-                        }
                     }
                 }
-                if (retryTimer.getElapsedMillis() > Settings.getMaxRequestTime(mContext)) {
+                // Only RkpdExceptions should get longer retries.
+                if (retryTimer.getElapsedMillis() > Settings.getMaxRequestTime(mContext)
+                        || lastSeenRkpdException == null) {
                     break;
-                } else {
-                    Thread.sleep(backoff_time);
-                    backoff_time *= 2;
-                    attempt += 1;
                 }
+                Thread.sleep(backoff_time);
+                backoff_time *= 2;
+                attempt += 1;
             }
         } finally {
             TrafficStats.setThreadStatsTag(oldTrafficTag);
+        }
+        if (lastSeenRkpdException != null) {
+            throw lastSeenRkpdException;
         }
         Settings.incrementFailureCounter(mContext);
         throw makeNetworkError("Error getting data from server.", metrics);
@@ -364,7 +387,7 @@ public class ServerInterface {
         try (StopWatch serverWaitTimer = metrics.startServerWait()) {
             HttpURLConnection con = (HttpURLConnection) url.openConnection();
             con.setRequestMethod("POST");
-            con.setConnectTimeout(TIMEOUT_MS);
+            con.setConnectTimeout(getConnectTimeoutMs());
             con.setReadTimeout(TIMEOUT_MS);
             con.setDoOutput(true);
 

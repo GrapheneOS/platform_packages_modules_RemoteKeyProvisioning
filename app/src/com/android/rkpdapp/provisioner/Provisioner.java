@@ -53,10 +53,13 @@ public class Provisioner {
 
     private final Context mContext;
     private final ProvisionedKeyDao mKeyDao;
+    private final boolean mIsAsync;
 
-    public Provisioner(final Context applicationContext, ProvisionedKeyDao keyDao) {
+    public Provisioner(final Context applicationContext, ProvisionedKeyDao keyDao,
+            boolean isAsync) {
         mContext = applicationContext;
         mKeyDao = keyDao;
+        mIsAsync = isAsync;
     }
 
     /**
@@ -124,7 +127,7 @@ public class Provisioner {
             throws RkpdException, CborException, InterruptedException {
         int provisionedSoFar = 0;
         List<byte[]> certChains = new ArrayList<>(keysGenerated.size());
-        int maxBatchSize = 0;
+        int maxBatchSize;
         try {
             maxBatchSize = systemInterface.getBatchSize();
         } catch (RemoteException e) {
@@ -154,7 +157,7 @@ public class Provisioner {
             throw new RkpdException(RkpdException.ErrorCode.INTERNAL_ERROR,
                     "Failed to serialize payload");
         }
-        return new ServerInterface(mContext).requestSignedCertificates(certRequest,
+        return new ServerInterface(mContext, mIsAsync).requestSignedCertificates(certRequest,
                 response.getChallenge(), metrics);
     }
 
@@ -162,9 +165,11 @@ public class Provisioner {
             List<RkpKey> keysGenerated) throws RkpdException {
         List<ProvisionedKey> provisionedKeys = new ArrayList<>();
         for (byte[] chain : certChains) {
-            X509Certificate cert = X509Utils.formatX509Certs(chain)[0];
-            long expirationDate = cert.getNotAfter().getTime();
-            byte[] rawPublicKey = X509Utils.getAndFormatRawPublicKey(cert);
+            X509Certificate[] certChain = X509Utils.formatX509Certs(chain);
+            X509Certificate leafCertificate = certChain[0];
+            long expirationDate = X509Utils.getExpirationTimeForCertificateChain(certChain)
+                    .getTime();
+            byte[] rawPublicKey = X509Utils.getAndFormatRawPublicKey(leafCertificate);
             if (rawPublicKey == null) {
                 Log.e(TAG, "Skipping malformed public key.");
                 continue;
