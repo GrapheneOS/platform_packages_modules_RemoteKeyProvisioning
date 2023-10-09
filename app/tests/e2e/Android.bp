@@ -26,7 +26,7 @@ android_test {
         "androidx.test.rules",
         "androidx.work_work-testing",
         "platform-test-annotations",
-        "truth-prebuilt",
+        "truth",
     ],
     platform_apis: true,
     test_suites: [
