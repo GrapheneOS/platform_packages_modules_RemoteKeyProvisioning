@@ -29,7 +29,7 @@ java_test_host {
         "host-libprotobuf-java-full",
         "platformprotos",
         "tradefed",
-        "truth-prebuilt",
+        "truth",
     ],
     static_libs: [
         "cts-statsd-atom-host-test-utils",
