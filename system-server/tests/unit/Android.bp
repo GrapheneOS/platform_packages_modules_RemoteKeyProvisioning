@@ -24,7 +24,7 @@ android_test {
         "androidx.test.runner",
         "mockito-target",
         "service-rkp.impl",
-        "truth-prebuilt",
+        "truth",
     ],
     libs: [
         "android.test.mock",
