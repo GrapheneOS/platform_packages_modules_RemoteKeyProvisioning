@@ -30,7 +30,7 @@ android_test {
         "libnanohttpd",
         "mockito-target-extended-minus-junit4",
         "platform-test-annotations",
-        "truth-prebuilt",
+        "truth",
         "rkpdapp-tink-prebuilt-test-only",
         "bouncycastle-unbundled",
     ],
