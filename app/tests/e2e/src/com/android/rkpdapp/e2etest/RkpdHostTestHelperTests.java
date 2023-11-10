@@ -42,6 +42,7 @@ import com.android.rkpdapp.interfaces.ServerInterface;
 import com.android.rkpdapp.interfaces.ServiceManagerInterface;
 import com.android.rkpdapp.interfaces.SystemInterface;
 import com.android.rkpdapp.provisioner.PeriodicProvisioner;
+import com.android.rkpdapp.testutil.SystemInterfaceSelector;
 import com.android.rkpdapp.testutil.TestDatabase;
 import com.android.rkpdapp.testutil.TestProvisionedKeyDao;
 import com.android.rkpdapp.utils.Settings;
@@ -107,13 +108,15 @@ public class RkpdHostTestHelperTests {
         mRealDao = RkpdDatabase.getDatabase(sContext).provisionedKeyDao();
         mRealDao.deleteAllKeys();
         mTestDao = Room.databaseBuilder(sContext, TestDatabase.class, DB_NAME).build().dao();
-        SystemInterface systemInterface = ServiceManagerInterface.getInstance(mServiceName);
-        ServiceManagerInterface.setInstances(new SystemInterface[] {systemInterface});
 
         mProvisioner = TestWorkerBuilder.from(
                 sContext,
                 PeriodicProvisioner.class,
                 Executors.newSingleThreadExecutor()).build();
+
+        SystemInterface systemInterface =
+                SystemInterfaceSelector.getSystemInterfaceForServiceName(mServiceName);
+        ServiceManagerInterface.setInstances(new SystemInterface[] {systemInterface});
     }
 
     @After

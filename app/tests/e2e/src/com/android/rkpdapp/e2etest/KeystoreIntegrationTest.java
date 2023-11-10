@@ -46,6 +46,7 @@ import com.android.rkpdapp.interfaces.ServiceManagerInterface;
 import com.android.rkpdapp.interfaces.SystemInterface;
 import com.android.rkpdapp.provisioner.PeriodicProvisioner;
 import com.android.rkpdapp.testutil.FakeRkpServer;
+import com.android.rkpdapp.testutil.SystemInterfaceSelector;
 import com.android.rkpdapp.testutil.SystemPropertySetter;
 import com.android.rkpdapp.utils.Settings;
 import com.android.rkpdapp.utils.X509Utils;
@@ -129,7 +130,8 @@ public class KeystoreIntegrationTest {
         mKeyStore.load(null);
         mKeyDao.deleteAllKeys();
 
-        SystemInterface systemInterface = ServiceManagerInterface.getInstance(mServiceName);
+        SystemInterface systemInterface =
+                SystemInterfaceSelector.getSystemInterfaceForServiceName(mServiceName);
         ServiceManagerInterface.setInstances(new SystemInterface[] {systemInterface});
     }
 
