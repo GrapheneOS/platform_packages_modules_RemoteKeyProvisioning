@@ -25,6 +25,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -53,8 +54,10 @@ import com.android.rkpdapp.interfaces.SystemInterface;
 import com.android.rkpdapp.metrics.ProvisioningAttempt;
 import com.android.rkpdapp.utils.CborUtils;
 
+import com.google.common.collect.ImmutableMap;
 import com.google.crypto.tink.subtle.Ed25519Sign;
 
+import org.junit.After;
 import org.junit.Assert;
 import org.junit.Assume;
 import org.junit.Before;
@@ -93,6 +96,12 @@ public class SystemInterfaceTest {
         Assume.assumeTrue(ServiceManager.isDeclared(SERVICE));
     }
 
+    @After
+    public void cleanUp() {
+        ServiceManagerInterface.setBinders(null);
+        ServiceManagerInterface.setInstances(null);
+    }
+
     @Test
     public void testGetDeclaredInstances() {
         SystemInterface[] instances = ServiceManagerInterface.getAllInstances();
@@ -111,6 +120,30 @@ public class SystemInterfaceTest {
             fail("Getting the declared service 'non-existent' should fail due to SEPolicy.");
         } catch (IllegalArgumentException | SecurityException e) {
             // Pre-android V, we'd get SecurityException. Post-V we get IllegalArgumentException
+        }
+    }
+
+    @Test
+    public void testGetAllInstancesWithUnsupportedService() throws RemoteException {
+        IRemotelyProvisionedComponent mockedBinder = mock(IRemotelyProvisionedComponent.class);
+        doThrow(new UnsupportedOperationException()).when(mockedBinder).getHardwareInfo();
+        ServiceManagerInterface.setBinders(ImmutableMap.of(SERVICE, mockedBinder));
+
+        SystemInterface[] instances = ServiceManagerInterface.getAllInstances();
+        assertThat(instances).isEmpty();
+    }
+
+    @Test
+    public void testGetInstanceWithUnsupportedService() throws RemoteException {
+        IRemotelyProvisionedComponent mockedBinder = mock(IRemotelyProvisionedComponent.class);
+        doThrow(new UnsupportedOperationException()).when(mockedBinder).getHardwareInfo();
+        ServiceManagerInterface.setBinders(ImmutableMap.of(SERVICE, mockedBinder));
+
+        try {
+            SystemInterface ignored = ServiceManagerInterface.getInstance(SERVICE);
+            fail("Expected UnsupportedOperationException");
+        } catch (UnsupportedOperationException e) {
+            // pass
         }
     }
 
