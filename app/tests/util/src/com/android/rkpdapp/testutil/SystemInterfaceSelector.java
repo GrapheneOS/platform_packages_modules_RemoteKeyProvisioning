@@ -19,6 +19,8 @@ package com.android.rkpdapp.testutil;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.TruthJUnit.assume;
 
+import android.hardware.security.keymint.IRemotelyProvisionedComponent;
+
 import com.android.rkpdapp.interfaces.ServiceManagerInterface;
 import com.android.rkpdapp.interfaces.SystemInterface;
 
@@ -34,7 +36,7 @@ public class SystemInterfaceSelector {
             }
         }
         if (matchingInterface == null) {
-            assertThat(serviceName).isEqualTo("avf");
+            assertThat(serviceName).isEqualTo(IRemotelyProvisionedComponent.DESCRIPTOR + "/avf");
             assume().withMessage("AVF is not supported by this system").fail();
         }
         return matchingInterface;
