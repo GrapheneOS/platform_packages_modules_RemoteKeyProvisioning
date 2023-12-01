@@ -56,7 +56,7 @@ public class WidevineProvisioner extends Worker {
     private static final Map<String, String> REQ_PROPERTIES = new HashMap<>();
     static {
         REQ_PROPERTIES.put("Accept", "*/*");
-        REQ_PROPERTIES.put("User-Agent", buildUserAgentString());
+        REQ_PROPERTIES.put("User-Agent", "AndroidRemoteProvisioner");
         REQ_PROPERTIES.put("Content-Type", "application/json");
         REQ_PROPERTIES.put("Connection", "close");
     }
@@ -65,17 +65,6 @@ public class WidevineProvisioner extends Worker {
 
     public WidevineProvisioner(@NonNull Context context, @NonNull WorkerParameters params) {
         super(context, params);
-    }
-
-    private static String buildUserAgentString() {
-        ArrayList<String> parts = new ArrayList<>();
-        parts.add("AndroidRemoteProvisioner");
-        parts.add(Build.BRAND);
-        parts.add(Build.MODEL);
-        parts.add(Build.TYPE);
-        parts.add(Build.VERSION.INCREMENTAL);
-        parts.add(Build.ID);
-        return String.join("/", parts);
     }
 
     private Result retryOrFail() {
