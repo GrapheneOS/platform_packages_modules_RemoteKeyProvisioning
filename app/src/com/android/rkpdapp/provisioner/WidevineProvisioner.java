@@ -17,6 +17,7 @@
 package com.android.rkpdapp.provisioner;
 
 import android.content.Context;
+import android.ext.settings.WidevineProvisioningSettings;
 import android.media.DeniedByServerException;
 import android.media.MediaDrm;
 import android.media.UnsupportedSchemeException;
@@ -162,13 +163,31 @@ public class WidevineProvisioner extends Worker {
 
     private byte[] fetchWidevineCertificate(MediaDrm.ProvisionRequest req) throws IOException {
         final byte[] data = req.getData();
+        final String origUrlString = req.getDefaultUrl();
+        final String urlString;
+
+        final String hostnameOverride = WidevineProvisioningSettings.getServerHostnameOverride(getApplicationContext());
+        if (hostnameOverride != null) {
+            URL origUrl = new URL(origUrlString);
+            urlString = new URL("https", hostnameOverride, origUrl.getFile()).toString();
+            Log.d(TAG, "fetchWidevineCertificate: overridden url from " + origUrlString + " to " + urlString);
+        } else {
+            urlString = origUrlString;
+        }
+
         final String signedUrl = String.format(
                 "%s&signedRequest=%s",
-                req.getDefaultUrl(),
+                urlString,
                 new String(data));
+        Log.d(TAG, "fetchWidevineCertificate: signedUrl: " + signedUrl);
+
         try {
             return sendNetworkRequest(signedUrl);
         } catch (SocketTimeoutException e) {
+            if (hostnameOverride != null) {
+                throw e;
+            }
+
             Log.i(TAG, "Provisioning failed with normal URL, retrying with China URL.");
             final String chinaUrl = req.getDefaultUrl().replace(".com", ".cn");
             final String signedUrlChina = String.format(
