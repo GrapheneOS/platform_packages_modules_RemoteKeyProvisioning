@@ -17,6 +17,7 @@
 package com.android.rkpdapp.provisioner;
 
 import android.content.Context;
+import android.ext.settings.WidevineProvisioningSettings;
 import android.media.DeniedByServerException;
 import android.media.MediaDrm;
 import android.media.UnsupportedSchemeException;
@@ -161,9 +162,14 @@ public class WidevineProvisioner extends Worker {
 
     private byte[] fetchWidevineCertificate(MediaDrm.ProvisionRequest req) throws IOException {
         final byte[] data = req.getData();
+        URL url = new URL(req.getDefaultUrl());
+        String override = WidevineProvisioningSettings.getServerHostnameOverride(getApplicationContext());
+        if (override != null) {
+            url = new URL(url.getProtocol(), override, url.getFile());
+        }
         final String signedUrl = String.format(
                 "%s&signedRequest=%s",
-                req.getDefaultUrl(),
+                url.toString(),
                 new String(data));
         return sendNetworkRequest(signedUrl);
     }
