@@ -40,6 +40,7 @@ import java.util.List;
 @RunWith(DeviceJUnit4ClassRunner.class)
 public final class RkpdStatsTests extends AtomsHostTest {
     private static final int NO_HTTP_STATUS_ERROR = 0;
+    private static final int HTTP_STATUS_SERVER_ERROR = 500;
     private static final int HTTPS_OK = 200;
     private static final String RPC_DEFAULT =
             "android.hardware.security.keymint.IRemotelyProvisionedComponent/default";
@@ -107,7 +108,7 @@ public final class RkpdStatsTests extends AtomsHostTest {
         assertThat(attempt.getUptime()).isNotEqualTo(UpTime.UPTIME_UNKNOWN);
         assertThat(attempt.getEnablement()).isEqualTo(Enablement.ENABLED_RKP_ONLY);
         assertThat(attempt.getStatus()).isEqualTo(
-                RemoteKeyProvisioningStatus.FETCH_GEEK_IO_EXCEPTION);
+                RemoteKeyProvisioningStatus.FETCH_GEEK_HTTP_ERROR);
 
         final RemoteKeyProvisioningTiming timing = getTimingMetric(data);
         assertThat(timing).isNotNull();
@@ -125,7 +126,7 @@ public final class RkpdStatsTests extends AtomsHostTest {
         assertThat(network).isNotNull();
         assertThat(network.getTransportType()).isEqualTo(timing.getTransportType());
         assertThat(network.getStatus()).isEqualTo(attempt.getStatus());
-        assertThat(network.getHttpStatusError()).isEqualTo(NO_HTTP_STATUS_ERROR);
+        assertThat(network.getHttpStatusError()).isEqualTo(HTTP_STATUS_SERVER_ERROR);
     }
 
     @Test
