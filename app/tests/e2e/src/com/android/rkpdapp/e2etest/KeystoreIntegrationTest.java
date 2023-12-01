@@ -230,9 +230,10 @@ public class KeystoreIntegrationTest {
         // Verify that if the system is set to rkp only, key creation fails when RKP is unable
         // to get keys.
 
-        try {
+        try (FakeRkpServer server = new FakeRkpServer(FakeRkpServer.Response.INTERNAL_ERROR,
+                FakeRkpServer.Response.INTERNAL_ERROR)) {
             Settings.setDeviceConfig(sContext, Settings.EXTRA_SIGNED_KEYS_AVAILABLE_DEFAULT,
-                    Duration.ofDays(1), "bad url");
+                    Duration.ofDays(1), server.getUrl());
             Settings.setMaxRequestTime(sContext, 100);
             createKeystoreKeyBackedByRkp();
             assertWithMessage("Should have gotten a KeyStoreException").fail();
@@ -251,14 +252,17 @@ public class KeystoreIntegrationTest {
                 .that(SystemProperties.getBoolean(getRkpOnlyProp(), false))
                 .isFalse();
 
-        Settings.setDeviceConfig(sContext, Settings.EXTRA_SIGNED_KEYS_AVAILABLE_DEFAULT,
-                Duration.ofDays(1), "bad url");
+        try (FakeRkpServer server = new FakeRkpServer(FakeRkpServer.Response.INTERNAL_ERROR,
+                FakeRkpServer.Response.INTERNAL_ERROR)) {
+            Settings.setDeviceConfig(sContext, Settings.EXTRA_SIGNED_KEYS_AVAILABLE_DEFAULT,
+                    Duration.ofDays(1), server.getUrl());
 
-        createKeystoreKey();
+            createKeystoreKey();
 
-        // Ensure the key has a cert, but it didn't come from rkpd.
-        assertThat(mKeyStore.getCertificateChain(getTestKeyAlias())).isNotEmpty();
-        assertThat(mKeyDao.getTotalKeysForIrpc(mServiceName)).isEqualTo(0);
+            // Ensure the key has a cert, but it didn't come from rkpd.
+            assertThat(mKeyStore.getCertificateChain(getTestKeyAlias())).isNotEmpty();
+            assertThat(mKeyDao.getTotalKeysForIrpc(mServiceName)).isEqualTo(0);
+        }
     }
 
     @Test
@@ -279,8 +283,9 @@ public class KeystoreIntegrationTest {
 
     @Test
     public void testRetryableRkpError() throws Exception {
-        try {
-            Settings.setDeviceConfig(sContext, 1, Duration.ofDays(1), "bad url");
+        try (FakeRkpServer server = new FakeRkpServer(FakeRkpServer.Response.INTERNAL_ERROR,
+                FakeRkpServer.Response.INTERNAL_ERROR)) {
+            Settings.setDeviceConfig(sContext, 1, Duration.ofDays(1), server.getUrl());
             Settings.setMaxRequestTime(sContext, 100);
             createKeystoreKeyBackedByRkp();
             Assert.fail("Expected a keystore exception");
