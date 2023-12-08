@@ -192,8 +192,8 @@ public final class ProvisioningAttempt implements AutoCloseable {
                 transportType, getIntStatus(), mHttpStatusError);
         RkpdStatsLog.write(RkpdStatsLog.REMOTE_KEY_PROVISIONING_TIMING,
                 mServerWaitTimer.getElapsedMillis(), mBinderWaitTimer.getElapsedMillis(),
-                mLockWaitTimer.getElapsedMillis(),
-                mTotalTimer.getElapsedMillis(), transportType, mRemotelyProvisionedComponent);
+                mLockWaitTimer.getElapsedMillis(), mTotalTimer.getElapsedMillis(), transportType,
+                mRemotelyProvisionedComponent, mCause);
     }
 
     private static Enablement getEnablementForComponent(String serviceName) {
