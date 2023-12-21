@@ -162,15 +162,24 @@ public class WidevineProvisioner extends Worker {
 
     private byte[] fetchWidevineCertificate(MediaDrm.ProvisionRequest req) throws IOException {
         final byte[] data = req.getData();
-        URL url = new URL(req.getDefaultUrl());
-        String override = WidevineProvisioningSettings.getServerHostnameOverride(getApplicationContext());
-        if (override != null) {
-            url = new URL(url.getProtocol(), override, url.getFile());
+        final String origUrlString = req.getDefaultUrl();
+        final String urlString;
+
+        final String hostnameOverride = WidevineProvisioningSettings.getServerHostnameOverride(getApplicationContext());
+        if (hostnameOverride != null) {
+            URL origUrl = new URL(origUrlString);
+            urlString = new URL("https", hostnameOverride, origUrl.getFile()).toString();
+            Log.d(TAG, "fetchWidevineCertificate: overridden url from " + origUrlString + " to " + urlString);
+        } else {
+            urlString = origUrlString;
         }
+
         final String signedUrl = String.format(
                 "%s&signedRequest=%s",
-                url.toString(),
+                urlString,
                 new String(data));
+        Log.d(TAG, "fetchWidevineCertificate: signedUrl: " + signedUrl);
+
         return sendNetworkRequest(signedUrl);
     }
 
