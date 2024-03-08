@@ -32,6 +32,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -165,7 +166,17 @@ public class WidevineProvisioner extends Worker {
                 "%s&signedRequest=%s",
                 req.getDefaultUrl(),
                 new String(data));
-        return sendNetworkRequest(signedUrl);
+        try {
+            return sendNetworkRequest(signedUrl);
+        } catch (SocketTimeoutException e) {
+            Log.i(TAG, "Provisioning failed with normal URL, retrying with China URL.");
+            final String chinaUrl = req.getDefaultUrl().replace(".com", ".cn");
+            final String signedUrlChina = String.format(
+                    "%s&signedRequest=%s",
+                    chinaUrl,
+                    new String(data));
+            return sendNetworkRequest(signedUrlChina);
+        }
     }
 
     private byte[] sendNetworkRequest(String url) throws IOException {
