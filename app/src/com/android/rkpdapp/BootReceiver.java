@@ -49,6 +49,7 @@ public class BootReceiver extends BroadcastReceiver {
 
         Constraints constraints = new Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
+                .setRequiresBatteryNotLow(true)
                 .build();
 
         PeriodicWorkRequest workRequest =
