@@ -23,9 +23,7 @@ import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.util.Base64;
-
 import androidx.test.core.app.ApplicationProvider;
-
 import com.android.rkpdapp.GeekResponse;
 import com.android.rkpdapp.RkpdException;
 import com.android.rkpdapp.interfaces.ServerInterface;
@@ -33,13 +31,6 @@ import com.android.rkpdapp.metrics.ProvisioningAttempt;
 import com.android.rkpdapp.testutil.FakeRkpServer;
 import com.android.rkpdapp.utils.CborUtils;
 import com.android.rkpdapp.utils.Settings;
-
-import org.junit.After;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
-import org.mockito.Mockito;
-
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -47,6 +38,11 @@ import java.net.HttpURLConnection;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.BeforeClass;
+import org.junit.Test;
+import org.mockito.Mockito;
 
 public class ServerInterfaceTest {
     private static final Duration TIME_TO_REFRESH_HOURS = Duration.ofHours(2);
@@ -171,7 +167,7 @@ public class ServerInterfaceTest {
                     TIME_TO_REFRESH_HOURS /* expiringBy */, server.getUrl());
             ProvisioningAttempt metrics = ProvisioningAttempt.createScheduledAttemptMetrics(
                     sContext);
-            mServerInterface.requestSignedCertificates(new byte[0], new byte[0], metrics);
+            mServerInterface.requestSignedCertificates(new byte[0], metrics);
             assertWithMessage("Should fail due to unregistered device.").fail();
         } catch (RkpdException e) {
             assertThat(e.getErrorCode()).isEqualTo(RkpdException.ErrorCode.DEVICE_NOT_REGISTERED);
@@ -188,7 +184,7 @@ public class ServerInterfaceTest {
             Settings.setMaxRequestTime(sContext, 100);
             ProvisioningAttempt metrics = ProvisioningAttempt.createScheduledAttemptMetrics(
                     sContext);
-            mServerInterface.requestSignedCertificates(new byte[0], new byte[0], metrics);
+            mServerInterface.requestSignedCertificates(new byte[0], metrics);
             assertWithMessage("Should fail due to client error.").fail();
         } catch (RkpdException e) {
             assertThat(e.getErrorCode()).isEqualTo(RkpdException.ErrorCode.HTTP_CLIENT_ERROR);
@@ -204,7 +200,7 @@ public class ServerInterfaceTest {
                     TIME_TO_REFRESH_HOURS /* expiringBy */, server.getUrl());
             ProvisioningAttempt metrics = ProvisioningAttempt.createScheduledAttemptMetrics(
                     sContext);
-            mServerInterface.requestSignedCertificates(new byte[0], new byte[0], metrics);
+            mServerInterface.requestSignedCertificates(new byte[0], metrics);
             assertWithMessage("Should fail due to invalid cbor.").fail();
         } catch (RkpdException e) {
             assertThat(e.getErrorCode()).isEqualTo(RkpdException.ErrorCode.INTERNAL_ERROR);
@@ -221,8 +217,8 @@ public class ServerInterfaceTest {
                     TIME_TO_REFRESH_HOURS /* expiringBy */, server.getUrl());
             ProvisioningAttempt metrics = ProvisioningAttempt.createScheduledAttemptMetrics(
                     sContext);
-            List<byte[]> certChains = mServerInterface.requestSignedCertificates(new byte[0],
-                    new byte[0], metrics);
+            List<byte[]> certChains =
+                    mServerInterface.requestSignedCertificates(new byte[0], metrics);
             assertThat(certChains).isEmpty();
             assertThat(certChains).isNotNull();
         }
