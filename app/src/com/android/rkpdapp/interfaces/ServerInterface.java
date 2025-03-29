@@ -25,9 +25,7 @@ import android.net.Uri;
 import android.os.SystemProperties;
 import android.util.Base64;
 import android.util.Log;
-
 import androidx.annotation.VisibleForTesting;
-
 import com.android.rkpdapp.GeekResponse;
 import com.android.rkpdapp.RkpdException;
 import com.android.rkpdapp.metrics.ProvisioningAttempt;
@@ -35,7 +33,6 @@ import com.android.rkpdapp.utils.CborUtils;
 import com.android.rkpdapp.utils.Settings;
 import com.android.rkpdapp.utils.StopWatch;
 import com.android.rkpdapp.utils.X509Utils;
-
 import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -166,19 +163,15 @@ public class ServerInterface {
      * provisioning server contains the MAC'ed CSRs and encrypted bundle containing the MAC key and
      * the hardware unique public key.
      *
-     * @param csr The CBOR encoded data containing the relevant pieces needed for the server to
-     *                    sign the CSRs. The data encoded within comes from Keystore / KeyMint.
-     * @param challenge The challenge that was sent from the server. It is included here even though
-     *                    it is also included in `cborBlob` in order to allow the server to more
-     *                    easily reject bad requests.
+     * @param csr The CBOR encoded data containing the relevant pieces needed for the server to sign
+     *     the CSRs. The data encoded within comes from Keystore / KeyMint.
      * @return A List of byte arrays, where each array contains an entire DER-encoded certificate
-     *                    chain for one attestation key pair.
+     *     chain for one attestation key pair.
      */
-    public List<byte[]> requestSignedCertificates(byte[] csr, byte[] challenge,
-            ProvisioningAttempt metrics) throws RkpdException, InterruptedException {
+    public List<byte[]> requestSignedCertificates(byte[] csr, ProvisioningAttempt metrics)
+            throws RkpdException, InterruptedException {
         final byte[] cborBytes =
-                connectAndGetData(metrics, generateSignCertsUrl(challenge),
-                                  csr, Operation.SIGN_CERTS);
+                connectAndGetData(metrics, generateSignCertsUrl(), csr, Operation.SIGN_CERTS);
         List<byte[]> certChains = CborUtils.parseSignedCertificates(cborBytes);
         if (certChains == null) {
             metrics.setStatus(ProvisioningAttempt.Status.INTERNAL_ERROR);
@@ -203,17 +196,17 @@ public class ServerInterface {
         return certChains;
     }
 
-    private URL generateSignCertsUrl(byte[] challenge) throws RkpdException {
+    private URL generateSignCertsUrl() throws RkpdException {
         try {
-            return new URL(Uri.parse(Settings.getUrl(mContext)).buildUpon()
-                    .appendEncodedPath(CERTIFICATE_SIGNING_URL)
-                    .appendQueryParameter(CHALLENGE_PARAMETER,
-                            Base64.encodeToString(challenge, Base64.URL_SAFE | Base64.NO_WRAP))
-                    .appendQueryParameter(REQUEST_ID_PARAMETER, generateAndLogRequestId())
-                    .build()
-                    .toString()
-                    // Needed due to the `:` in the URL endpoint.
-                    .replaceFirst("%3A", ":"));
+            return new URL(
+                    Uri.parse(Settings.getUrl(mContext))
+                            .buildUpon()
+                            .appendEncodedPath(CERTIFICATE_SIGNING_URL)
+                            .appendQueryParameter(REQUEST_ID_PARAMETER, generateAndLogRequestId())
+                            .build()
+                            .toString()
+                            // Needed due to the `:` in the URL endpoint.
+                            .replaceFirst("%3A", ":"));
         } catch (MalformedURLException e) {
             throw new RkpdException(RkpdException.ErrorCode.HTTP_CLIENT_ERROR, "Bad URL", e);
         }

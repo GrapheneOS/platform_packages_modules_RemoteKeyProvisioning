@@ -19,7 +19,7 @@ package com.android.rkpdapp.provisioner;
 import android.content.Context;
 import android.os.RemoteException;
 import android.util.Log;
-
+import co.nstant.in.cbor.CborException;
 import com.android.rkpdapp.GeekResponse;
 import com.android.rkpdapp.RkpdException;
 import com.android.rkpdapp.database.InstantConverter;
@@ -32,15 +32,12 @@ import com.android.rkpdapp.metrics.ProvisioningAttempt;
 import com.android.rkpdapp.utils.Settings;
 import com.android.rkpdapp.utils.StatsProcessor;
 import com.android.rkpdapp.utils.X509Utils;
-
 import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-
-import co.nstant.in.cbor.CborException;
 
 /**
  * Provides an easy package to run the provisioning process from start to finish, interfacing
@@ -158,8 +155,8 @@ public class Provisioner {
             throw new RkpdException(RkpdException.ErrorCode.INTERNAL_ERROR,
                     "Failed to serialize payload");
         }
-        return new ServerInterface(mContext, mIsAsync).requestSignedCertificates(certRequest,
-                response.getChallenge(), metrics);
+        return new ServerInterface(mContext, mIsAsync)
+                .requestSignedCertificates(certRequest, metrics);
     }
 
     private List<ProvisionedKey> associateCertsWithKeys(List<byte[]> certChains,
