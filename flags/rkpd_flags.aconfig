@@ -1,0 +1,21 @@
+package: "com.android.rkpd.flags"
+container: "com.android.rkpd"
+
+##### Use the below as example.
+#flag {
+#    name: "test_flag"
+#    namespace: "hardware_backed_security"
+#    description: "This flag is a test flag. Create other flags based on this."
+#    bug: "bug number"
+#    metadata {
+#        # purpose can be either FEATURE or BUGFIX, else don't add metadata.
+#        purpose: PURPOSE_BUGFIX
+#    }
+#}
+
+flag {
+    name: "allow_network_consent_bypass"
+    namespace: "hardware_backed_security"
+    description: "When enabled, a system property may be set to indicate network access consent."
+    bug: "411197466"
+}
