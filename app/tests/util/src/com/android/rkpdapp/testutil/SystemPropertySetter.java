@@ -43,6 +43,9 @@ public class SystemPropertySetter implements AutoCloseable {
      * @return an instance of SystemPropertySetter.
      */
     public static SystemPropertySetter setSkipNetworkConsentCheck(boolean skipNetworkConsent) {
+        if (SystemProperties.get("remote_provisioning.skip_network_consent_check").isEmpty()) {
+            return null;
+        }
         return new SystemPropertySetter("remote_provisioning.skip_network_consent_check",
                 String.valueOf(skipNetworkConsent));
     }

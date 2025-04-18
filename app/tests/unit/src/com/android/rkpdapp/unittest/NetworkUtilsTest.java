@@ -54,9 +54,11 @@ public class NetworkUtilsTest {
         Mockito.when(mockedPackageManager.getApplicationInfo(Mockito.any(), Mockito.eq(0)))
                 .thenReturn(fakeApplicationInfo);
 
-        try (SystemPropertySetter ignored = SystemPropertySetter.setSkipNetworkConsentCheck(true)) {
-            fakeApplicationInfo.enabled = false;
-            assertThat(NetworkUtils.assumeNetworkConsent(mockedContext)).isTrue();
+        try (SystemPropertySetter check = SystemPropertySetter.setSkipNetworkConsentCheck(true)) {
+            if (check != null) {
+                fakeApplicationInfo.enabled = false;
+                assertThat(NetworkUtils.assumeNetworkConsent(mockedContext)).isTrue();
+            }
         }
 
         try (SystemPropertySetter ignored =
