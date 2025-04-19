@@ -79,6 +79,7 @@ android_app {
         "androidx.work_work-runtime",
         "cbor-java",
         "com.android.rkpdapp-aidl-java",
+        "rkpd_aconfig_flags_lib",
     ],
     resource_dirs: ["res"],
     srcs: [

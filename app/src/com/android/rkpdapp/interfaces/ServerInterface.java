@@ -17,7 +17,6 @@
 package com.android.rkpdapp.interfaces;
 
 import android.content.Context;
-import android.content.pm.PackageManager;
 import android.net.ConnectivityManager;
 import android.net.NetworkCapabilities;
 import android.net.TrafficStats;
@@ -25,14 +24,18 @@ import android.net.Uri;
 import android.os.SystemProperties;
 import android.util.Base64;
 import android.util.Log;
+
 import androidx.annotation.VisibleForTesting;
+
 import com.android.rkpdapp.GeekResponse;
 import com.android.rkpdapp.RkpdException;
 import com.android.rkpdapp.metrics.ProvisioningAttempt;
 import com.android.rkpdapp.utils.CborUtils;
+import com.android.rkpdapp.utils.NetworkUtils;
 import com.android.rkpdapp.utils.Settings;
 import com.android.rkpdapp.utils.StopWatch;
 import com.android.rkpdapp.utils.X509Utils;
+
 import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -65,10 +68,7 @@ public class ServerInterface {
     private static final String TAG = "RkpdServerInterface";
     private static final String GEEK_URL = ":fetchEekChain";
     private static final String CERTIFICATE_SIGNING_URL = ":signCertificates";
-    private static final String CHALLENGE_PARAMETER = "challenge";
     private static final String REQUEST_ID_PARAMETER = "request_id";
-    private static final String GMS_PACKAGE = "com.google.android.gms";
-    private static final String CHINA_GMS_FEATURE = "cn.google.services";
 
     private final Context mContext;
     private final boolean mIsAsync;
@@ -237,7 +237,7 @@ public class ServerInterface {
         }
         // Since fetchGeek would be the first call for any sort of provisioning, we are okay
         // checking network consent here.
-        if (!assumeNetworkConsent(mContext)) {
+        if (!NetworkUtils.assumeNetworkConsent(mContext)) {
             throw new RkpdException(RkpdException.ErrorCode.NETWORK_COMMUNICATION_ERROR,
                     "Network communication consent not provided. Need to enable GMSCore app.");
         }
@@ -352,29 +352,6 @@ public class ServerInterface {
 
         final Charset charset = getCharsetFromContentTypeHeader(contentType);
         return new String(bytes, charset);
-    }
-
-    /**
-     * Checks whether GMSCore is installed and enabled for restricted regions.
-     * This lets us assume that user has consented to connecting to Google
-     * servers to provide attestation service.
-     * For all other regions, we assume consent by default since this is an
-     * Android OS-level application.
-     *
-     * @return True if user consent can be assumed else false.
-     */
-    @VisibleForTesting
-    public static boolean assumeNetworkConsent(Context context) {
-        PackageManager pm = context.getPackageManager();
-        if (pm.hasSystemFeature(CHINA_GMS_FEATURE)) {
-            // For china GMS, we can simply check whether GMS package is installed and enabled.
-            try {
-                return pm.getApplicationInfo(GMS_PACKAGE, 0).enabled;
-            } catch (PackageManager.NameNotFoundException e) {
-                return false;
-            }
-        }
-        return true;
     }
 
     private static Charset getCharsetFromContentTypeHeader(String contentType) {

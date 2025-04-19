@@ -33,6 +33,8 @@ android_test {
         "truth",
         "rkpdapp-tink-prebuilt-test-only",
         "bouncycastle-unbundled",
+        "flag-junit",
+        "rkpd_aconfig_flags_lib",
     ],
     platform_apis: true,
     test_suites: [

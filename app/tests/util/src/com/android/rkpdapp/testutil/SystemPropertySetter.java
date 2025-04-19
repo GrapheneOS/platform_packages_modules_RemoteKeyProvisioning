@@ -37,6 +37,19 @@ public class SystemPropertySetter implements AutoCloseable {
         }
     }
 
+    /**
+     * Sets the system property to skip network consent checks.
+     * @param skipNetworkConsent boolean
+     * @return an instance of SystemPropertySetter.
+     */
+    public static SystemPropertySetter setSkipNetworkConsentCheck(boolean skipNetworkConsent) {
+        if (SystemProperties.get("remote_provisioning.skip_network_consent_check").isEmpty()) {
+            return null;
+        }
+        return new SystemPropertySetter("remote_provisioning.skip_network_consent_check",
+                String.valueOf(skipNetworkConsent));
+    }
+
     private SystemPropertySetter(String key, String value) {
         mKey = key;
         mOriginalValue = SystemProperties.get(key, "");
