@@ -18,6 +18,12 @@
     <option name="test-suite-tag" value="apct" />
     <option name="test-suite-tag" value="apct-instrumentation" />
 
+    <!-- Only run if the VM attestation is supported.
+         Match with MicrodroidDeviceTestBase#ensureVmAttestationSupported() -->
+    <object type="module_controller" class="com.android.tradefed.testtype.suite.module.ShippingApiLevelModuleController">
+        <option name="vsr-min-api-level" value="202504" />
+    </object>
+
     <target_preparer class="com.android.tradefed.targetprep.suite.SuiteApkInstaller">
         <option name="cleanup-apks" value="true" />
         <option name="test-file-name" value="AvfRkpdAppIntegrationTests.apk" />
