@@ -13,6 +13,9 @@
     {
       "name": "RkpdAppGoogleIntegrationTests",
       "keywords": ["internal"]
+    },
+    {
+      "name": "AvfRkpdAppIntegrationTests"
     }
   ],
   "avf-postsubmit": [
@@ -22,11 +25,6 @@
     }
   ],
   "avf-presubmit": [
-    {
-      // TODO(b/325610326): Add this target to presubmit once there is enough
-      // SLO data for it.
-      "name": "AvfRkpdAppIntegrationTests"
-    },
     {
       "name": "AvfRkpdVmAttestationTestApp"
     }
