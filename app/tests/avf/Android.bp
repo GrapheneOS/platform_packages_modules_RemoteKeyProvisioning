@@ -6,7 +6,7 @@ android_test {
     name: "AvfRkpdAppIntegrationTests",
     srcs: ["src/**/*.java"],
     static_libs: [
-        "MicrodroidDeviceTestHelper",
+        "MicrodroidDeviceTestLib",
         "Nene",
         "RkpdAppTestUtil",
         "androidx.test.ext.junit",
