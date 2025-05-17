@@ -18,17 +18,6 @@
       "name": "AvfRkpdAppIntegrationTests"
     }
   ],
-  "avf-postsubmit": [
-    {
-      "name": "AvfRkpdAppGoogleIntegrationTests",
-      "keywords": ["internal"]
-    }
-  ],
-  "avf-presubmit": [
-    {
-      "name": "AvfRkpdVmAttestationTestApp"
-    }
-  ],
   "mainline-presubmit": [
     {
       "name": "RkpdAppGoogleUnitTests[com.google.android.rkpd.apex]"
