@@ -40,4 +40,8 @@ apex {
     min_sdk_version: "33",
     apps: ["rkpdapp"],
     compile_multilib: "both",
+    licenses: [
+        "Android-Apache-2.0",
+        "opensourcerequest",
+    ],
 }
