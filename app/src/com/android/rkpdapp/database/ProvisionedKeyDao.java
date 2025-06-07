@@ -57,6 +57,13 @@ public abstract class ProvisionedKeyDao {
     public abstract void deleteKey(byte[] keyBlob);
 
     /**
+     * Delete all the provisioned keys for a given key_id for keystore service.
+     * 1017 is the keystore service user id.
+     */
+    @Query("DELETE FROM provisioned_keys WHERE key_id = :keyId AND client_uid = :clientId")
+    public abstract void deleteAllKeysForClientAndKeyId(int clientId, int keyId);
+
+    /**
      * Delete all the provisioned keys.
      */
     @Query("DELETE FROM provisioned_keys")
