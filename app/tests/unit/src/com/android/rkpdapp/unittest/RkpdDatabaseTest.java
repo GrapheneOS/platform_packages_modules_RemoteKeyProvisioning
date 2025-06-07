@@ -54,6 +54,7 @@ public class RkpdDatabaseTest {
     private static final Instant TEST_KEY_EXPIRY = Instant.now().plus(Duration.ofHours(1));
     private static final int FAKE_CLIENT_UID = 1;
     private static final int FAKE_CLIENT_UID_2 = 2;
+    private static final int KEYSTORE_CLIENT_UID = 1017;
     private static final int FAKE_KEY_ID = 1;
     private static final int FAKE_CLIENT_UID_3 = 3;
     private static final int FAKE_KEY_ID_2 = 2;
@@ -183,6 +184,36 @@ public class RkpdDatabaseTest {
         ProvisionedKey key = keysInDatabase.get(0);
         assertThat(key.keyBlob).isEqualTo(mProvisionedKey2.keyBlob);
     }
+
+    /* TODO: Uncomment this test once the code is out in the wild to prevent API not available
+     * failures.
+     */
+    /*
+    @Test
+    public void testDeleteSingleUidKey() {
+        ProvisionedKey key3 = new ProvisionedKey(TEST_KEY_BLOB_3, TEST_HAL_2, TEST_KEY_BLOB_3,
+                TEST_KEY_BLOB_3, TEST_KEY_EXPIRY);
+
+        mKeyDao.insertKeys(List.of(mProvisionedKey1, mProvisionedKey2, key3));
+        List<ProvisionedKey> keysInDatabase = mKeyDao.getAllKeys();
+        assertThat(keysInDatabase).hasSize(3);
+
+        assertThat(mKeyDao.getOrAssignKey(TEST_HAL_1, Instant.now(), KEYSTORE_CLIENT_UID,
+                FAKE_KEY_ID)).isNotNull();
+        assertThat(mKeyDao.getOrAssignKey(TEST_HAL_2, Instant.now(), KEYSTORE_CLIENT_UID,
+                FAKE_KEY_ID_2)).isNotNull();
+        assertThat(mKeyDao.getOrAssignKey(TEST_HAL_2, Instant.now(), FAKE_CLIENT_UID,
+                FAKE_KEY_ID)).isNotNull();
+
+        mKeyDao.deleteAllKeysForClientAndKeyId(KEYSTORE_CLIENT_UID, FAKE_KEY_ID);
+        keysInDatabase = mKeyDao.getAllKeys();
+        assertThat(keysInDatabase).hasSize(2);
+        assertThat(keysInDatabase.get(0).keyId).isEqualTo(FAKE_KEY_ID_2);
+
+        mKeyDao.deleteAllKeysForClientAndKeyId(KEYSTORE_CLIENT_UID, FAKE_KEY_ID_2);
+        keysInDatabase = mKeyDao.getAllKeys();
+        assertThat(keysInDatabase).hasSize(1);
+    }*/
 
     @Test
     public void testGetTotalExpiringKeysForIrpc() {

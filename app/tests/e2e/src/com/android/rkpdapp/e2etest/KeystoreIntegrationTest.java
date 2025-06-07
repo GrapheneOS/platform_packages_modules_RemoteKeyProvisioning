@@ -33,6 +33,7 @@ import android.os.SystemProperties;
 import android.security.KeyStoreException;
 import android.security.keystore.KeyGenParameterSpec;
 import android.system.keystore2.ResponseCode;
+import android.util.Log;
 
 import androidx.test.core.app.ApplicationProvider;
 import androidx.work.ListenableWorker;
@@ -63,6 +64,8 @@ import org.junit.rules.TestName;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.security.KeyPairGenerator;
 import java.security.KeyStore;
 import java.security.ProviderException;
@@ -77,6 +80,7 @@ import java.util.concurrent.Executors;
 
 @RunWith(Parameterized.class)
 public class KeystoreIntegrationTest {
+    private static final String TAG = "KeystoreIntegrationTest";
     // This is the SEQUENCE header and AlgorithmIdentifier that prefix the raw public key. This
     // lets us create DER-encoded SubjectPublicKeyInfo by concatenating the prefix with the raw key
     // to produce the following:
@@ -129,6 +133,11 @@ public class KeystoreIntegrationTest {
                 .withMessage(mInstanceName + " is not supported by this system")
                 .that(mInstanceName)
                 .isIn(List.of("default", "strongbox"));
+
+        assume()
+                .withMessage("Device is not able to resolve hostnames. Check network connection.")
+                .that(isDnsResolutionSuccessful())
+                .isTrue();
 
         Settings.clearPreferences(sContext);
 
@@ -449,6 +458,23 @@ public class KeystoreIntegrationTest {
                 return true;
             default:
                 throw new IllegalArgumentException("Unexpected instance: " + mInstanceName);
+        }
+    }
+
+    private boolean isDnsResolutionSuccessful() {
+        String hostname = SystemProperties.get("remote_provisioning.hostname");
+        try {
+            InetAddress ignored = InetAddress.getByName(hostname);
+            // If the inet address is resolving to null address, we should let
+            // it continue to test and make noise since this is an unknown
+            // failure.
+            return true;
+        } catch (Exception e) {
+            Log.e(TAG, "Exception encountered during test setup.", e);
+            // UnknownHostException signals the DNS resolution failure.
+            // Anything else would be unknown, and we should allow our testing
+            // to make noise in that case.
+            return !(e instanceof UnknownHostException);
         }
     }
 }
