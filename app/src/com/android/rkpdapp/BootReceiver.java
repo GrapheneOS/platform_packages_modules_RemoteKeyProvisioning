@@ -19,6 +19,8 @@ package com.android.rkpdapp;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.os.UserManager;
 import android.util.Log;
 
 import androidx.work.Constraints;
@@ -45,6 +47,16 @@ public class BootReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
         Log.i(TAG, "Caught boot intent, waking up.");
+        UserManager userManager = context.getSystemService(UserManager.class);
+        if (userManager != null && !userManager.isSystemUser()) {
+            Log.i(TAG, "Caught boot intent on non-system user, disabling the application and going"
+                    + " back to sleep.");
+            context.getPackageManager().setApplicationEnabledSetting(
+                    context.getPackageName(),
+                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                    0);
+            return;
+        }
         Settings.generateAndSetId(context);
 
         Constraints constraints = new Constraints.Builder()
