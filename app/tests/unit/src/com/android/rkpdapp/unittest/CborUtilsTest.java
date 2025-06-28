@@ -467,6 +467,7 @@ public class CborUtilsTest {
     @Test
     public void testBuildProvisioningInfo() throws CborException {
         Context context = ApplicationProvider.getApplicationContext();
+        Settings.generateAndSetId(context);
 
         byte[] cbor = CborUtils.buildProvisioningInfo(context);
         DataItem info = new CborDecoder(new ByteArrayInputStream(cbor)).decode().get(0);
