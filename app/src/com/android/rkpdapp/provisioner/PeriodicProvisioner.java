@@ -82,18 +82,20 @@ public class PeriodicProvisioner extends Worker {
      */
     @Override
     public Result doWork() {
+        Log.i(TAG, "Waking up; waiting to check provisioning state.");
         sLock.lock();
         try {
             Trace.beginSection("Periodic.Provisioner");
             return doSynchronizedWork();
         } finally {
             Trace.endSection();
+            Log.i(TAG, "Provisioning complete; going back to sleep.");
             sLock.unlock();
         }
     }
 
     private Result doSynchronizedWork() {
-        Log.i(TAG, "Waking up; checking provisioning state.");
+        Log.i(TAG, "Checking provisioning state.");
 
         SystemInterface[] irpcs = ServiceManagerInterface.getAllInstances();
         if (irpcs.length == 0) {
