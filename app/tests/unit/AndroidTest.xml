@@ -22,6 +22,8 @@
         <option name="test-file-name" value="RkpdAppUnitTests.apk" />
     </target_preparer>
 
+    <target_preparer class="com.android.tradefed.targetprep.RunOnSystemUserTargetPreparer"/>
+
     <test class="com.android.tradefed.testtype.AndroidJUnitTest" >
         <option name="package" value="com.android.rkpdapp.unittest" />
         <option name="runner" value="androidx.test.runner.AndroidJUnitRunner" />
