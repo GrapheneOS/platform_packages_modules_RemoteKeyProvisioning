@@ -24,25 +24,8 @@ import static org.junit.Assert.assertNull;
 import android.content.Context;
 import android.os.Build;
 import android.platform.test.annotations.Presubmit;
-
 import androidx.test.core.app.ApplicationProvider;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
-
-import com.android.rkpdapp.GeekResponse;
-import com.android.rkpdapp.utils.CborUtils;
-import com.android.rkpdapp.utils.Settings;
-
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
-
 import co.nstant.in.cbor.CborBuilder;
 import co.nstant.in.cbor.CborDecoder;
 import co.nstant.in.cbor.CborEncoder;
@@ -54,6 +37,18 @@ import co.nstant.in.cbor.model.MajorType;
 import co.nstant.in.cbor.model.Map;
 import co.nstant.in.cbor.model.UnicodeString;
 import co.nstant.in.cbor.model.UnsignedInteger;
+import com.android.rkpdapp.GeekResponse;
+import com.android.rkpdapp.utils.CborUtils;
+import com.android.rkpdapp.utils.Settings;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
 
 @RunWith(AndroidJUnit4.class)
 public class CborUtilsTest {
