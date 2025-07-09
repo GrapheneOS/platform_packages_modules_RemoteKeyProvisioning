@@ -20,6 +20,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Convenience class for packaging up the values returned by the server when initially requesting
@@ -47,6 +48,7 @@ public class GeekResponse {
     public static final int NO_EXTRA_KEY_UPDATE = -1;
     private byte[] mChallenge;
     private final Map<Integer, byte[]> mCurveToGeek;
+    public final String requestId;
     public int numExtraAttestationKeys;
     public Duration timeToRefresh;
     public String provisioningUrl;
@@ -61,6 +63,7 @@ public class GeekResponse {
         numExtraAttestationKeys = NO_EXTRA_KEY_UPDATE;
         lastBadCertTimeStart = null;
         lastBadCertTimeEnd = null;
+        requestId = UUID.randomUUID().toString();
     }
 
     /**
