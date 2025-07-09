@@ -83,14 +83,15 @@ public class PeriodicProvisioner extends Worker {
     @Override
     public Result doWork() {
         Log.i(TAG, "Waking up; waiting to check provisioning state.");
-        sLock.lock();
-        try {
+        try (AutoCloseable lock = lock()) {
             Trace.beginSection("Periodic.Provisioner");
             return doSynchronizedWork();
+        } catch(Exception e) {
+            Log.e(TAG, "Error running PeriodicProvisioner", e);
+            return Result.failure();
         } finally {
             Trace.endSection();
             Log.i(TAG, "Provisioning complete; going back to sleep.");
-            sLock.unlock();
         }
     }
 
