@@ -59,14 +59,15 @@ public class BootReceiver extends BroadcastReceiver {
         }
         Settings.generateAndSetId(context);
 
-        Constraints constraints = new Constraints.Builder()
+        Constraints rkpConstraints = new Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .setRequiresBatteryNotLow(true)
+                .setRequiresCharging(true)
                 .build();
 
         PeriodicWorkRequest workRequest =
                 new PeriodicWorkRequest.Builder(PeriodicProvisioner.class, 1, TimeUnit.DAYS)
-                        .setConstraints(constraints)
+                        .setConstraints(rkpConstraints)
                         .build();
         WorkManager
                 .getInstance(context)
@@ -74,10 +75,15 @@ public class BootReceiver extends BroadcastReceiver {
                         ExistingPeriodicWorkPolicy.CANCEL_AND_REENQUEUE, // Replace on reboot.
                         workRequest);
 
+        Constraints wvConstraints = new Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .setRequiresBatteryNotLow(true)
+                .build();
+
         Log.i(TAG, "Queueing a one-time provisioning job for widevine provisioning.");
         OneTimeWorkRequest wvRequest = new OneTimeWorkRequest.Builder(WidevineProvisioner.class)
                 .addTag("WidevineProvisioner")
-                .setConstraints(constraints)
+                .setConstraints(wvConstraints)
                 .build();
         WorkManager.getInstance(context).enqueue(wvRequest);
     }
