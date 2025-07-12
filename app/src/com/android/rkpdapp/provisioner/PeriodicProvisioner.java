@@ -141,16 +141,17 @@ public class PeriodicProvisioner extends Worker {
 
             final AtomicBoolean result = new AtomicBoolean(true);
             Arrays.stream(irpcs).parallel().forEach(irpc -> {
-                Log.i(TAG, "Starting provisioning for " + irpc);
+                String irpcName = irpc.getServiceName();
+                Log.i(TAG, "Starting provisioning for " + irpcName);
                 try {
                     provisioner.provisionKeys(metrics, irpc, response);
                     recordKeyPoolStatsAtom(irpc);
-                    Log.i(TAG, "Successfully provisioned " + irpc);
+                    Log.i(TAG, "Successfully provisioned " + irpcName);
                 } catch (CborException e) {
-                    Log.e(TAG, "Error parsing CBOR for " + irpc, e);
+                    Log.e(TAG, "Error parsing CBOR for " + irpcName, e);
                     result.set(false);
                 } catch (InterruptedException | RkpdException e) {
-                    Log.e(TAG, "Error provisioning keys for " + irpc, e);
+                    Log.e(TAG, "Error provisioning keys for " + irpcName, e);
                     result.set(false);
                 }
             });
