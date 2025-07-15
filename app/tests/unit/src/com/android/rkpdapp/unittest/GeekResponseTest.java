@@ -354,4 +354,70 @@ public class GeekResponseTest {
                                 .build());
         assertNull(GeekResponse.parse(mBaos.toByteArray()));
     }
+
+    @Test
+    public void testParseInvalidUrl() throws Exception {
+        Map deviceConfigInvalidUrl =
+                new Map()
+                        .put(
+                                new UnicodeString(GeekResponse.PROVISIONING_URL),
+                                new UnicodeString("obviously not a url"));
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        new CborEncoder(baos)
+                .encode(
+                        new CborBuilder()
+                                .addArray()
+                                .addArray() // GEEK Curve to Chains
+                                .addArray()
+                                .add(new UnsignedInteger(GeekResponse.EC_CURVE_25519))
+                                .add(GEEK_CHAIN_1)
+                                .end()
+                                .addArray()
+                                .add(new UnsignedInteger(GeekResponse.EC_CURVE_P256))
+                                .add(GEEK_CHAIN_2)
+                                .end()
+                                .end()
+                                .add(CHALLENGE)
+                                .add(deviceConfigInvalidUrl)
+                                .end()
+                                .build());
+        GeekResponse resp = GeekResponse.parse(baos.toByteArray(), "request_id");
+        baos.reset();
+
+        assertNull(resp.provisioningUrl);
+    }
+
+    @Test
+    public void testParseRelativeUrl() throws Exception {
+        Map deviceConfigRelativeUrl =
+                new Map()
+                        .put(
+                                new UnicodeString(GeekResponse.PROVISIONING_URL),
+                                new UnicodeString("relative/url"));
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        new CborEncoder(baos)
+                .encode(
+                        new CborBuilder()
+                                .addArray()
+                                .addArray() // GEEK Curve to Chains
+                                .addArray()
+                                .add(new UnsignedInteger(GeekResponse.EC_CURVE_25519))
+                                .add(GEEK_CHAIN_1)
+                                .end()
+                                .addArray()
+                                .add(new UnsignedInteger(GeekResponse.EC_CURVE_P256))
+                                .add(GEEK_CHAIN_2)
+                                .end()
+                                .end()
+                                .add(CHALLENGE)
+                                .add(deviceConfigRelativeUrl)
+                                .end()
+                                .build());
+        GeekResponse resp = GeekResponse.parse(baos.toByteArray(), "request_id");
+        baos.reset();
+
+        assertNull(resp.provisioningUrl);
+    }
 }
