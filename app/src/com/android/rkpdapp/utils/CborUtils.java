@@ -23,19 +23,6 @@ import android.content.pm.PackageManager;
 import android.hardware.security.keymint.MacedPublicKey;
 import android.os.Build;
 import android.util.Log;
-
-import com.android.rkpdapp.GeekResponse;
-import com.android.rkpdapp.RkpdException;
-import com.android.rkpdapp.database.InstantConverter;
-import com.android.rkpdapp.database.RkpKey;
-
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
-
 import co.nstant.in.cbor.CborBuilder;
 import co.nstant.in.cbor.CborDecoder;
 import co.nstant.in.cbor.CborEncoder;
@@ -48,6 +35,16 @@ import co.nstant.in.cbor.model.Map;
 import co.nstant.in.cbor.model.NegativeInteger;
 import co.nstant.in.cbor.model.UnicodeString;
 import co.nstant.in.cbor.model.UnsignedInteger;
+import com.android.rkpdapp.GeekResponse;
+import com.android.rkpdapp.RkpdException;
+import com.android.rkpdapp.database.InstantConverter;
+import com.android.rkpdapp.database.RkpKey;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 
 public class CborUtils {
     public static final int EC_CURVE_P256 = 1;
@@ -99,33 +96,32 @@ public class CborUtils {
         try {
             ByteArrayInputStream bais = new ByteArrayInputStream(serverResp);
             List<DataItem> dataItems = new CborDecoder(bais).decode();
-            if (dataItems.size() != RESPONSE_ARRAY_SIZE
-                    || !checkType(dataItems.get(RESPONSE_CERT_ARRAY_INDEX),
-                                  MajorType.ARRAY, "CborResponse")) {
-                Log.e(TAG, "Improper formatting of CBOR response. Expected size 1. Actual: "
-                            + dataItems.size());
-                return null;
+            if (dataItems.size() != RESPONSE_ARRAY_SIZE) {
+                throw new CborException(
+                        "Improper formatting of CBOR response. Expected size 1. Actual: "
+                                + dataItems.size());
             }
+            checkType(dataItems.get(RESPONSE_CERT_ARRAY_INDEX), MajorType.ARRAY, "CborResponse");
             dataItems = ((Array) dataItems.get(RESPONSE_CERT_ARRAY_INDEX)).getDataItems();
             if (dataItems.size() != CERT_ARRAY_ENTRIES) {
-                Log.e(TAG, "Incorrect number of certificate array entries. Expected: 2. Actual: "
-                            + dataItems.size());
-                return null;
+                throw new CborException(
+                        "Incorrect number of certificate array entries. Expected: 2. Actual: "
+                                + dataItems.size());
             }
-            if (!checkType(dataItems.get(SHARED_CERTIFICATES_INDEX),
-                           MajorType.BYTE_STRING, "SharedCertificates")
-                    || !checkType(dataItems.get(UNIQUE_CERTIFICATES_INDEX),
-                                  MajorType.ARRAY, "UniqueCertificates")) {
-                return null;
-            }
+            checkType(
+                    dataItems.get(SHARED_CERTIFICATES_INDEX),
+                    MajorType.BYTE_STRING,
+                    "SharedCertificates");
+            checkType(
+                    dataItems.get(UNIQUE_CERTIFICATES_INDEX),
+                    MajorType.ARRAY,
+                    "UniqueCertificates");
             byte[] sharedCertificates =
                     ((ByteString) dataItems.get(SHARED_CERTIFICATES_INDEX)).getBytes();
             Array uniqueCertificates = (Array) dataItems.get(UNIQUE_CERTIFICATES_INDEX);
             List<byte[]> uniqueCertificateChains = new ArrayList<>();
             for (DataItem entry : uniqueCertificates.getDataItems()) {
-                if (!checkType(entry, MajorType.BYTE_STRING, "UniqueCertificate")) {
-                    return null;
-                }
+                checkType(entry, MajorType.BYTE_STRING, "UniqueCertificate");
                 ByteArrayOutputStream concat = new ByteArrayOutputStream();
                 // DER encoding specifies certificate chains ordered from leaf to root.
                 concat.write(((ByteString) entry).getBytes());
@@ -141,19 +137,22 @@ public class CborUtils {
         return null;
     }
 
-    private static boolean checkType(DataItem item, MajorType majorType, String field) {
+    private static void checkType(DataItem item, MajorType majorType, String field)
+            throws CborException {
         if (item.getMajorType() != majorType) {
-            Log.e(TAG, "Incorrect CBOR type for field: " + field + ". Expected " + majorType.name()
-                        + ". Actual: " + item.getMajorType().name());
-            return false;
+            throw new CborException(
+                    "Incorrect CBOR type for field: "
+                            + field
+                            + ". Expected "
+                            + majorType.name()
+                            + ". Actual: "
+                            + item.getMajorType().name());
         }
-        return true;
     }
 
-    private static boolean parseDeviceConfig(GeekResponse resp, DataItem deviceConfig) {
-        if (!checkType(deviceConfig, MajorType.MAP, "DeviceConfig")) {
-            return false;
-        }
+    private static void parseDeviceConfig(GeekResponse resp, DataItem deviceConfig)
+            throws CborException {
+        checkType(deviceConfig, MajorType.MAP, "DeviceConfig");
         Map deviceConfiguration = (Map) deviceConfig;
         DataItem extraKeys =
                 deviceConfiguration.get(new UnicodeString(EXTRA_KEYS));
@@ -166,39 +165,28 @@ public class CborUtils {
         DataItem lastBadCertTimeEnd =
                 deviceConfiguration.get(new UnicodeString(LAST_BAD_CERT_TIME_END_MILLIS));
         if (extraKeys != null) {
-            if (!checkType(extraKeys, MajorType.UNSIGNED_INTEGER, "ExtraKeys")) {
-                return false;
-            }
+            checkType(extraKeys, MajorType.UNSIGNED_INTEGER, "ExtraKeys");
             resp.numExtraAttestationKeys = ((UnsignedInteger) extraKeys).getValue().intValue();
         }
         if (timeToRefreshHours != null) {
-            if (!checkType(timeToRefreshHours, MajorType.UNSIGNED_INTEGER, "TimeToRefresh")) {
-                return false;
-            }
+            checkType(timeToRefreshHours, MajorType.UNSIGNED_INTEGER, "TimeToRefresh");
             resp.timeToRefresh =
                     Duration.ofHours(((UnsignedInteger) timeToRefreshHours).getValue().intValue());
         }
         if (newUrl != null) {
-            if (!checkType(newUrl, MajorType.UNICODE_STRING, "ProvisioningURL")) {
-                return false;
-            }
+            checkType(newUrl, MajorType.UNICODE_STRING, "ProvisioningURL");
             resp.provisioningUrl = ((UnicodeString) newUrl).getString();
         }
         if (lastBadCertTimeStart != null) {
-            if (!checkType(lastBadCertTimeStart, MajorType.UNSIGNED_INTEGER, "BadCertTimeStart")) {
-                return false;
-            }
+            checkType(lastBadCertTimeStart, MajorType.UNSIGNED_INTEGER, "BadCertTimeStart");
             resp.lastBadCertTimeStart = InstantConverter.fromTimestamp(
                     ((UnsignedInteger) lastBadCertTimeStart).getValue().longValue());
         }
         if (lastBadCertTimeEnd != null) {
-            if (!checkType(lastBadCertTimeEnd, MajorType.UNSIGNED_INTEGER, "BadCertTimeEnd")) {
-                return false;
-            }
+            checkType(lastBadCertTimeEnd, MajorType.UNSIGNED_INTEGER, "BadCertTimeEnd");
             resp.lastBadCertTimeEnd = InstantConverter.fromTimestamp(
                     ((UnsignedInteger) lastBadCertTimeEnd).getValue().longValue());
         }
-        return true;
     }
 
     /**
@@ -210,31 +198,29 @@ public class CborUtils {
             GeekResponse resp = new GeekResponse();
             ByteArrayInputStream bais = new ByteArrayInputStream(serverResp);
             List<DataItem> dataItems = new CborDecoder(bais).decode();
-            if (dataItems.size() != RESPONSE_ARRAY_SIZE
-                    || !checkType(dataItems.get(RESPONSE_CERT_ARRAY_INDEX),
-                                  MajorType.ARRAY, "CborResponse")) {
-                Log.e(TAG, "Improper formatting of CBOR response. Expected size 1. Actual: "
-                            + dataItems.size());
-                return null;
+            if (dataItems.size() != RESPONSE_ARRAY_SIZE) {
+                throw new CborException(
+                        "Improper formatting of CBOR response. Expected size 1. Actual: "
+                                + dataItems.size());
             }
+            checkType(dataItems.get(RESPONSE_CERT_ARRAY_INDEX), MajorType.ARRAY, "CborResponse");
             List<DataItem> respItems =
                     ((Array) dataItems.get(RESPONSE_CERT_ARRAY_INDEX)).getDataItems();
             if (respItems.size() != EEK_ARRAY_ENTRIES_NO_CONFIG
                     && respItems.size() != EEK_ARRAY_ENTRIES_WITH_CONFIG) {
-                Log.e(TAG, "Incorrect number of certificate array entries. Expected: "
-                            + EEK_ARRAY_ENTRIES_NO_CONFIG + " or " + EEK_ARRAY_ENTRIES_WITH_CONFIG
-                            + ". Actual: " + respItems.size());
-                return null;
+                throw new CborException(
+                        "Incorrect number of certificate array entries. Expected: "
+                                + EEK_ARRAY_ENTRIES_NO_CONFIG
+                                + " or "
+                                + EEK_ARRAY_ENTRIES_WITH_CONFIG
+                                + ". Actual: "
+                                + respItems.size());
             }
-            if (!checkType(respItems.get(EEK_AND_CURVE_INDEX), MajorType.ARRAY, "EekAndCurveArr")) {
-                return null;
-            }
+            checkType(respItems.get(EEK_AND_CURVE_INDEX), MajorType.ARRAY, "EekAndCurveArr");
             List<DataItem> curveAndEekChains =
                     ((Array) respItems.get(EEK_AND_CURVE_INDEX)).getDataItems();
             for (int i = 0; i < curveAndEekChains.size(); i++) {
-                if (!checkType(curveAndEekChains.get(i), MajorType.ARRAY, "EekAndCurve")) {
-                    return null;
-                }
+                checkType(curveAndEekChains.get(i), MajorType.ARRAY, "EekAndCurve");
                 List<DataItem> curveAndEekChain =
                         ((Array) curveAndEekChains.get(i)).getDataItems();
                 if (curveAndEekChain.size() != CURVE_AND_EEK_CHAIN_LENGTH) {
@@ -242,24 +228,20 @@ public class CborUtils {
                                + curveAndEekChain.size());
                     return null;
                 }
-                if (!checkType(curveAndEekChain.get(CURVE_INDEX),
-                               MajorType.UNSIGNED_INTEGER, "Curve")
-                        || !checkType(curveAndEekChain.get(EEK_CERT_CHAIN_INDEX),
-                                                           MajorType.ARRAY, "EekCertChain")) {
-                    return null;
-                }
+                checkType(curveAndEekChain.get(CURVE_INDEX), MajorType.UNSIGNED_INTEGER, "Curve");
+                checkType(
+                        curveAndEekChain.get(EEK_CERT_CHAIN_INDEX),
+                        MajorType.ARRAY,
+                        "EekCertChain");
                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
                 new CborEncoder(baos).encode(curveAndEekChain.get(EEK_CERT_CHAIN_INDEX));
                 UnsignedInteger curve = (UnsignedInteger) curveAndEekChain.get(CURVE_INDEX);
                 resp.addGeek(curve.getValue().intValue(), baos.toByteArray());
             }
-            if (!checkType(respItems.get(CHALLENGE_INDEX), MajorType.BYTE_STRING, "Challenge")) {
-                return null;
-            }
+            checkType(respItems.get(CHALLENGE_INDEX), MajorType.BYTE_STRING, "Challenge");
             resp.setChallenge(((ByteString) respItems.get(CHALLENGE_INDEX)).getBytes());
-            if (respItems.size() == EEK_ARRAY_ENTRIES_WITH_CONFIG
-                    && !parseDeviceConfig(resp, respItems.get(CONFIG_INDEX))) {
-                return null;
+            if (respItems.size() == EEK_ARRAY_ENTRIES_WITH_CONFIG) {
+                parseDeviceConfig(resp, respItems.get(CONFIG_INDEX));
             }
             return resp;
         } catch (CborException e) {
@@ -393,11 +375,11 @@ public class CborUtils {
             MajorType majorType) throws CborException, RkpdException {
         ByteArrayInputStream bais = new ByteArrayInputStream(encodedBytes);
         List<DataItem> dataItems = new CborDecoder(bais).decode();
-        if (dataItems.size() != RESPONSE_ARRAY_SIZE
-                || !checkType(dataItems.get(RESPONSE_CERT_ARRAY_INDEX), majorType, debugName)) {
+        if (dataItems.size() != RESPONSE_ARRAY_SIZE) {
             throw new RkpdException(RkpdException.ErrorCode.INTERNAL_ERROR, debugName
                     + " not in proper Cbor format. Expected size 1. Actual: " + dataItems.size());
         }
+        checkType(dataItems.get(RESPONSE_CERT_ARRAY_INDEX), majorType, debugName);
         return dataItems.get(0);
     }
 
