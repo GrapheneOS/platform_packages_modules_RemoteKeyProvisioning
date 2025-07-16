@@ -31,8 +31,6 @@ import com.android.rkpdapp.database.InstantConverter;
 import com.android.rkpdapp.utils.CborUtils;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
@@ -184,18 +182,8 @@ public class GeekResponse {
                     Duration.ofHours(((UnsignedInteger) timeToRefreshHours).getValue().intValue());
         }
         if (newUrl != null) {
-            String receivedUrl = ((UnicodeString) newUrl).getString();
             CborUtils.checkType(newUrl, MajorType.UNICODE_STRING, "ProvisioningURL");
-            try {
-                URI uri = new URI(receivedUrl);
-                if (uri.isAbsolute()) {
-                    resp.provisioningUrl = receivedUrl;
-                } else {
-                    Log.e(TAG, "Ignoring relative URI received from server: " + receivedUrl);
-                }
-            } catch (URISyntaxException e) {
-                Log.e(TAG, "Ignoring invalid URL syntax received from server: " + receivedUrl, e);
-            }
+            resp.provisioningUrl = ((UnicodeString) newUrl).getString();
         }
         if (lastBadCertTimeStart != null) {
             CborUtils.checkType(
