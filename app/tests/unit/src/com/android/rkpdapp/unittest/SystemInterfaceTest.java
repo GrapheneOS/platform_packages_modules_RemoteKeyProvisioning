@@ -17,9 +17,7 @@
 package com.android.rkpdapp.unittest;
 
 import static com.android.rkpdapp.unittest.Utils.generateEcdsaKeyPair;
-
 import static com.google.common.truth.Truth.assertThat;
-
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -41,10 +39,11 @@ import android.os.RemoteException;
 import android.os.ServiceManager;
 import android.os.ServiceSpecificException;
 import android.util.Base64;
-
 import androidx.test.core.app.ApplicationProvider;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
-
+import co.nstant.in.cbor.CborBuilder;
+import co.nstant.in.cbor.CborEncoder;
+import co.nstant.in.cbor.CborException;
 import com.android.rkpdapp.GeekResponse;
 import com.android.rkpdapp.RkpdException;
 import com.android.rkpdapp.database.ProvisionedKey;
@@ -52,18 +51,8 @@ import com.android.rkpdapp.database.RkpKey;
 import com.android.rkpdapp.interfaces.ServiceManagerInterface;
 import com.android.rkpdapp.interfaces.SystemInterface;
 import com.android.rkpdapp.metrics.ProvisioningAttempt;
-import com.android.rkpdapp.utils.CborUtils;
-
 import com.google.common.collect.ImmutableMap;
 import com.google.crypto.tink.subtle.Ed25519Sign;
-
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Assume;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-
 import java.io.ByteArrayOutputStream;
 import java.math.BigInteger;
 import java.security.KeyPair;
@@ -75,10 +64,12 @@ import java.util.Arrays;
 import java.util.Random;
 import java.util.Set;
 import java.util.stream.Collectors;
-
-import co.nstant.in.cbor.CborBuilder;
-import co.nstant.in.cbor.CborEncoder;
-import co.nstant.in.cbor.CborException;
+import org.junit.After;
+import org.junit.Assert;
+import org.junit.Assume;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
 
 @RunWith(AndroidJUnit4.class)
 public class SystemInterfaceTest {
@@ -150,8 +141,9 @@ public class SystemInterfaceTest {
     @Test
     public void testGenerateKey() throws CborException, RkpdException, RemoteException {
         IRemotelyProvisionedComponent mockedComponent = mock(IRemotelyProvisionedComponent.class);
-        SystemInterface systemInterface = mockSystemInterface(CborUtils.EC_CURVE_25519,
-                INTERFACE_VERSION_V3, mockedComponent);
+        SystemInterface systemInterface =
+                mockSystemInterface(
+                        GeekResponse.EC_CURVE_25519, INTERFACE_VERSION_V3, mockedComponent);
         ProvisioningAttempt metrics = ProvisioningAttempt.createScheduledAttemptMetrics(
                 ApplicationProvider.getApplicationContext());
         RkpKey rkpKey = systemInterface.generateKey(metrics);
@@ -191,8 +183,9 @@ public class SystemInterfaceTest {
     @Test
     public void testGenerateCSRPreV3P256() throws Exception {
         IRemotelyProvisionedComponent mockedComponent = mock(IRemotelyProvisionedComponent.class);
-        SystemInterface systemInterface = mockSystemInterface(CborUtils.EC_CURVE_P256,
-                INTERFACE_VERSION_V2, mockedComponent);
+        SystemInterface systemInterface =
+                mockSystemInterface(
+                        GeekResponse.EC_CURVE_P256, INTERFACE_VERSION_V2, mockedComponent);
 
         ProvisioningAttempt metrics = ProvisioningAttempt.createOutOfKeysAttemptMetrics(
                 ApplicationProvider.getApplicationContext(), SERVICE);
@@ -202,7 +195,7 @@ public class SystemInterfaceTest {
         byte[] eekChain = generateEekChain(Utils.CURVE_P256, eekPub);
         assertThat(eekChain).isNotNull();
         GeekResponse geekResponse = new GeekResponse();
-        geekResponse.addGeek(CborUtils.EC_CURVE_P256, eekChain);
+        geekResponse.addGeek(GeekResponse.EC_CURVE_P256, eekChain);
         geekResponse.setChallenge(new byte[]{0x02});
 
         byte[] csrTag = systemInterface.generateCsr(metrics, geekResponse, new ArrayList<>());
@@ -217,8 +210,9 @@ public class SystemInterfaceTest {
     @Test
     public void testGenerateCSRPreV3Ed25519() throws Exception {
         IRemotelyProvisionedComponent mockedComponent = mock(IRemotelyProvisionedComponent.class);
-        SystemInterface systemInterface = mockSystemInterface(CborUtils.EC_CURVE_25519,
-                INTERFACE_VERSION_V2, mockedComponent);
+        SystemInterface systemInterface =
+                mockSystemInterface(
+                        GeekResponse.EC_CURVE_25519, INTERFACE_VERSION_V2, mockedComponent);
 
         ProvisioningAttempt metrics = ProvisioningAttempt.createOutOfKeysAttemptMetrics(
                 ApplicationProvider.getApplicationContext(), SERVICE);
@@ -227,7 +221,7 @@ public class SystemInterfaceTest {
         new Random().nextBytes(eekPub);
         byte[] eekChain = generateEekChain(Utils.CURVE_ED25519, eekPub);
         assertThat(eekChain).isNotNull();
-        geekResponse.addGeek(CborUtils.EC_CURVE_25519, eekChain);
+        geekResponse.addGeek(GeekResponse.EC_CURVE_25519, eekChain);
         geekResponse.setChallenge(new byte[]{0x02});
 
         byte[] csrTag = systemInterface.generateCsr(metrics, geekResponse, new ArrayList<>());
@@ -242,8 +236,9 @@ public class SystemInterfaceTest {
     @Test
     public void testGenerateCSRv3() throws Exception {
         IRemotelyProvisionedComponent mockedComponent = mock(IRemotelyProvisionedComponent.class);
-        SystemInterface systemInterface = mockSystemInterface(CborUtils.EC_CURVE_25519,
-                INTERFACE_VERSION_V3, mockedComponent);
+        SystemInterface systemInterface =
+                mockSystemInterface(
+                        GeekResponse.EC_CURVE_25519, INTERFACE_VERSION_V3, mockedComponent);
 
         ProvisioningAttempt metrics = ProvisioningAttempt.createOutOfKeysAttemptMetrics(
                 ApplicationProvider.getApplicationContext(), SERVICE);
@@ -262,8 +257,8 @@ public class SystemInterfaceTest {
     @Test
     public void testGetVersion() throws Exception {
         IRemotelyProvisionedComponent mockedComponent = mock(IRemotelyProvisionedComponent.class);
-        SystemInterface systemInterface = mockSystemInterface(CborUtils.EC_CURVE_25519,
-                123, mockedComponent);
+        SystemInterface systemInterface =
+                mockSystemInterface(GeekResponse.EC_CURVE_25519, 123, mockedComponent);
         assertThat(systemInterface.getVersion()).isEqualTo(123);
     }
 
@@ -368,7 +363,7 @@ public class SystemInterfaceTest {
             throws RemoteException {
         IRemotelyProvisionedComponent mockedComponent = mock(IRemotelyProvisionedComponent.class);
         RpcHardwareInfo mockedHardwareInfo = mock(RpcHardwareInfo.class);
-        mockedHardwareInfo.supportedEekCurve = CborUtils.EC_CURVE_25519;
+        mockedHardwareInfo.supportedEekCurve = GeekResponse.EC_CURVE_25519;
         when(mockedComponent.getHardwareInfo()).thenReturn(mockedHardwareInfo);
         when(mockedComponent.generateEcdsaP256KeyPair(eq(false), any())).thenThrow(exception);
         return new SystemInterface(mockedComponent, SERVICE);

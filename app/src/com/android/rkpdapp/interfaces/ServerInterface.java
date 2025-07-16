@@ -24,9 +24,7 @@ import android.net.Uri;
 import android.os.SystemProperties;
 import android.util.Base64;
 import android.util.Log;
-
 import androidx.annotation.VisibleForTesting;
-
 import com.android.rkpdapp.GeekResponse;
 import com.android.rkpdapp.RkpdException;
 import com.android.rkpdapp.metrics.ProvisioningAttempt;
@@ -35,7 +33,6 @@ import com.android.rkpdapp.utils.NetworkUtils;
 import com.android.rkpdapp.utils.Settings;
 import com.android.rkpdapp.utils.StopWatch;
 import com.android.rkpdapp.utils.X509Utils;
-
 import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -244,7 +241,7 @@ public class ServerInterface {
         byte[] input = CborUtils.buildProvisioningInfo(mContext);
         byte[] cborBytes =
                 connectAndGetData(metrics, generateFetchGeekUrl(), input, Operation.FETCH_GEEK);
-        GeekResponse resp = CborUtils.parseGeekResponse(cborBytes);
+        GeekResponse resp = GeekResponse.parse(cborBytes);
         if (resp == null) {
             metrics.setStatus(ProvisioningAttempt.Status.FETCH_GEEK_HTTP_ERROR);
             throw new RkpdException(

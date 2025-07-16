@@ -21,23 +21,13 @@ import static com.google.common.truth.Truth.assertWithMessage;
 
 import android.content.Context;
 import android.util.Base64;
-
 import androidx.test.core.app.ApplicationProvider;
-
 import com.android.rkpdapp.GeekResponse;
 import com.android.rkpdapp.RkpdException;
 import com.android.rkpdapp.interfaces.ServerInterface;
 import com.android.rkpdapp.metrics.ProvisioningAttempt;
 import com.android.rkpdapp.testutil.FakeRkpServer;
-import com.android.rkpdapp.utils.CborUtils;
 import com.android.rkpdapp.utils.Settings;
-
-import org.junit.After;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
-import org.mockito.Mockito;
-
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -45,6 +35,11 @@ import java.net.HttpURLConnection;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.BeforeClass;
+import org.junit.Test;
+import org.mockito.Mockito;
 
 public class ServerInterfaceTest {
     private static final Duration TIME_TO_REFRESH_HOURS = Duration.ofHours(2);
@@ -140,8 +135,9 @@ public class ServerInterfaceTest {
                             + "xeWrSZJZYET6xPIz5QSybBlk6RzjZDs0hgBlLfXdr6oBya+DyU74WpToZZNR4xgeOY"
                             + "CnaUszzQ==",
                     Base64.DEFAULT);
-            assertThat(response.getGeekChain(CborUtils.EC_CURVE_25519)).isEqualTo(ed25519GeekChain);
-            assertThat(response.getGeekChain(CborUtils.EC_CURVE_P256)).isEqualTo(p256GeekChain);
+            assertThat(response.getGeekChain(GeekResponse.EC_CURVE_25519))
+                    .isEqualTo(ed25519GeekChain);
+            assertThat(response.getGeekChain(GeekResponse.EC_CURVE_P256)).isEqualTo(p256GeekChain);
         }
     }
 

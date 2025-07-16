@@ -35,44 +35,22 @@ import co.nstant.in.cbor.model.Map;
 import co.nstant.in.cbor.model.NegativeInteger;
 import co.nstant.in.cbor.model.UnicodeString;
 import co.nstant.in.cbor.model.UnsignedInteger;
-import com.android.rkpdapp.GeekResponse;
 import com.android.rkpdapp.RkpdException;
-import com.android.rkpdapp.database.InstantConverter;
 import com.android.rkpdapp.database.RkpKey;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
 public class CborUtils {
-    public static final int EC_CURVE_P256 = 1;
-    public static final int EC_CURVE_25519 = 2;
-
-    public static final String EXTRA_KEYS = "num_extra_attestation_keys";
-    public static final String TIME_TO_REFRESH = "time_to_refresh_hours";
-    public static final String PROVISIONING_URL = "provisioning_url";
-    public static final String LAST_BAD_CERT_TIME_START_MILLIS = "bad_cert_start";
-    public static final String LAST_BAD_CERT_TIME_END_MILLIS = "bad_cert_end";
-
-    private static final int RESPONSE_CERT_ARRAY_INDEX = 0;
-    private static final int RESPONSE_ARRAY_SIZE = 1;
+    public static final int RESPONSE_CERT_ARRAY_INDEX = 0;
+    public static final int RESPONSE_ARRAY_SIZE = 1;
 
     private static final int SHARED_CERTIFICATES_INDEX = 0;
     private static final int UNIQUE_CERTIFICATES_INDEX = 1;
     private static final int CERT_ARRAY_ENTRIES = 2;
 
-    private static final int EEK_AND_CURVE_INDEX = 0;
-    private static final int CHALLENGE_INDEX = 1;
-    private static final int CONFIG_INDEX = 2;
-
-    private static final int CURVE_AND_EEK_CHAIN_LENGTH = 2;
-    private static final int CURVE_INDEX = 0;
-    private static final int EEK_CERT_CHAIN_INDEX = 1;
-
-    private static final int EEK_ARRAY_ENTRIES_NO_CONFIG = 2;
-    private static final int EEK_ARRAY_ENTRIES_WITH_CONFIG = 3;
     private static final String TAG = "RkpdCborUtils";
     private static final byte[] EMPTY_MAP = new byte[] {(byte) 0xA0};
     private static final int KEY_PARAMETER_X = -2;
@@ -96,18 +74,10 @@ public class CborUtils {
         try {
             ByteArrayInputStream bais = new ByteArrayInputStream(serverResp);
             List<DataItem> dataItems = new CborDecoder(bais).decode();
-            if (dataItems.size() != RESPONSE_ARRAY_SIZE) {
-                throw new CborException(
-                        "Improper formatting of CBOR response. Expected size 1. Actual: "
-                                + dataItems.size());
-            }
+            checkSize(dataItems, RESPONSE_ARRAY_SIZE, "CborResponse");
             checkType(dataItems.get(RESPONSE_CERT_ARRAY_INDEX), MajorType.ARRAY, "CborResponse");
             dataItems = ((Array) dataItems.get(RESPONSE_CERT_ARRAY_INDEX)).getDataItems();
-            if (dataItems.size() != CERT_ARRAY_ENTRIES) {
-                throw new CborException(
-                        "Incorrect number of certificate array entries. Expected: 2. Actual: "
-                                + dataItems.size());
-            }
+            checkSize(dataItems, CERT_ARRAY_ENTRIES, "CertificateArray");
             checkType(
                     dataItems.get(SHARED_CERTIFICATES_INDEX),
                     MajorType.BYTE_STRING,
@@ -137,7 +107,7 @@ public class CborUtils {
         return null;
     }
 
-    private static void checkType(DataItem item, MajorType majorType, String field)
+    public static void checkType(DataItem item, MajorType majorType, String field)
             throws CborException {
         if (item.getMajorType() != majorType) {
             throw new CborException(
@@ -150,103 +120,16 @@ public class CborUtils {
         }
     }
 
-    private static void parseDeviceConfig(GeekResponse resp, DataItem deviceConfig)
+    public static void checkSize(List<DataItem> dataItems, int expectedSize, String field)
             throws CborException {
-        checkType(deviceConfig, MajorType.MAP, "DeviceConfig");
-        Map deviceConfiguration = (Map) deviceConfig;
-        DataItem extraKeys =
-                deviceConfiguration.get(new UnicodeString(EXTRA_KEYS));
-        DataItem timeToRefreshHours =
-                deviceConfiguration.get(new UnicodeString(TIME_TO_REFRESH));
-        DataItem newUrl =
-                deviceConfiguration.get(new UnicodeString(PROVISIONING_URL));
-        DataItem lastBadCertTimeStart =
-                deviceConfiguration.get(new UnicodeString(LAST_BAD_CERT_TIME_START_MILLIS));
-        DataItem lastBadCertTimeEnd =
-                deviceConfiguration.get(new UnicodeString(LAST_BAD_CERT_TIME_END_MILLIS));
-        if (extraKeys != null) {
-            checkType(extraKeys, MajorType.UNSIGNED_INTEGER, "ExtraKeys");
-            resp.numExtraAttestationKeys = ((UnsignedInteger) extraKeys).getValue().intValue();
-        }
-        if (timeToRefreshHours != null) {
-            checkType(timeToRefreshHours, MajorType.UNSIGNED_INTEGER, "TimeToRefresh");
-            resp.timeToRefresh =
-                    Duration.ofHours(((UnsignedInteger) timeToRefreshHours).getValue().intValue());
-        }
-        if (newUrl != null) {
-            checkType(newUrl, MajorType.UNICODE_STRING, "ProvisioningURL");
-            resp.provisioningUrl = ((UnicodeString) newUrl).getString();
-        }
-        if (lastBadCertTimeStart != null) {
-            checkType(lastBadCertTimeStart, MajorType.UNSIGNED_INTEGER, "BadCertTimeStart");
-            resp.lastBadCertTimeStart = InstantConverter.fromTimestamp(
-                    ((UnsignedInteger) lastBadCertTimeStart).getValue().longValue());
-        }
-        if (lastBadCertTimeEnd != null) {
-            checkType(lastBadCertTimeEnd, MajorType.UNSIGNED_INTEGER, "BadCertTimeEnd");
-            resp.lastBadCertTimeEnd = InstantConverter.fromTimestamp(
-                    ((UnsignedInteger) lastBadCertTimeEnd).getValue().longValue());
-        }
-    }
-
-    /**
-     * Parses the Google Endpoint Encryption Key response provided by the server which contains a
-     * Google signed EEK and a challenge for use by the underlying IRemotelyProvisionedComponent HAL
-     */
-    public static GeekResponse parseGeekResponse(byte[] serverResp) {
-        try {
-            GeekResponse resp = new GeekResponse();
-            ByteArrayInputStream bais = new ByteArrayInputStream(serverResp);
-            List<DataItem> dataItems = new CborDecoder(bais).decode();
-            if (dataItems.size() != RESPONSE_ARRAY_SIZE) {
-                throw new CborException(
-                        "Improper formatting of CBOR response. Expected size 1. Actual: "
-                                + dataItems.size());
-            }
-            checkType(dataItems.get(RESPONSE_CERT_ARRAY_INDEX), MajorType.ARRAY, "CborResponse");
-            List<DataItem> respItems =
-                    ((Array) dataItems.get(RESPONSE_CERT_ARRAY_INDEX)).getDataItems();
-            if (respItems.size() != EEK_ARRAY_ENTRIES_NO_CONFIG
-                    && respItems.size() != EEK_ARRAY_ENTRIES_WITH_CONFIG) {
-                throw new CborException(
-                        "Incorrect number of certificate array entries. Expected: "
-                                + EEK_ARRAY_ENTRIES_NO_CONFIG
-                                + " or "
-                                + EEK_ARRAY_ENTRIES_WITH_CONFIG
-                                + ". Actual: "
-                                + respItems.size());
-            }
-            checkType(respItems.get(EEK_AND_CURVE_INDEX), MajorType.ARRAY, "EekAndCurveArr");
-            List<DataItem> curveAndEekChains =
-                    ((Array) respItems.get(EEK_AND_CURVE_INDEX)).getDataItems();
-            for (int i = 0; i < curveAndEekChains.size(); i++) {
-                checkType(curveAndEekChains.get(i), MajorType.ARRAY, "EekAndCurve");
-                List<DataItem> curveAndEekChain =
-                        ((Array) curveAndEekChains.get(i)).getDataItems();
-                if (curveAndEekChain.size() != CURVE_AND_EEK_CHAIN_LENGTH) {
-                    Log.e(TAG, "Wrong size. Expected: " + CURVE_AND_EEK_CHAIN_LENGTH + ". Actual: "
-                               + curveAndEekChain.size());
-                    return null;
-                }
-                checkType(curveAndEekChain.get(CURVE_INDEX), MajorType.UNSIGNED_INTEGER, "Curve");
-                checkType(
-                        curveAndEekChain.get(EEK_CERT_CHAIN_INDEX),
-                        MajorType.ARRAY,
-                        "EekCertChain");
-                ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                new CborEncoder(baos).encode(curveAndEekChain.get(EEK_CERT_CHAIN_INDEX));
-                UnsignedInteger curve = (UnsignedInteger) curveAndEekChain.get(CURVE_INDEX);
-                resp.addGeek(curve.getValue().intValue(), baos.toByteArray());
-            }
-            checkType(respItems.get(CHALLENGE_INDEX), MajorType.BYTE_STRING, "Challenge");
-            resp.setChallenge(((ByteString) respItems.get(CHALLENGE_INDEX)).getBytes());
-            if (respItems.size() == EEK_ARRAY_ENTRIES_WITH_CONFIG) {
-                parseDeviceConfig(resp, respItems.get(CONFIG_INDEX));
-            }
-            return resp;
-        } catch (CborException e) {
-            Log.e(TAG, "CBOR parsing/serializing failed.", e);
-            return null;
+        if (dataItems.size() != expectedSize) {
+            throw new CborException(
+                    "Incorrect number of items for `"
+                            + field
+                            + "`. Expected size "
+                            + expectedSize
+                            + ". Actual: "
+                            + dataItems.size());
         }
     }
 
@@ -338,22 +221,23 @@ public class CborUtils {
      * @return the CBOR Map object.
      */
     public static Map buildUnverifiedDeviceInfo() {
-        Map unverifiedDeviceInfo = new Map();
-        unverifiedDeviceInfo.put(new UnicodeString("fingerprint"),
-                                    new UnicodeString(Build.FINGERPRINT));
-        return unverifiedDeviceInfo;
+        return new Map()
+                .put(new UnicodeString("fingerprint"), new UnicodeString(Build.FINGERPRINT));
     }
 
     /**
      * Extracts provisioned key for storage from Maced key pair received from underlying binder
      * service.
      */
-    public static RkpKey extractRkpKeyFromMacedKey(byte[] privKey, String serviceName,
-            MacedPublicKey macedPublicKey) throws CborException, RkpdException {
+    public static RkpKey extractRkpKeyFromMacedKey(
+            byte[] privKey, String serviceName, MacedPublicKey macedPublicKey)
+            throws CborException {
         Array cborMessage = (Array) decodeCbor(macedPublicKey.macedKey, "MacedPublicKeys",
                 MajorType.ARRAY);
         List<DataItem> messageArray = cborMessage.getDataItems();
-        byte[] macedMessage = getBytesFromBstr(messageArray.get(2));
+        checkType(messageArray.get(2), MajorType.BYTE_STRING, "MacedPublicKey");
+        byte[] macedMessage = ((ByteString) messageArray.get(2)).getBytes();
+
         Map keyMap = (Map) decodeCbor(macedMessage, "byte stream", MajorType.MAP);
         byte[] xCor = ((ByteString) keyMap.get(new NegativeInteger(KEY_PARAMETER_X))).getBytes();
         if (xCor.length != 32) {
@@ -371,14 +255,11 @@ public class CborUtils {
      * Decodes and returns the CBOR encoded DataItem in encodedBytes. Also verifies that the
      * majorType actually matches what is being assumed.
      */
-    public static DataItem decodeCbor(byte[] encodedBytes, String debugName,
-            MajorType majorType) throws CborException, RkpdException {
+    public static DataItem decodeCbor(byte[] encodedBytes, String debugName, MajorType majorType)
+            throws CborException {
         ByteArrayInputStream bais = new ByteArrayInputStream(encodedBytes);
         List<DataItem> dataItems = new CborDecoder(bais).decode();
-        if (dataItems.size() != RESPONSE_ARRAY_SIZE) {
-            throw new RkpdException(RkpdException.ErrorCode.INTERNAL_ERROR, debugName
-                    + " not in proper Cbor format. Expected size 1. Actual: " + dataItems.size());
-        }
+        checkSize(dataItems, RESPONSE_ARRAY_SIZE, debugName);
         checkType(dataItems.get(RESPONSE_CERT_ARRAY_INDEX), majorType, debugName);
         return dataItems.get(0);
     }
@@ -390,21 +271,14 @@ public class CborUtils {
         return result;
     }
 
-    private static byte[] getBytesFromBstr(DataItem item) throws CborException {
-        if (item.getMajorType() == MajorType.BYTE_STRING) {
-            return ((ByteString) item).getBytes();
-        }
-        throw new CborException("Error while decoding CBOR. Expected bstr value.");
-    }
-
     /**
      * Make protected headers for certificate request.
      */
     public static Map makeProtectedHeaders() throws CborException {
-        Map protectedHeaders = new Map();
-        protectedHeaders.put(new UnsignedInteger(COSE_HEADER_ALGORITHM),
-                new UnsignedInteger(COSE_ALGORITHM_HMAC_256));
-        return protectedHeaders;
+        return new Map()
+                .put(
+                        new UnsignedInteger(COSE_HEADER_ALGORITHM),
+                        new UnsignedInteger(COSE_ALGORITHM_HMAC_256));
     }
 
     /**
