@@ -2,6 +2,7 @@
 -keep class com.android.rkpdapp.interfaces.ServiceManagerInterface { *; }
 -keep class com.android.rkpdapp.service.** { *; }
 -keep class com.android.rkpdapp.utils.Settings { *; }
+-keep class com.android.rkpdapp.ConfirmCertificates { *; }
 -keep class com.android.rkpdapp.provisioner.PeriodicProvisioner {
   public static java.lang.AutoCloseable lock();
 }
