@@ -50,6 +50,7 @@ import java.security.cert.X509Certificate;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -167,14 +168,26 @@ public class ServerInterface {
      */
     public List<byte[]> requestSignedCertificates(byte[] csr, ProvisioningAttempt metrics)
             throws RkpdException, InterruptedException {
+        return requestSignedCertificatesInternal(csr, metrics, Optional.empty());
+    }
+
+    public List<byte[]> requestSignedCertificates(
+            byte[] csr, ProvisioningAttempt metrics, String requestId)
+            throws RkpdException, InterruptedException {
+        return requestSignedCertificatesInternal(csr, metrics, Optional.of(requestId));
+    }
+
+    private List<byte[]> requestSignedCertificatesInternal(
+            byte[] csr, ProvisioningAttempt metrics, Optional<String> requestId)
+            throws RkpdException, InterruptedException {
         final byte[] cborBytes =
-                connectAndGetData(metrics, generateSignCertsUrl(), csr, Operation.SIGN_CERTS);
+                connectAndGetData(
+                        metrics, generateSignCertsUrl(requestId), csr, Operation.SIGN_CERTS);
         List<byte[]> certChains = CborUtils.parseSignedCertificates(cborBytes);
         if (certChains == null) {
             metrics.setStatus(ProvisioningAttempt.Status.INTERNAL_ERROR);
             throw new RkpdException(
-                    RkpdException.ErrorCode.INTERNAL_ERROR,
-                    "Response failed to parse.");
+                    RkpdException.ErrorCode.INTERNAL_ERROR, "Response failed to parse.");
         } else if (certChains.isEmpty()) {
             metrics.setCertChainLength(0);
             metrics.setRootCertFingerprint("");
@@ -186,20 +199,22 @@ public class ServerInterface {
                 byte[] pubKeyDigest = MessageDigest.getInstance("SHA-256").digest(pubKey);
                 metrics.setRootCertFingerprint(Base64.encodeToString(pubKeyDigest, Base64.DEFAULT));
             } catch (NoSuchAlgorithmException e) {
-                throw new RkpdException(RkpdException.ErrorCode.INTERNAL_ERROR,
-                        "Algorithm not found", e);
+                throw new RkpdException(
+                        RkpdException.ErrorCode.INTERNAL_ERROR, "Algorithm not found", e);
             }
         }
         return certChains;
     }
 
-    private URL generateSignCertsUrl() throws RkpdException {
+    private URL generateSignCertsUrl(Optional<String> requestId) throws RkpdException {
+        String reqId = requestId.orElseGet(() -> UUID.randomUUID().toString());
+        Log.i(TAG, "request_id: " + reqId);
         try {
             return new URL(
                     Uri.parse(Settings.getUrl(mContext))
                             .buildUpon()
                             .appendEncodedPath(CERTIFICATE_SIGNING_URL)
-                            .appendQueryParameter(REQUEST_ID_PARAMETER, generateAndLogRequestId())
+                            .appendQueryParameter(REQUEST_ID_PARAMETER, reqId)
                             .build()
                             .toString()
                             // Needed due to the `:` in the URL endpoint.
@@ -207,12 +222,6 @@ public class ServerInterface {
         } catch (MalformedURLException e) {
             throw new RkpdException(RkpdException.ErrorCode.HTTP_CLIENT_ERROR, "Bad URL", e);
         }
-    }
-
-    private String generateAndLogRequestId() {
-        String reqId = UUID.randomUUID().toString();
-        Log.i(TAG, "request_id: " + reqId);
-        return reqId;
     }
 
     /**

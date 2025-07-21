@@ -20,15 +20,13 @@ import static com.google.common.truth.Truth.assertWithMessage;
 
 import android.security.NetworkSecurityPolicy;
 import android.util.Base64;
-
 import com.google.protobuf.ByteString;
-
+import fi.iki.elonen.NanoHTTPD;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
-
-import fi.iki.elonen.NanoHTTPD;
+import java.util.Map;
 
 public class FakeRkpServer implements AutoCloseable {
     private static final String EEK_RESPONSE_OK =
@@ -125,6 +123,8 @@ public class FakeRkpServer implements AutoCloseable {
 
     final NanoHTTPD mServer;
     final boolean mCleartextPolicy;
+    private String capturedUri;
+    private Map<String, String> capturedParams;
 
     // Interface allowing users to plug in completely custom handlers.
     public interface RequestHandler {
@@ -137,19 +137,23 @@ public class FakeRkpServer implements AutoCloseable {
         mCleartextPolicy = NetworkSecurityPolicy.getInstance().isCleartextTrafficPermitted();
         NetworkSecurityPolicy.getInstance().setCleartextTrafficPermitted(true);
 
-        mServer = new NanoHTTPD("localhost", 0) {
-            @Override
-            public Response serve(IHTTPSession session) {
-                try {
-                    return handler.serve(session, (int) ((HTTPSession) session).getBodySize());
-                } catch (IOException | NanoHTTPD.ResponseException e) {
-                    StringWriter stack = new StringWriter();
-                    e.printStackTrace(new PrintWriter(stack));
-                    assertWithMessage("Error handling request: " + stack).fail();
-                }
-                return null;
-            }
-        };
+        mServer =
+                new NanoHTTPD("localhost", 0) {
+                    @Override
+                    public Response serve(IHTTPSession session) {
+                        capturedUri = session.getUri();
+                        capturedParams = session.getParms();
+                        try {
+                            return handler.serve(
+                                    session, (int) ((HTTPSession) session).getBodySize());
+                        } catch (IOException | NanoHTTPD.ResponseException e) {
+                            StringWriter stack = new StringWriter();
+                            e.printStackTrace(new PrintWriter(stack));
+                            assertWithMessage("Error handling request: " + stack).fail();
+                        }
+                        return null;
+                    }
+                };
 
         mServer.start(NanoHTTPD.SOCKET_READ_TIMEOUT, false);
     }
@@ -178,5 +182,13 @@ public class FakeRkpServer implements AutoCloseable {
 
     public String getUrl() {
         return "http://localhost:" + mServer.getListeningPort() + "/";
+    }
+
+    public String getCapturedUri() {
+        return capturedUri;
+    }
+
+    public Map<String, String> getCapturedParams() {
+        return capturedParams;
     }
 }
