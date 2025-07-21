@@ -13,11 +13,14 @@
  */
 package com.android.rkpdapp;
 
+import android.content.Context;
 import co.nstant.in.cbor.CborException;
 import co.nstant.in.cbor.model.ByteString;
 import co.nstant.in.cbor.model.Map;
 import co.nstant.in.cbor.model.UnicodeString;
 import com.android.rkpdapp.utils.CborUtils;
+import com.android.rkpdapp.utils.Settings;
+import java.util.Locale;
 import java.util.Optional;
 
 public class ConfirmCertificates {
@@ -25,6 +28,9 @@ public class ConfirmCertificates {
 
     /** The HAL instance that received the signed certificates. */
     private String halInstance;
+
+    /** The environment of the RKP server that issued the signed certificates. */
+    private String environment;
 
     /** The error reason if any. */
     private Optional<String> errorReason;
@@ -36,21 +42,33 @@ public class ConfirmCertificates {
     private Optional<byte[]> cborCertChain;
 
     private ConfirmCertificates(
-            String halInstance, Optional<String> errorReason, Optional<byte[]> cborCertChain) {
+            Context context,
+            String halInstance,
+            Optional<String> errorReason,
+            Optional<byte[]> cborCertChain) {
         if (halInstance == null || halInstance.isEmpty()) {
             throw new IllegalArgumentException("HAL instance must not be null or empty.");
         }
         this.halInstance = halInstance;
+        this.environment = getEnvironment(context);
         this.errorReason = errorReason;
         this.cborCertChain = cborCertChain;
     }
 
-    public static ConfirmCertificates createSuccessInstance(String halInstance) {
-        return new ConfirmCertificates(halInstance, Optional.empty(), Optional.empty());
+    private static String getEnvironment(Context context) {
+        String url = Settings.getUrl(context);
+        if (url == null || url.isEmpty()) {
+            return "prod";
+        }
+        return url.toLowerCase(Locale.ROOT).contains("preprod") ? "preprod" : "prod";
+    }
+
+    public static ConfirmCertificates createSuccessInstance(Context context, String halInstance) {
+        return new ConfirmCertificates(context, halInstance, Optional.empty(), Optional.empty());
     }
 
     public static ConfirmCertificates createErrorInstance(
-            String halInstance, String errorReason, byte[] cborCertChain) {
+            Context context, String halInstance, String errorReason, byte[] cborCertChain) {
         if (errorReason == null || errorReason.isEmpty()) {
             throw new IllegalArgumentException("Error reason must not be null or empty.");
         }
@@ -58,12 +76,14 @@ public class ConfirmCertificates {
             throw new IllegalArgumentException("CBOR certificate chain must not be null or empty.");
         }
         return new ConfirmCertificates(
-                halInstance, Optional.of(errorReason), Optional.of(cborCertChain));
+                context, halInstance, Optional.of(errorReason), Optional.of(cborCertChain));
     }
 
     public byte[] buildConfirmCertificatesInfo() throws CborException {
         Map confirmCertificatesInfo =
-                new Map().put(new UnicodeString("instance"), new UnicodeString(halInstance));
+                new Map()
+                        .put(new UnicodeString("instance"), new UnicodeString(halInstance))
+                        .put(new UnicodeString("environment"), new UnicodeString(environment));
         if (errorReason.isPresent() && cborCertChain.isPresent()) {
             confirmCertificatesInfo.put(
                     new UnicodeString("error_info"),
