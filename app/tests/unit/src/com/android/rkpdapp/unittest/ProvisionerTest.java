@@ -17,7 +17,6 @@
 package com.android.rkpdapp.unittest;
 
 import static com.google.common.truth.Truth.assertThat;
-
 import static org.junit.Assert.assertThrows;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.notNull;
@@ -30,10 +29,13 @@ import static org.mockito.Mockito.verify;
 
 import android.content.Context;
 import android.os.RemoteException;
-
+import android.platform.test.annotations.RequiresFlagsEnabled;
+import android.platform.test.flag.junit.CheckFlagsRule;
+import android.platform.test.flag.junit.DeviceFlagsValueProvider;
 import androidx.test.core.app.ApplicationProvider;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
-
+import co.nstant.in.cbor.model.Array;
+import com.android.rkpd.flags.Flags;
 import com.android.rkpdapp.GeekResponse;
 import com.android.rkpdapp.RkpdException;
 import com.android.rkpdapp.database.ProvisionedKey;
@@ -45,22 +47,18 @@ import com.android.rkpdapp.metrics.ProvisioningAttempt;
 import com.android.rkpdapp.provisioner.Provisioner;
 import com.android.rkpdapp.testutil.FakeRkpServer;
 import com.android.rkpdapp.utils.Settings;
-
 import com.google.crypto.tink.subtle.Random;
-
-import org.junit.After;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-
 import java.security.KeyPair;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
-
-import co.nstant.in.cbor.model.Array;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.BeforeClass;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.runner.RunWith;
 
 @RunWith(AndroidJUnit4.class)
 public class ProvisionerTest {
@@ -75,6 +73,9 @@ public class ProvisionerTest {
     private static Context sContext;
     private Provisioner mProvisioner;
     private ProvisionedKeyDao mKeyDao;
+
+    @Rule
+    public final CheckFlagsRule mCheckFlagsRule = DeviceFlagsValueProvider.createCheckFlagsRule();
 
     @BeforeClass
     public static void init() {
@@ -217,5 +218,28 @@ public class ProvisionerTest {
         mProvisioner.clearBadAttestationKeys(resp);
 
         assertThat(mKeyDao.getAllKeys()).hasSize(3);
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_REQUEST_ID_REUSE)
+    public void testProvisionerReusesRequestIdFromGeekResponse() throws Exception {
+        try (FakeRkpServer server =
+                new FakeRkpServer(
+                        FakeRkpServer.Response.FETCH_EEK_OK,
+                        FakeRkpServer.Response.SIGN_CERTS_OK_VALID_CBOR)) {
+            Settings.setDeviceConfig(sContext, 20, Duration.ofDays(1), server.getUrl());
+            ProvisioningAttempt atom = ProvisioningAttempt.createScheduledAttemptMetrics(sContext);
+            SystemInterface mockSystem = mock(SystemInterface.class);
+            doReturn(13).when(mockSystem).getBatchSize();
+            doReturn(FAKE_RKP_KEY).when(mockSystem).generateKey(eq(atom));
+            doReturn(new byte[1]).when(mockSystem).generateCsr(eq(atom), notNull(), notNull());
+
+            GeekResponse geekResponse = new GeekResponse();
+            geekResponse.setChallenge(new byte[1]);
+            mProvisioner.provisionKeys(atom, mockSystem, geekResponse);
+
+            assertThat(server.getCapturedParams())
+                    .containsEntry("request_id", geekResponse.requestId);
+        }
     }
 }
