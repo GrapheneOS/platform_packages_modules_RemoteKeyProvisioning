@@ -20,6 +20,7 @@ import android.content.Context;
 import android.os.RemoteException;
 import android.util.Log;
 import co.nstant.in.cbor.CborException;
+import com.android.rkpd.flags.Flags;
 import com.android.rkpdapp.GeekResponse;
 import com.android.rkpdapp.RkpdException;
 import com.android.rkpdapp.database.InstantConverter;
@@ -155,8 +156,12 @@ public class Provisioner {
             throw new RkpdException(RkpdException.ErrorCode.INTERNAL_ERROR,
                     "Failed to serialize payload");
         }
-        return new ServerInterface(mContext, mIsAsync)
-                .requestSignedCertificates(certRequest, metrics);
+
+        return Flags.enableRequestIdReuse()
+                ? new ServerInterface(mContext, mIsAsync)
+                        .requestSignedCertificates(certRequest, metrics, response.requestId)
+                : new ServerInterface(mContext, mIsAsync)
+                        .requestSignedCertificates(certRequest, metrics);
     }
 
     private List<ProvisionedKey> associateCertsWithKeys(List<byte[]> certChains,
