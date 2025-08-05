@@ -340,10 +340,18 @@ public class ServerInterface {
             throw new RkpdException(RkpdException.ErrorCode.NETWORK_COMMUNICATION_ERROR,
                     "Network communication consent not provided. Need to enable GMSCore app.");
         }
+
+        String requestId = UUID.randomUUID().toString();
+        Log.i(TAG, "request_id: " + requestId);
+
         byte[] input = CborUtils.buildProvisioningInfo(mContext);
         byte[] cborBytes =
-                connectAndGetData(metrics, generateFetchGeekUrl(), input, Operation.FETCH_GEEK);
+                connectAndGetData(
+                        metrics, generateFetchGeekUrl(requestId), input, Operation.FETCH_GEEK);
         GeekResponse resp = GeekResponse.parse(cborBytes);
+        if (Flags.enableRequestIdReuse()) {
+            resp.setRequestId(requestId);
+        }
         if (resp == null) {
             metrics.setStatus(ProvisioningAttempt.Status.FETCH_GEEK_HTTP_ERROR);
             throw new RkpdException(
@@ -353,10 +361,15 @@ public class ServerInterface {
         return resp;
     }
 
-    private URL generateFetchGeekUrl() throws RkpdException {
+    private URL generateFetchGeekUrl(String requestId) throws RkpdException {
+        Uri.Builder uriBuilder =
+                Uri.parse(Settings.getUrl(mContext)).buildUpon().appendPath(GEEK_URL);
+        if (Flags.enableRequestIdReuse()) {
+            uriBuilder.appendQueryParameter(REQUEST_ID_PARAMETER, requestId);
+        }
         try {
-            return new URL(Uri.parse(Settings.getUrl(mContext)).buildUpon()
-                            .appendPath(GEEK_URL)
+            return new URL(
+                    uriBuilder
                             .build()
                             .toString()
                             // Needed due to the `:` in the URL endpoint.
