@@ -21,6 +21,8 @@ import android.os.RemoteException;
 import android.util.Log;
 import co.nstant.in.cbor.CborException;
 import com.android.rkpd.flags.Flags;
+import com.android.rkpdapp.ConfirmCertificates;
+import com.android.rkpdapp.ConfirmCertificates.PayloadType;
 import com.android.rkpdapp.GeekResponse;
 import com.android.rkpdapp.RkpdException;
 import com.android.rkpdapp.database.InstantConverter;
@@ -39,6 +41,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Provides an easy package to run the provisioning process from start to finish, interfacing
@@ -91,7 +94,13 @@ public class Provisioner {
                 List<byte[]> certChains = fetchCertificates(metrics, keysGenerated, systemInterface,
                         geekResponse);
                 checkForInterrupts();
-                List<ProvisionedKey> keys = associateCertsWithKeys(certChains, keysGenerated);
+                List<ProvisionedKey> keys =
+                        associateCertsWithKeys(
+                                certChains,
+                                keysGenerated,
+                                systemInterface.getHalInstanceName(),
+                                geekResponse.requestId,
+                                metrics);
 
                 mKeyDao.insertKeys(keys);
                 Log.i(TAG, "Total provisioned keys: " + keys.size());
@@ -157,6 +166,16 @@ public class Provisioner {
                     "Failed to serialize payload");
         }
 
+        if (Flags.enableFeedbackLoop()) {
+            Optional<String> requestId =
+                    Flags.enableRequestIdReuse()
+                            ? Optional.of(response.requestId)
+                            : Optional.empty();
+            return new ServerInterface(mContext, mIsAsync)
+                    .requestSignedCertificates(
+                            certRequest, metrics, requestId, Optional.of(systemInterface));
+        }
+
         return Flags.enableRequestIdReuse()
                 ? new ServerInterface(mContext, mIsAsync)
                         .requestSignedCertificates(certRequest, metrics, response.requestId)
@@ -164,11 +183,36 @@ public class Provisioner {
                         .requestSignedCertificates(certRequest, metrics);
     }
 
-    private List<ProvisionedKey> associateCertsWithKeys(List<byte[]> certChains,
-            List<RkpKey> keysGenerated) throws RkpdException {
+    private List<ProvisionedKey> associateCertsWithKeys(
+            List<byte[]> certChains,
+            List<RkpKey> keysGenerated,
+            String halInstanceName,
+            String requestId,
+            ProvisioningAttempt metrics)
+            throws RkpdException, InterruptedException {
         List<ProvisionedKey> provisionedKeys = new ArrayList<>();
         for (byte[] chain : certChains) {
-            X509Certificate[] certChain = X509Utils.formatX509Certs(chain);
+            X509Certificate[] certChain;
+            try {
+                certChain = X509Utils.formatX509Certs(chain);
+            } catch (RkpdException e) {
+                try {
+                    if (Flags.enableFeedbackLoop()) {
+                    // Only send the particular certificate chain that encountered parsing errors.
+                    ConfirmCertificates confirmCertificates =
+                            ConfirmCertificates.createErrorInstance(
+                                    halInstanceName,
+                                    e.getMessage(),
+                                    chain,
+                                    PayloadType.DER_CERTIFICATE_CHAIN);
+                        new ServerInterface(mContext, mIsAsync)
+                                .confirmCertificates(confirmCertificates, requestId, metrics);
+                    }
+                } catch (IllegalArgumentException iae) {
+                    Log.e(TAG, "Failed to create ConfirmCertificates instance.", iae);
+                }
+                throw e;
+            }
             X509Certificate leafCertificate = certChain[0];
             long expirationDate = X509Utils.getExpirationTimeForCertificateChain(certChain)
                     .toInstant().toEpochMilli();

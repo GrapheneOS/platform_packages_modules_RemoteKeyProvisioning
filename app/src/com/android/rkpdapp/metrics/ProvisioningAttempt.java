@@ -23,10 +23,8 @@ import android.net.NetworkCapabilities;
 import android.os.SystemClock;
 import android.os.SystemProperties;
 import android.util.Log;
-
 import com.android.rkpdapp.service.RemoteProvisioningService;
 import com.android.rkpdapp.utils.StopWatch;
-
 import java.time.Duration;
 
 /**
@@ -62,7 +60,10 @@ public final class ProvisioningAttempt implements AutoCloseable {
         SIGN_CERTS_TIMED_OUT,
         SIGN_CERTS_IO_EXCEPTION,
         SIGN_CERTS_HTTP_ERROR,
-        SIGN_CERTS_DEVICE_NOT_REGISTERED
+        SIGN_CERTS_DEVICE_NOT_REGISTERED,
+        CONFIRM_CERTIFICATES_HTTP_ERROR,
+        CONFIRM_CERTIFICATES_IO_EXCEPTION,
+        CONFIRM_CERTIFICATES_TIMED_OUT,
     }
 
     private static final String TAG = RemoteProvisioningService.TAG;

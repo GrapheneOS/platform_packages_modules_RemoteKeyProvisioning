@@ -20,8 +20,14 @@ import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
 
 import android.content.Context;
+import android.platform.test.annotations.RequiresFlagsEnabled;
+import android.platform.test.flag.junit.CheckFlagsRule;
+import android.platform.test.flag.junit.DeviceFlagsValueProvider;
 import android.util.Base64;
 import androidx.test.core.app.ApplicationProvider;
+import com.android.rkpd.flags.Flags;
+import com.android.rkpdapp.ConfirmCertificates;
+import com.android.rkpdapp.ConfirmCertificates.PayloadType;
 import com.android.rkpdapp.GeekResponse;
 import com.android.rkpdapp.RkpdException;
 import com.android.rkpdapp.interfaces.ServerInterface;
@@ -38,6 +44,7 @@ import java.util.List;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Rule;
 import org.junit.Test;
 import org.mockito.Mockito;
 
@@ -45,6 +52,9 @@ public class ServerInterfaceTest {
     private static final Duration TIME_TO_REFRESH_HOURS = Duration.ofHours(2);
     private static Context sContext;
     private ServerInterface mServerInterface;
+
+    @Rule
+    public final CheckFlagsRule mCheckFlagsRule = DeviceFlagsValueProvider.createCheckFlagsRule();
 
     @BeforeClass
     public static void init() {
@@ -398,7 +408,128 @@ public class ServerInterfaceTest {
                 ServerInterface.SYNC_CONNECT_TIMEOUT_OPEN_MS);
 
         Mockito.when(serverInterface.getRegionalProperty()).thenReturn("us");
-        assertThat(serverInterface.getConnectTimeoutMs()).isEqualTo(
-                ServerInterface.SYNC_CONNECT_TIMEOUT_OPEN_MS);
+        assertThat(serverInterface.getConnectTimeoutMs())
+                .isEqualTo(ServerInterface.SYNC_CONNECT_TIMEOUT_OPEN_MS);
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_FEEDBACK_LOOP)
+    public void testconfirmCertificatesRetryOnServerFailure() throws Exception {
+        try (FakeRkpServer server =
+                new FakeRkpServer(
+                        FakeRkpServer.Response.FETCH_EEK_OK,
+                        FakeRkpServer.Response.SIGN_CERTS_OK_VALID_CBOR,
+                        FakeRkpServer.Response.INTERNAL_ERROR)) {
+            Settings.setDeviceConfig(
+                    sContext,
+                    1 /* extraKeys */,
+                    TIME_TO_REFRESH_HOURS /* expiringBy */,
+                    server.getUrl());
+            Settings.setMaxRequestTime(sContext, 100);
+            mServerInterface.confirmCertificates(
+                    ConfirmCertificates.createSuccessInstance("strongbox"),
+                    "requestId",
+                    ProvisioningAttempt.createScheduledAttemptMetrics(sContext));
+            assertWithMessage("Expected RkpdException.").fail();
+        } catch (RkpdException e) {
+            assertThat(e.getErrorCode()).isEqualTo(RkpdException.ErrorCode.HTTP_SERVER_ERROR);
+            assertThat(e).hasMessageThat().contains("HTTP error status encountered");
+        }
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_FEEDBACK_LOOP)
+    public void testConfirmCertificatesSuccess() throws Exception {
+        try (FakeRkpServer server =
+                new FakeRkpServer(
+                        FakeRkpServer.Response.FETCH_EEK_OK,
+                        FakeRkpServer.Response.SIGN_CERTS_OK_VALID_CBOR,
+                        FakeRkpServer.Response.CONFIRM_CERTS_OK)) {
+            Settings.setDeviceConfig(
+                    sContext,
+                    1 /* extraKeys */,
+                    TIME_TO_REFRESH_HOURS /* expiringBy */,
+                    server.getUrl());
+
+            // The method does not return anything, but should not throw an exception.
+            mServerInterface.confirmCertificates(
+                    ConfirmCertificates.createSuccessInstance("strongbox"),
+                    "requestId",
+                    ProvisioningAttempt.createScheduledAttemptMetrics(sContext));
+
+            assertThat(server.getCapturedUri()).contains(":confirmCertificates");
+            assertThat(server.getCapturedParams()).containsEntry("request_id", "requestId");
+
+            // The device config should not be reset.
+            assertThat(Settings.getUrl(sContext)).isEqualTo(server.getUrl());
+            assertThat(Settings.getExpiringBy(sContext)).isEqualTo(TIME_TO_REFRESH_HOURS);
+            assertThat(Settings.getExtraSignedKeysAvailable(sContext)).isEqualTo(1);
+        }
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_FEEDBACK_LOOP)
+    public void testConfirmCertificatesErrorInstanceResetsDeviceConfig() throws Exception {
+        try (FakeRkpServer server =
+                new FakeRkpServer(
+                        FakeRkpServer.Response.FETCH_EEK_OK,
+                        FakeRkpServer.Response.SIGN_CERTS_OK_VALID_CBOR,
+                        FakeRkpServer.Response.CONFIRM_CERTS_OK)) {
+            Settings.setDeviceConfig(
+                    sContext,
+                    1 /* extraKeys */,
+                    TIME_TO_REFRESH_HOURS /* expiringBy */,
+                    server.getUrl());
+
+            // The method does not return anything, but should not throw an exception.
+            mServerInterface.confirmCertificates(
+                    ConfirmCertificates.createErrorInstance(
+                            "strongbox",
+                            "error",
+                            new byte[] {1, 2, 3},
+                            PayloadType.DER_CERTIFICATE_CHAIN),
+                    "requestId",
+                    ProvisioningAttempt.createScheduledAttemptMetrics(sContext));
+
+            assertThat(server.getCapturedUri()).contains(":confirmCertificates");
+
+            // The device config should be reset.
+            assertThat(Settings.getUrl(sContext)).isEqualTo(Settings.getDefaultUrl());
+            assertThat(Settings.getExpiringBy(sContext))
+                    .isEqualTo(Duration.ofMillis(Settings.EXPIRING_BY_MS_DEFAULT));
+            assertThat(Settings.getExtraSignedKeysAvailable(sContext))
+                    .isEqualTo(Settings.EXTRA_SIGNED_KEYS_AVAILABLE_DEFAULT);
+        }
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_FEEDBACK_LOOP)
+    public void testConfirmCertificatesInvalidServerResponseResetsDeviceConfig() throws Exception {
+        try (FakeRkpServer server =
+                new FakeRkpServer(
+                        FakeRkpServer.Response.FETCH_EEK_OK,
+                        FakeRkpServer.Response.SIGN_CERTS_OK_VALID_CBOR,
+                        FakeRkpServer.Response.CONFIRM_CERTS_INVALID_CBOR)) {
+            Settings.setDeviceConfig(
+                    sContext,
+                    1 /* extraKeys */,
+                    TIME_TO_REFRESH_HOURS /* expiringBy */,
+                    server.getUrl());
+            assertThat(Settings.getUrl(sContext)).isNotEqualTo(Settings.getDefaultUrl());
+
+            mServerInterface.confirmCertificates(
+                    ConfirmCertificates.createSuccessInstance("strongbox"),
+                    "requestId",
+                    ProvisioningAttempt.createScheduledAttemptMetrics(sContext));
+
+            assertThat(server.getCapturedUri()).contains(":confirmCertificates");
+
+            // Device config should be reset.
+            assertThat(Settings.getUrl(sContext)).isEqualTo(Settings.getDefaultUrl());
+            assertThat(Settings.getExpiringBy(sContext))
+                    .isEqualTo(Duration.ofMillis(Settings.EXPIRING_BY_MS_DEFAULT));
+            assertThat(Settings.getExtraSignedKeysAvailable(sContext))
+                    .isEqualTo(Settings.EXTRA_SIGNED_KEYS_AVAILABLE_DEFAULT);
+        }
     }
 }
