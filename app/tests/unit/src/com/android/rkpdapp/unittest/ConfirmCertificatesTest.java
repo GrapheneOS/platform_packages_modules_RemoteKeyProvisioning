@@ -13,10 +13,10 @@
  */
 package com.android.rkpdapp.unittest;
 
+import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
 
 import android.platform.test.annotations.RequiresFlagsEnabled;
 import android.platform.test.flag.junit.CheckFlagsRule;
@@ -30,6 +30,7 @@ import co.nstant.in.cbor.model.Map;
 import co.nstant.in.cbor.model.UnicodeString;
 import com.android.rkpd.flags.Flags;
 import com.android.rkpdapp.ConfirmCertificates;
+import com.android.rkpdapp.ConfirmCertificates.PayloadType;
 import java.io.ByteArrayInputStream;
 import java.util.List;
 import org.junit.Rule;
@@ -49,12 +50,20 @@ public class ConfirmCertificatesTest {
 
     @Test
     public void testCreateSuccessInstance() {
-        ConfirmCertificates.createSuccessInstance(HAL_INSTANCE);
+        ConfirmCertificates successInstance =
+                ConfirmCertificates.createSuccessInstance(HAL_INSTANCE);
+        assertThat(successInstance.isErrorInstance()).isFalse();
     }
 
     @Test
     public void testCreateErrorInstance() {
-        ConfirmCertificates.createErrorInstance(HAL_INSTANCE, ERROR_REASON, CBOR_CERT_CHAIN);
+        ConfirmCertificates errorInstance =
+                ConfirmCertificates.createErrorInstance(
+                        HAL_INSTANCE,
+                        ERROR_REASON,
+                        CBOR_CERT_CHAIN,
+                        PayloadType.CERTIFICATE_BUNDLE);
+        assertThat(errorInstance.isErrorInstance()).isTrue();
     }
 
     @Test
@@ -75,35 +84,51 @@ public class ConfirmCertificatesTest {
     public void testCreateErrorInstanceWithNullHal() {
         assertThrows(
                 IllegalArgumentException.class,
-                () -> ConfirmCertificates.createErrorInstance(null, ERROR_REASON, CBOR_CERT_CHAIN));
+                () ->
+                        ConfirmCertificates.createErrorInstance(
+                                null,
+                                ERROR_REASON,
+                                CBOR_CERT_CHAIN,
+                                PayloadType.CERTIFICATE_BUNDLE));
     }
 
     @Test
     public void testCreateErrorInstanceWithEmptyHal() {
         assertThrows(
                 IllegalArgumentException.class,
-                () -> ConfirmCertificates.createErrorInstance("", ERROR_REASON, CBOR_CERT_CHAIN));
+                () ->
+                        ConfirmCertificates.createErrorInstance(
+                                "", ERROR_REASON, CBOR_CERT_CHAIN, PayloadType.CERTIFICATE_BUNDLE));
     }
 
     @Test
     public void testCreateErrorInstanceWithNullErrorReason() {
         assertThrows(
                 IllegalArgumentException.class,
-                () -> ConfirmCertificates.createErrorInstance(HAL_INSTANCE, null, CBOR_CERT_CHAIN));
+                () ->
+                        ConfirmCertificates.createErrorInstance(
+                                HAL_INSTANCE,
+                                null,
+                                CBOR_CERT_CHAIN,
+                                PayloadType.CERTIFICATE_BUNDLE));
     }
 
     @Test
     public void testCreateErrorInstanceWithEmptyErrorReason() {
         assertThrows(
                 IllegalArgumentException.class,
-                () -> ConfirmCertificates.createErrorInstance(HAL_INSTANCE, "", CBOR_CERT_CHAIN));
+                () ->
+                        ConfirmCertificates.createErrorInstance(
+                                HAL_INSTANCE, "", CBOR_CERT_CHAIN, PayloadType.CERTIFICATE_BUNDLE));
     }
 
     @Test
     public void testCreateErrorInstanceWithNullCertChain() {
         assertThrows(
                 IllegalArgumentException.class,
-                () -> ConfirmCertificates.createErrorInstance(HAL_INSTANCE, ERROR_REASON, null));
+                () ->
+                        ConfirmCertificates.createErrorInstance(
+                                HAL_INSTANCE, ERROR_REASON, null, PayloadType.CERTIFICATE_BUNDLE));
     }
 
     @Test
@@ -112,7 +137,10 @@ public class ConfirmCertificatesTest {
                 IllegalArgumentException.class,
                 () ->
                         ConfirmCertificates.createErrorInstance(
-                                HAL_INSTANCE, ERROR_REASON, new byte[0]));
+                                HAL_INSTANCE,
+                                ERROR_REASON,
+                                new byte[0],
+                                PayloadType.CERTIFICATE_BUNDLE));
     }
 
     @Test
@@ -122,40 +150,80 @@ public class ConfirmCertificatesTest {
 
         ByteArrayInputStream bais = new ByteArrayInputStream(encodedInfo);
         List<DataItem> dataItems = new CborDecoder(bais).decode();
-        assertEquals(1, dataItems.size());
-        assertTrue(dataItems.get(0) instanceof Map);
+        assertThat(dataItems.size()).isEqualTo(1);
+        assertThat(dataItems.get(0)).isInstanceOf(Map.class);
         Map map = (Map) dataItems.get(0);
 
-        assertEquals(1, map.getKeys().size());
-        assertEquals(
-                HAL_INSTANCE, ((UnicodeString) map.get(new UnicodeString("instance"))).getString());
+        assertThat(map.getKeys().size()).isEqualTo(1);
+        assertThat(((UnicodeString) map.get(new UnicodeString("instance"))).getString())
+                .isEqualTo(HAL_INSTANCE);
     }
 
     @Test
-    public void testBuildConfirmCertificatesInfoError() throws CborException {
+    public void testBuildConfirmCertificatesInfoErrorWithCertBundle() throws CborException {
         ConfirmCertificates error =
                 ConfirmCertificates.createErrorInstance(
-                        HAL_INSTANCE, ERROR_REASON, CBOR_CERT_CHAIN);
+                        HAL_INSTANCE,
+                        ERROR_REASON,
+                        CBOR_CERT_CHAIN,
+                        PayloadType.CERTIFICATE_BUNDLE);
         byte[] encodedInfo = error.buildConfirmCertificatesInfo();
 
         ByteArrayInputStream bais = new ByteArrayInputStream(encodedInfo);
         List<DataItem> dataItems = new CborDecoder(bais).decode();
-        assertEquals(1, dataItems.size());
-        assertTrue(dataItems.get(0) instanceof Map);
+        assertThat(dataItems.size()).isEqualTo(1);
+        assertThat(dataItems.get(0)).isInstanceOf(Map.class);
         Map map = (Map) dataItems.get(0);
 
-        assertEquals(2, map.getKeys().size());
-        assertEquals(
-                HAL_INSTANCE, ((UnicodeString) map.get(new UnicodeString("instance"))).getString());
+        assertThat(map.getKeys().size()).isEqualTo(2);
+        assertThat(((UnicodeString) map.get(new UnicodeString("instance"))).getString())
+                .isEqualTo(HAL_INSTANCE);
 
-        assertTrue(map.get(new UnicodeString("error_info")) instanceof Map);
+        assertThat(map.get(new UnicodeString("error_info"))).isInstanceOf(Map.class);
         Map errorInfo = (Map) map.get(new UnicodeString("error_info"));
-        assertEquals(2, errorInfo.getKeys().size());
-        assertEquals(
-                ERROR_REASON,
-                ((UnicodeString) errorInfo.get(new UnicodeString("reason"))).getString());
+        assertThat(errorInfo.getKeys().size()).isEqualTo(2);
+        assertThat(((UnicodeString) errorInfo.get(new UnicodeString("reason"))).getString())
+                .isEqualTo(ERROR_REASON);
         assertArrayEquals(
                 CBOR_CERT_CHAIN,
-                ((ByteString) errorInfo.get(new UnicodeString("signed_certificates"))).getBytes());
+                ((ByteString)
+                                errorInfo.get(
+                                        new UnicodeString(
+                                                PayloadType.CERTIFICATE_BUNDLE.getValue())))
+                        .getBytes());
+    }
+
+    @Test
+    public void testBuildConfirmCertificatesInfoErrorWithDerChain() throws CborException {
+        ConfirmCertificates error =
+                ConfirmCertificates.createErrorInstance(
+                        HAL_INSTANCE,
+                        ERROR_REASON,
+                        CBOR_CERT_CHAIN,
+                        PayloadType.DER_CERTIFICATE_CHAIN);
+        byte[] encodedInfo = error.buildConfirmCertificatesInfo();
+
+        ByteArrayInputStream bais = new ByteArrayInputStream(encodedInfo);
+        List<DataItem> dataItems = new CborDecoder(bais).decode();
+        assertThat(dataItems.size()).isEqualTo(1);
+        assertThat(dataItems.get(0)).isInstanceOf(Map.class);
+        Map map = (Map) dataItems.get(0);
+
+        assertThat(map.getKeys().size()).isEqualTo(2);
+        assertThat(((UnicodeString) map.get(new UnicodeString("instance"))).getString())
+                .isEqualTo(HAL_INSTANCE);
+
+        assertThat(map.get(new UnicodeString("error_info"))).isInstanceOf(Map.class);
+        Map errorInfo = (Map) map.get(new UnicodeString("error_info"));
+        assertThat(errorInfo.getKeys().size()).isEqualTo(2);
+        assertThat(((UnicodeString) errorInfo.get(new UnicodeString("reason"))).getString())
+                .isEqualTo(ERROR_REASON);
+        assertArrayEquals(
+                CBOR_CERT_CHAIN,
+                ((ByteString)
+                                errorInfo.get(
+                                        new UnicodeString(
+                                                PayloadType.DER_CERTIFICATE_CHAIN.getValue())))
+                        .getBytes());
     }
 }

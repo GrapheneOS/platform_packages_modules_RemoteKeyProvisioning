@@ -68,19 +68,27 @@ public class FakeRkpServer implements AutoCloseable {
                     + "8L01k/PGu1lOXvneIQcUo7ako4uPgpaWugNYHQAAAYBINcxrASC0rWP9VTSO7LdABvcdkv7W2vh+"
                     + "onV0aW1lX3RvX3JlZnJlc2hfaG91cnMYSHgabnVtX2V4dHJhX2F0dGVzdGF0aW9uX2tleXMA";
 
-    public enum Response {
+    public static class Response {
         // canned responses for :fetchEekChain
-        FETCH_EEK_OK(EEK_RESPONSE_OK),
-        FETCH_EEK_RKP_DISABLED(EEK_RESPONSE_RKP_DISABLED),
+        public static final Response FETCH_EEK_OK = new Response(EEK_RESPONSE_OK);
+        public static final Response FETCH_EEK_RKP_DISABLED =
+                new Response(EEK_RESPONSE_RKP_DISABLED);
 
         // canned responses for :signCertificates
-        SIGN_CERTS_OK_VALID_CBOR("gkCA"),
-        SIGN_CERTS_OK_INVALID_CBOR(200, "OK"),
-        SIGN_CERTS_DEVICE_UNREGISTERED(444, "Device Not Registered"),
-        SIGN_CERTS_USER_UNAUTHORIZED(403, "User not authorized"),
+        public static final Response SIGN_CERTS_OK_VALID_CBOR = new Response("gkCA");
+        public static final Response SIGN_CERTS_OK_INVALID_CBOR = new Response(200, "OK");
+        public static final Response SIGN_CERTS_DEVICE_UNREGISTERED =
+                new Response(444, "Device Not Registered");
+        public static final Response SIGN_CERTS_USER_UNAUTHORIZED =
+                new Response(403, "User not authorized");
+
+        // canned responses for :confirmCertificates
+        public static final Response CONFIRM_CERTS_OK = new Response("gA"); // empty CBOR array
+        public static final Response CONFIRM_CERTS_INVALID_CBOR =
+                new Response(200, "not a CBOR encoded array");
 
         // canned responses for any request
-        INTERNAL_ERROR(500, "Internal Server Error");
+        public static final Response INTERNAL_ERROR = new Response(500, "Internal Server Error");
 
         private final int mStatusCode;
         private final String mDescription;
@@ -88,17 +96,17 @@ public class FakeRkpServer implements AutoCloseable {
         private final String mMime;
 
         // Text response (generally used to indicate an error)
-        Response(int code, String description) {
+        public Response(int code, String description) {
             this(code, description, description.getBytes(StandardCharsets.UTF_8), "text/plain");
         }
 
         // Standard OK CBOR response
-        Response(String base64Body) {
+        public Response(String base64Body) {
             this(200, "OK", Base64.decode(base64Body, Base64.DEFAULT), "application/cbor");
         }
 
         // Arbitrary response
-        Response(int code, String description, byte[] body, String mime) {
+        public Response(int code, String description, byte[] body, String mime) {
             mStatusCode = code;
             mDescription = code + " " + description;
             mBody = ByteString.copyFrom(body);
@@ -162,16 +170,27 @@ public class FakeRkpServer implements AutoCloseable {
     // signCertificates
     public FakeRkpServer(Response fetchEekResponse, Response signCertResponse)
             throws IOException {
-        this((session, bodySize) -> {
-            session.getInputStream().readNBytes(bodySize);
-            if (session.getUri().contains(":fetchEekChain")) {
-                return fetchEekResponse.toNanoResponse();
-            } else if (session.getUri().contains(":signCertificates")) {
-                return signCertResponse.toNanoResponse();
-            }
-            assertWithMessage("Unexpected HTTP request: " + session.getUri()).fail();
-            return null;
-        });
+        this(fetchEekResponse, signCertResponse, Response.CONFIRM_CERTS_OK);
+    }
+
+    // Create a test server that returns pre-defined responses for fetchEek, signCertificates,
+    // and confirmCertificates
+    public FakeRkpServer(
+            Response fetchEekResponse, Response signCertResponse, Response confirmCertResponse)
+            throws IOException {
+        this(
+                (session, bodySize) -> {
+                    session.getInputStream().readNBytes(bodySize);
+                    if (session.getUri().contains(":fetchEekChain")) {
+                        return fetchEekResponse.toNanoResponse();
+                    } else if (session.getUri().contains(":signCertificates")) {
+                        return signCertResponse.toNanoResponse();
+                    } else if (session.getUri().contains(":confirmCertificates")) {
+                        return confirmCertResponse.toNanoResponse();
+                    }
+                    assertWithMessage("Unexpected HTTP request: " + session.getUri()).fail();
+                    return null;
+                });
     }
 
     @Override

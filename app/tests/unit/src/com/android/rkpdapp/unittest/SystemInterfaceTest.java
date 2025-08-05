@@ -18,6 +18,7 @@ package com.android.rkpdapp.unittest;
 
 import static com.android.rkpdapp.unittest.Utils.generateEcdsaKeyPair;
 import static com.google.common.truth.Truth.assertThat;
+import static com.google.common.truth.Truth.assertWithMessage;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -38,12 +39,16 @@ import android.hardware.security.keymint.RpcHardwareInfo;
 import android.os.RemoteException;
 import android.os.ServiceManager;
 import android.os.ServiceSpecificException;
+import android.platform.test.annotations.RequiresFlagsEnabled;
+import android.platform.test.flag.junit.CheckFlagsRule;
+import android.platform.test.flag.junit.DeviceFlagsValueProvider;
 import android.util.Base64;
 import androidx.test.core.app.ApplicationProvider;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import co.nstant.in.cbor.CborBuilder;
 import co.nstant.in.cbor.CborEncoder;
 import co.nstant.in.cbor.CborException;
+import com.android.rkpd.flags.Flags;
 import com.android.rkpdapp.GeekResponse;
 import com.android.rkpdapp.RkpdException;
 import com.android.rkpdapp.database.ProvisionedKey;
@@ -68,6 +73,7 @@ import org.junit.After;
 import org.junit.Assert;
 import org.junit.Assume;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -81,6 +87,9 @@ public class SystemInterfaceTest {
             0x01, 0x03, (byte) 0xA1, 0x05, 0x4C, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
             (byte) 0x88, (byte) 0x99, 0x00, (byte) 0xAA, (byte) 0xBB, 0x46, 0x12, 0x34,
             0x12, 0x34, 0x12, 0x34, (byte) 0x80};
+
+    @Rule
+    public final CheckFlagsRule mCheckFlagsRule = DeviceFlagsValueProvider.createCheckFlagsRule();
 
     @Before
     public void preCheck() {
@@ -102,6 +111,48 @@ public class SystemInterfaceTest {
                 .map(SystemInterface::getServiceName)
                 .collect(Collectors.toSet());
         assertThat(instanceNames).contains(SERVICE);
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_FEEDBACK_LOOP)
+    public void testGetHalInstanceNameInvalidServiceName() throws RemoteException {
+        IRemotelyProvisionedComponent mockedComponent = mock(IRemotelyProvisionedComponent.class);
+        RpcHardwareInfo hwInfo = mock(RpcHardwareInfo.class);
+        when(mockedComponent.getHardwareInfo()).thenReturn(hwInfo);
+
+        String serviceName = "not enough slashes";
+        SystemInterface systemInterface = new SystemInterface(mockedComponent, serviceName);
+        try {
+            var unused = systemInterface.getHalInstanceName();
+            assertWithMessage("Expected RkpdException").fail();
+        } catch (RkpdException e) {
+            assertThat(e.getErrorCode()).isEqualTo(RkpdException.ErrorCode.INTERNAL_ERROR);
+            assertThat(e).hasMessageThat().contains("not in the expected format");
+        }
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_FEEDBACK_LOOP)
+    public void testGetHalInstanceNameDefault() throws Exception {
+        IRemotelyProvisionedComponent mockedComponent = mock(IRemotelyProvisionedComponent.class);
+        RpcHardwareInfo hwInfo = mock(RpcHardwareInfo.class);
+        when(mockedComponent.getHardwareInfo()).thenReturn(hwInfo);
+
+        String serviceName = IRemotelyProvisionedComponent.DESCRIPTOR + "/default";
+        SystemInterface systemInterface = new SystemInterface(mockedComponent, serviceName);
+        assertThat(systemInterface.getHalInstanceName()).isEqualTo("default");
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_FEEDBACK_LOOP)
+    public void testGetHalInstanceNameStrongbox() throws Exception {
+        IRemotelyProvisionedComponent mockedComponent = mock(IRemotelyProvisionedComponent.class);
+        RpcHardwareInfo hwInfo = mock(RpcHardwareInfo.class);
+        when(mockedComponent.getHardwareInfo()).thenReturn(hwInfo);
+
+        String serviceName = IRemotelyProvisionedComponent.DESCRIPTOR + "/strongbox";
+        SystemInterface systemInterface = new SystemInterface(mockedComponent, serviceName);
+        assertThat(systemInterface.getHalInstanceName()).isEqualTo("strongbox");
     }
 
     @Test

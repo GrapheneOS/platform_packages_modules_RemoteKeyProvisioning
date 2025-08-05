@@ -32,9 +32,11 @@ import android.os.RemoteException;
 import android.platform.test.annotations.RequiresFlagsEnabled;
 import android.platform.test.flag.junit.CheckFlagsRule;
 import android.platform.test.flag.junit.DeviceFlagsValueProvider;
+import android.util.Base64;
 import androidx.test.core.app.ApplicationProvider;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import co.nstant.in.cbor.model.Array;
+import co.nstant.in.cbor.model.ByteString;
 import com.android.rkpd.flags.Flags;
 import com.android.rkpdapp.GeekResponse;
 import com.android.rkpdapp.RkpdException;
@@ -46,6 +48,7 @@ import com.android.rkpdapp.interfaces.SystemInterface;
 import com.android.rkpdapp.metrics.ProvisioningAttempt;
 import com.android.rkpdapp.provisioner.Provisioner;
 import com.android.rkpdapp.testutil.FakeRkpServer;
+import com.android.rkpdapp.utils.CborUtils;
 import com.android.rkpdapp.utils.Settings;
 import com.google.crypto.tink.subtle.Random;
 import java.security.KeyPair;
@@ -240,6 +243,57 @@ public class ProvisionerTest {
 
             assertThat(server.getCapturedParams())
                     .containsEntry("request_id", geekResponse.requestId);
+        }
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_FEEDBACK_LOOP)
+    public void testProvisionerFailedSignedCertsX509ParingTriggersConfirmCertificates()
+            throws Exception {
+        // Create a signed certificate chain that is in the correct CBOR format expected by the
+        // client, but fails to parse as a valid X509 certificate chain.
+        Array certChains =
+                new Array()
+                        .add(new ByteString(new byte[1])) // shared chain
+                        .add(
+                                new Array() // unique chains
+                                        .add(new ByteString(new byte[1]))
+                                        .add(new ByteString(new byte[1])));
+        String base64Encoded =
+                Base64.encodeToString(CborUtils.encodeCbor(certChains), Base64.DEFAULT);
+        FakeRkpServer.Response signCertsResponse = new FakeRkpServer.Response(base64Encoded);
+
+        try (FakeRkpServer server =
+                new FakeRkpServer(
+                        FakeRkpServer.Response.FETCH_EEK_OK,
+                        signCertsResponse,
+                        FakeRkpServer.Response.CONFIRM_CERTS_OK)) {
+            Settings.setDeviceConfig(sContext, 20, Duration.ofDays(1), server.getUrl());
+            ProvisioningAttempt atom = ProvisioningAttempt.createScheduledAttemptMetrics(sContext);
+            SystemInterface mockSystem = mock(SystemInterface.class);
+            doReturn(13).when(mockSystem).getBatchSize();
+            doReturn(FAKE_RKP_KEY).when(mockSystem).generateKey(eq(atom));
+            doReturn(new byte[1]).when(mockSystem).generateCsr(eq(atom), notNull(), notNull());
+            doReturn("strongbox").when(mockSystem).getHalInstanceName();
+
+            GeekResponse geekResponse = new GeekResponse();
+            geekResponse.setChallenge(new byte[1]);
+
+            RkpdException e =
+                    assertThrows(
+                            RkpdException.class,
+                            () -> mProvisioner.provisionKeys(atom, mockSystem, geekResponse));
+            assertThat(e.getErrorCode()).isEqualTo(RkpdException.ErrorCode.INTERNAL_ERROR);
+            assertThat(e).hasMessageThat().contains("Could not validate certificate chain");
+
+            // Verify that confirmCertificates was called and device config was reset since we sent
+            // an error instance of ConfirmCertificates.
+            assertThat(server.getCapturedUri()).contains(":confirmCertificates");
+            assertThat(Settings.getUrl(sContext)).isEqualTo(Settings.getDefaultUrl());
+            assertThat(Settings.getExpiringBy(sContext))
+                    .isEqualTo(Duration.ofMillis(Settings.EXPIRING_BY_MS_DEFAULT));
+            assertThat(Settings.getExtraSignedKeysAvailable(sContext))
+                    .isEqualTo(Settings.EXTRA_SIGNED_KEYS_AVAILABLE_DEFAULT);
         }
     }
 }

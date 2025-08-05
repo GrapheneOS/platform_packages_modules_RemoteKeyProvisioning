@@ -24,21 +24,18 @@ import android.hardware.security.keymint.RpcHardwareInfo;
 import android.os.RemoteException;
 import android.os.ServiceSpecificException;
 import android.util.Log;
-
+import co.nstant.in.cbor.CborException;
+import co.nstant.in.cbor.model.Array;
+import co.nstant.in.cbor.model.ByteString;
+import co.nstant.in.cbor.model.MajorType;
+import co.nstant.in.cbor.model.Map;
 import com.android.rkpdapp.GeekResponse;
 import com.android.rkpdapp.RkpdException;
 import com.android.rkpdapp.database.RkpKey;
 import com.android.rkpdapp.metrics.ProvisioningAttempt;
 import com.android.rkpdapp.utils.CborUtils;
 import com.android.rkpdapp.utils.StopWatch;
-
 import java.util.List;
-
-import co.nstant.in.cbor.CborException;
-import co.nstant.in.cbor.model.Array;
-import co.nstant.in.cbor.model.ByteString;
-import co.nstant.in.cbor.model.MajorType;
-import co.nstant.in.cbor.model.Map;
 
 /**
  * Provides convenience methods for interfacing with the IRemotelyProvisionedComponent
@@ -67,6 +64,18 @@ public class SystemInterface {
      */
     public String getServiceName() {
         return mServiceName;
+    }
+
+    public String getHalInstanceName() throws RkpdException {
+        // Strip the prefix "android.hardware.security.keymint.IRemotelyProvisionedComponent/" from
+        // the service name.
+        String[] parts = mServiceName.split("/");
+        if (parts.length < 2) {
+            throw new RkpdException(
+                    RkpdException.ErrorCode.INTERNAL_ERROR,
+                    "Service name " + mServiceName + " is not in the expected format.");
+        }
+        return parts[1];
     }
 
     /**

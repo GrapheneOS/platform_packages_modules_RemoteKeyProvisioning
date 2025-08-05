@@ -18,9 +18,7 @@ package com.android.rkpdapp.utils;
 
 import android.util.Base64;
 import android.util.Log;
-
 import com.android.rkpdapp.RkpdException;
-
 import java.io.ByteArrayInputStream;
 import java.math.BigInteger;
 import java.security.InvalidAlgorithmParameterException;
@@ -123,6 +121,10 @@ public class X509Utils {
     public static boolean isCertChainValid(X509Certificate[] certChain)
             throws NoSuchAlgorithmException, NoSuchProviderException,
             InvalidAlgorithmParameterException {
+        if (certChain.length == 0) {
+            Log.e(TAG, "Certificate chain is empty.");
+            return false;
+        }
         X509Certificate rootCert = certChain[certChain.length - 1];
         return isSelfSignedCertificate(rootCert) && verifyCertChain(rootCert, certChain);
     }
