@@ -21,6 +21,7 @@ android_test {
     static_libs: [
         "Nene",
         "RkpdAppTestUtil",
+        "androidx.room_room-runtime",
         "androidx.test.ext.junit",
         "androidx.test.core",
         "androidx.test.rules",
