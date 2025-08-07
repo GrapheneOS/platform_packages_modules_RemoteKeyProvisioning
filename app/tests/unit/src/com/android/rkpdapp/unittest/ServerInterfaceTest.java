@@ -41,6 +41,7 @@ import java.net.HttpURLConnection;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
+import java.util.UUID;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -148,6 +149,34 @@ public class ServerInterfaceTest {
             assertThat(response.getGeekChain(GeekResponse.EC_CURVE_25519))
                     .isEqualTo(ed25519GeekChain);
             assertThat(response.getGeekChain(GeekResponse.EC_CURVE_P256)).isEqualTo(p256GeekChain);
+        }
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_REQUEST_ID_REUSE)
+    public void testFetchGeekIncludesRequestId() throws Exception {
+        try (FakeRkpServer server =
+                new FakeRkpServer(
+                        FakeRkpServer.Response.FETCH_EEK_OK,
+                        FakeRkpServer.Response.SIGN_CERTS_OK_VALID_CBOR)) {
+            Settings.setDeviceConfig(
+                    sContext,
+                    2 /* extraKeys */,
+                    TIME_TO_REFRESH_HOURS /* expiringBy */,
+                    server.getUrl());
+            GeekResponse response =
+                    mServerInterface.fetchGeekAndUpdate(
+                            ProvisioningAttempt.createScheduledAttemptMetrics(sContext));
+
+            assertThat(server.getCapturedUri()).contains(":fetchEekChain");
+            assertThat(server.getCapturedParams()).containsKey("request_id");
+            String requestId = server.getCapturedParams().get("request_id");
+            try {
+                UUID.fromString(requestId);
+            } catch (IllegalArgumentException e) {
+                assertWithMessage("Request ID is not a UUID.").fail();
+            }
+            assertThat(response.requestId).isEqualTo(requestId);
         }
     }
 
@@ -414,7 +443,7 @@ public class ServerInterfaceTest {
 
     @Test
     @RequiresFlagsEnabled(Flags.FLAG_ENABLE_FEEDBACK_LOOP)
-    public void testconfirmCertificatesRetryOnServerFailure() throws Exception {
+    public void testConfirmCertificatesRetryOnServerFailure() throws Exception {
         try (FakeRkpServer server =
                 new FakeRkpServer(
                         FakeRkpServer.Response.FETCH_EEK_OK,

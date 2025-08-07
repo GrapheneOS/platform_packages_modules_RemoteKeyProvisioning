@@ -54,6 +54,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -69,10 +70,12 @@ public class ServerInterface {
     private static final int BACKOFF_TIME_MS = 100;
 
     private static final String TAG = "RkpdServerInterface";
-    private static final String GEEK_URL = ":fetchEekChain";
-    private static final String CERTIFICATE_SIGNING_URL = ":signCertificates";
-    private static final String CONFIRM_CERTIFICATES_URL = ":confirmCertificates";
     private static final String REQUEST_ID_PARAMETER = "request_id";
+    private static final Map<Operation, String> URL_PATHS =
+            Map.of(
+                    Operation.FETCH_GEEK, ":fetchEekChain",
+                    Operation.SIGN_CERTS, ":signCertificates",
+                    Operation.CONFIRM_CERTIFICATES, ":confirmCertificates");
 
     private final Context mContext;
     private final boolean mIsAsync;
@@ -192,7 +195,7 @@ public class ServerInterface {
         final byte[] response =
                 connectAndGetData(
                         metrics,
-                        generateConfirmCertificatesUrl(requestId),
+                        generateUrl(Operation.CONFIRM_CERTIFICATES, requestId),
                         cborBytes,
                         Operation.CONFIRM_CERTIFICATES);
 
@@ -250,7 +253,11 @@ public class ServerInterface {
         Log.i(TAG, "request_id: " + reqId);
 
         final byte[] cborBytes =
-                connectAndGetData(metrics, generateSignCertsUrl(reqId), csr, Operation.SIGN_CERTS);
+                connectAndGetData(
+                        metrics,
+                        generateUrl(Operation.SIGN_CERTS, reqId),
+                        csr,
+                        Operation.SIGN_CERTS);
         List<byte[]> certChains = CborUtils.parseSignedCertificates(cborBytes);
         if (certChains == null) {
             metrics.setStatus(ProvisioningAttempt.Status.INTERNAL_ERROR);
@@ -285,38 +292,6 @@ public class ServerInterface {
         return certChains;
     }
 
-    private URL generateSignCertsUrl(String requestId) throws RkpdException {
-        try {
-            return new URL(
-                    Uri.parse(Settings.getUrl(mContext))
-                            .buildUpon()
-                            .appendEncodedPath(CERTIFICATE_SIGNING_URL)
-                            .appendQueryParameter(REQUEST_ID_PARAMETER, requestId)
-                            .build()
-                            .toString()
-                            // Needed due to the `:` in the URL endpoint.
-                            .replaceFirst("%3A", ":"));
-        } catch (MalformedURLException e) {
-            throw new RkpdException(RkpdException.ErrorCode.HTTP_CLIENT_ERROR, "Bad URL", e);
-        }
-    }
-
-    private URL generateConfirmCertificatesUrl(String requestId) throws RkpdException {
-        try {
-            return new URL(
-                    Uri.parse(Settings.getUrl(mContext))
-                            .buildUpon()
-                            .appendEncodedPath(CONFIRM_CERTIFICATES_URL)
-                            .appendQueryParameter(REQUEST_ID_PARAMETER, requestId)
-                            .build()
-                            .toString()
-                            // Needed due to the `:` in the URL endpoint.
-                            .replaceFirst("%3A", ":"));
-        } catch (MalformedURLException e) {
-            throw new RkpdException(RkpdException.ErrorCode.HTTP_CLIENT_ERROR, "Bad URL", e);
-        }
-    }
-
     /**
      * Calls out to the specified backend servers to retrieve an Endpoint Encryption Key and
      * corresponding certificate chain to provide to KeyMint. This public key will be used to
@@ -340,10 +315,21 @@ public class ServerInterface {
             throw new RkpdException(RkpdException.ErrorCode.NETWORK_COMMUNICATION_ERROR,
                     "Network communication consent not provided. Need to enable GMSCore app.");
         }
+
+        String requestId = UUID.randomUUID().toString();
+        Log.i(TAG, "request_id: " + requestId);
+
         byte[] input = CborUtils.buildProvisioningInfo(mContext);
         byte[] cborBytes =
-                connectAndGetData(metrics, generateFetchGeekUrl(), input, Operation.FETCH_GEEK);
+                connectAndGetData(
+                        metrics,
+                        generateUrl(Operation.FETCH_GEEK, requestId),
+                        input,
+                        Operation.FETCH_GEEK);
         GeekResponse resp = GeekResponse.parse(cborBytes);
+        if (Flags.enableRequestIdReuse()) {
+            resp.setRequestId(requestId);
+        }
         if (resp == null) {
             metrics.setStatus(ProvisioningAttempt.Status.FETCH_GEEK_HTTP_ERROR);
             throw new RkpdException(
@@ -353,16 +339,27 @@ public class ServerInterface {
         return resp;
     }
 
-    private URL generateFetchGeekUrl() throws RkpdException {
+    private URL generateUrl(Operation operation, String requestId) throws RkpdException {
+        Uri.Builder uriBuilder =
+                Uri.parse(Settings.getUrl(mContext))
+                        .buildUpon()
+                        // appendEncodedPath appends an already encoded path segment to the URI's
+                        // path. It performs no further encoding on the input string. This is the
+                        // correct method to use (instead of appendPath) since we do not want the
+                        // special character `:` to be percent-encoded.
+                        .appendEncodedPath(URL_PATHS.get(operation));
+        if (operation != Operation.FETCH_GEEK || Flags.enableRequestIdReuse()) {
+            uriBuilder.appendQueryParameter(REQUEST_ID_PARAMETER, requestId);
+        }
         try {
-            return new URL(Uri.parse(Settings.getUrl(mContext)).buildUpon()
-                            .appendPath(GEEK_URL)
+            return new URL(
+                    uriBuilder
                             .build()
                             .toString()
-                            // Needed due to the `:` in the URL endpoint.
+                            // Not really needed, but just in case.
                             .replaceFirst("%3A", ":"));
         } catch (MalformedURLException e) {
-            throw new RkpdException(RkpdException.ErrorCode.INTERNAL_ERROR, "Bad URL", e);
+            throw new RkpdException(RkpdException.ErrorCode.HTTP_CLIENT_ERROR, "Bad URL", e);
         }
     }
 

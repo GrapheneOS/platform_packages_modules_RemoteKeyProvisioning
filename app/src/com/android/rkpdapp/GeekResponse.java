@@ -87,7 +87,7 @@ public class GeekResponse {
 
     private byte[] challenge;
     private final java.util.Map<Integer, byte[]> curveToGeek;
-    public final String requestId;
+    public String requestId;
     public int numExtraAttestationKeys;
     public Duration timeToRefresh;
     public String provisioningUrl;
@@ -239,6 +239,11 @@ public class GeekResponse {
      */
     public void setChallenge(byte[] challenge) {
         this.challenge = challenge;
+    }
+
+    /** Sets the {@code requestId}. */
+    public void setRequestId(String requestId) {
+        this.requestId = requestId;
     }
 
     /**
