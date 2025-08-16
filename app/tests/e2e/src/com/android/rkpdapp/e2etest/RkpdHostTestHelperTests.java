@@ -144,6 +144,11 @@ public class RkpdHostTestHelperTests {
 
     @Test
     public void provisionThenUseKeyThenProvision() throws Exception {
+        assume()
+                .withMessage(mInstanceName + " is not supported for this test.")
+                .that(mInstanceName)
+                .isIn(List.of("default", "strongbox"));
+
         assertThat(mProvisioner.doWork()).isEqualTo(ListenableWorker.Result.success());
 
         KeyPairGenerator generator = KeyPairGenerator.getInstance(KEY_ALGORITHM_EC,
