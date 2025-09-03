@@ -17,7 +17,6 @@
 package com.android.rkpdapp.unittest;
 
 import static com.google.common.truth.Truth.assertThat;
-
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
@@ -26,7 +25,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import android.content.Context;
-
+import android.platform.test.annotations.RequiresFlagsDisabled;
+import android.platform.test.flag.junit.CheckFlagsRule;
+import android.platform.test.flag.junit.DeviceFlagsValueProvider;
 import androidx.test.core.app.ApplicationProvider;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.work.Configuration;
@@ -36,7 +37,9 @@ import androidx.work.WorkManager;
 import androidx.work.testing.SynchronousExecutor;
 import androidx.work.testing.TestWorkerBuilder;
 import androidx.work.testing.WorkManagerTestInitHelper;
-
+import co.nstant.in.cbor.CborException;
+import co.nstant.in.cbor.model.Array;
+import com.android.rkpd.flags.Flags;
 import com.android.rkpdapp.BootReceiver;
 import com.android.rkpdapp.database.ProvisionedKey;
 import com.android.rkpdapp.database.ProvisionedKeyDao;
@@ -49,23 +52,19 @@ import com.android.rkpdapp.service.RegistrationBinder;
 import com.android.rkpdapp.testutil.FakeRkpServer;
 import com.android.rkpdapp.testutil.SystemPropertySetter;
 import com.android.rkpdapp.utils.Settings;
-
-import org.junit.After;
-import org.junit.Assume;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mockito;
-
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
-
-import co.nstant.in.cbor.CborException;
-import co.nstant.in.cbor.model.Array;
+import org.junit.After;
+import org.junit.Assume;
+import org.junit.Before;
+import org.junit.BeforeClass;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Mockito;
 
 @RunWith(AndroidJUnit4.class)
 public class PeriodicProvisionerTests {
@@ -74,6 +73,9 @@ public class PeriodicProvisionerTests {
 
     private static Context sContext;
     private PeriodicProvisioner mProvisioner;
+
+    @Rule
+    public final CheckFlagsRule mCheckFlagsRule = DeviceFlagsValueProvider.createCheckFlagsRule();
 
     @BeforeClass
     public static void init() {
@@ -171,6 +173,7 @@ public class PeriodicProvisionerTests {
     }
 
     @Test
+    @RequiresFlagsDisabled(Flags.FLAG_ENABLE_FEEDBACK_LOOP)
     public void provisionSuccess() throws Exception {
         try (FakeRkpServer fakeRkpServer = new FakeRkpServer(
                 FakeRkpServer.Response.FETCH_EEK_OK,
@@ -227,6 +230,7 @@ public class PeriodicProvisionerTests {
     }
 
     @Test
+    @RequiresFlagsDisabled(Flags.FLAG_ENABLE_FEEDBACK_LOOP)
     public void provisioningExpiresOldKeys() throws Exception {
         ProvisionedKeyDao dao = RkpdDatabase.getDatabase(sContext).provisionedKeyDao();
         ProvisionedKey oldKey = new ProvisionedKey(new byte[1], "fake-irpc", new byte[2],

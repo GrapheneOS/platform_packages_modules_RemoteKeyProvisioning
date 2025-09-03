@@ -16,14 +16,18 @@
 
 package com.android.rkpdapp.unittest;
 
+import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 
 import android.content.Context;
 import android.os.Build;
 import android.platform.test.annotations.Presubmit;
+import android.platform.test.annotations.RequiresFlagsEnabled;
+import android.platform.test.flag.junit.CheckFlagsRule;
+import android.platform.test.flag.junit.DeviceFlagsValueProvider;
 import androidx.test.core.app.ApplicationProvider;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import co.nstant.in.cbor.CborBuilder;
@@ -35,6 +39,8 @@ import co.nstant.in.cbor.model.DataItem;
 import co.nstant.in.cbor.model.MajorType;
 import co.nstant.in.cbor.model.Map;
 import co.nstant.in.cbor.model.UnicodeString;
+import com.android.rkpd.flags.Flags;
+import com.android.rkpdapp.RkpdException;
 import com.android.rkpdapp.utils.CborUtils;
 import com.android.rkpdapp.utils.Settings;
 import java.io.ByteArrayInputStream;
@@ -42,12 +48,16 @@ import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
 @RunWith(AndroidJUnit4.class)
 public class CborUtilsTest {
     private ByteArrayOutputStream mBaos;
+
+    @Rule
+    public final CheckFlagsRule mCheckFlagsRule = DeviceFlagsValueProvider.createCheckFlagsRule();
 
     @Before
     public void setUp() throws Exception {
@@ -74,16 +84,26 @@ public class CborUtilsTest {
     }
 
     @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_FEEDBACK_LOOP)
     public void testParseSignedCertificatesWrongSize() throws Exception {
         new CborEncoder(mBaos).encode(new CborBuilder()
                 .addArray()
                     .add(1)
                     .end()
                 .build());
-        assertNull(CborUtils.parseSignedCertificates(mBaos.toByteArray()));
+
+        RkpdException ex =
+                assertThrows(
+                        RkpdException.class,
+                        () -> CborUtils.parseSignedCertificates(mBaos.toByteArray()));
+
+        assertEquals(RkpdException.ErrorCode.INTERNAL_ERROR, ex.getErrorCode());
+        assertThat(ex).hasMessageThat().isEqualTo("Failed to parse signed certificates");
+        assertThat(ex).hasCauseThat().isInstanceOf(CborException.class);
     }
 
     @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_FEEDBACK_LOOP)
     public void testParseSignedCertificatesWrongTypeSharedCerts() throws Exception {
         new CborEncoder(mBaos).encode(new CborBuilder()
                 .addArray()
@@ -94,10 +114,20 @@ public class CborUtilsTest {
                         .end()
                     .end()
                 .build());
-        assertNull(CborUtils.parseSignedCertificates(mBaos.toByteArray()));
+
+        RkpdException ex =
+                assertThrows(
+                        RkpdException.class,
+                        () -> CborUtils.parseSignedCertificates(mBaos.toByteArray()));
+
+        assertEquals(RkpdException.ErrorCode.INTERNAL_ERROR, ex.getErrorCode());
+        assertThat(ex).hasMessageThat().isEqualTo("Failed to parse signed certificates");
+        assertThat(ex).hasCauseThat().isInstanceOf(CborException.class);
+        assertThat(ex).hasCauseThat().hasMessageThat().contains("Expected BYTE_STRING");
     }
 
     @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_FEEDBACK_LOOP)
     public void testParseSignedCertificatesWrongTypeUniqueCerts() throws Exception {
         new CborEncoder(mBaos).encode(new CborBuilder()
                 .addArray()
@@ -109,7 +139,16 @@ public class CborUtilsTest {
                         .end()
                     .end()
                 .build());
-        assertNull(CborUtils.parseSignedCertificates(mBaos.toByteArray()));
+
+        RkpdException ex =
+                assertThrows(
+                        RkpdException.class,
+                        () -> CborUtils.parseSignedCertificates(mBaos.toByteArray()));
+
+        assertEquals(RkpdException.ErrorCode.INTERNAL_ERROR, ex.getErrorCode());
+        assertThat(ex).hasMessageThat().isEqualTo("Failed to parse signed certificates");
+        assertThat(ex).hasCauseThat().isInstanceOf(CborException.class);
+        assertThat(ex).hasCauseThat().hasMessageThat().contains("Expected BYTE_STRING");
     }
 
     @Test
