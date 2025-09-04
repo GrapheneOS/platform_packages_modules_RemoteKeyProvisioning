@@ -66,11 +66,10 @@ public class CborUtils {
      * is returned in a byte array.
      *
      * @param serverResp The CBOR blob received from the server which contains all signed
-     *                      certificate chains.
-     *
+     *     certificate chains.
      * @return A List object where each byte[] entry is an entire DER-encoded certificate chain.
      */
-    public static List<byte[]> parseSignedCertificates(byte[] serverResp) {
+    public static List<byte[]> parseSignedCertificates(byte[] serverResp) throws RkpdException {
         try {
             ByteArrayInputStream bais = new ByteArrayInputStream(serverResp);
             List<DataItem> dataItems = new CborDecoder(bais).decode();
@@ -99,12 +98,13 @@ public class CborUtils {
                 uniqueCertificateChains.add(concat.toByteArray());
             }
             return uniqueCertificateChains;
-        } catch (CborException e) {
-            Log.e(TAG, "CBOR decoding failed.", e);
-        } catch (IOException e) {
-            Log.e(TAG, "Writing bytes failed.", e);
+        } catch (CborException | IOException e) {
+            Log.e(TAG, "Failed to parse signed certificates", e);
+            throw new RkpdException(
+                    RkpdException.ErrorCode.INTERNAL_ERROR,
+                    "Failed to parse signed certificates",
+                    e);
         }
-        return null;
     }
 
     public static void checkType(DataItem item, MajorType majorType, String field)

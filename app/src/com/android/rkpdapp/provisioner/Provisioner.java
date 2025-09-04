@@ -105,6 +105,12 @@ public class Provisioner {
                 mKeyDao.insertKeys(keys);
                 Log.i(TAG, "Total provisioned keys: " + keys.size());
                 metrics.setStatus(ProvisioningAttempt.Status.KEYS_SUCCESSFULLY_PROVISIONED);
+                new ServerInterface(mContext, mIsAsync)
+                        .confirmCertificates(
+                                ConfirmCertificates.createSuccess(
+                                        systemInterface.getHalInstanceName()),
+                                geekResponse.requestId,
+                                metrics);
             } catch (InterruptedException e) {
                 metrics.setStatus(ProvisioningAttempt.Status.INTERRUPTED);
                 throw e;
@@ -196,21 +202,14 @@ public class Provisioner {
             try {
                 certChain = X509Utils.formatX509Certs(chain);
             } catch (RkpdException e) {
-                try {
-                    if (Flags.enableFeedbackLoop()) {
-                    // Only send the particular certificate chain that encountered parsing errors.
-                    ConfirmCertificates confirmCertificates =
-                            ConfirmCertificates.createErrorInstance(
-                                    halInstanceName,
-                                    e.getMessage(),
-                                    chain,
-                                    PayloadType.DER_CERTIFICATE_CHAIN);
-                        new ServerInterface(mContext, mIsAsync)
-                                .confirmCertificates(confirmCertificates, requestId, metrics);
-                    }
-                } catch (IllegalArgumentException iae) {
-                    Log.e(TAG, "Failed to create ConfirmCertificates instance.", iae);
-                }
+                new ServerInterface(mContext, mIsAsync)
+                        .confirmCertificatesError(
+                                halInstanceName,
+                                e,
+                                chain,
+                                PayloadType.DER_CERTIFICATE_CHAIN,
+                                requestId,
+                                metrics);
                 throw e;
             }
             X509Certificate leafCertificate = certChain[0];

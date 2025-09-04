@@ -18,6 +18,8 @@ package com.android.rkpdapp.unittest;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
+import static org.junit.Assert.assertThrows;
+import static org.mockito.Mockito.doReturn;
 
 import android.content.Context;
 import android.platform.test.annotations.RequiresFlagsEnabled;
@@ -31,6 +33,7 @@ import com.android.rkpdapp.ConfirmCertificates.PayloadType;
 import com.android.rkpdapp.GeekResponse;
 import com.android.rkpdapp.RkpdException;
 import com.android.rkpdapp.interfaces.ServerInterface;
+import com.android.rkpdapp.interfaces.SystemInterface;
 import com.android.rkpdapp.metrics.ProvisioningAttempt;
 import com.android.rkpdapp.testutil.FakeRkpServer;
 import com.android.rkpdapp.utils.Settings;
@@ -41,12 +44,14 @@ import java.net.HttpURLConnection;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
 public class ServerInterfaceTest {
@@ -229,20 +234,37 @@ public class ServerInterfaceTest {
     }
 
     @Test
-    public void testRequestSignedCertCborError() throws Exception {
-        try (FakeRkpServer server = new FakeRkpServer(
-                FakeRkpServer.Response.FETCH_EEK_OK,
-                FakeRkpServer.Response.SIGN_CERTS_OK_INVALID_CBOR)) {
-            Settings.setDeviceConfig(sContext, 2 /* extraKeys */,
-                    TIME_TO_REFRESH_HOURS /* expiringBy */, server.getUrl());
-            ProvisioningAttempt metrics = ProvisioningAttempt.createScheduledAttemptMetrics(
-                    sContext);
-            mServerInterface.requestSignedCertificates(new byte[0], metrics);
-            assertWithMessage("Should fail due to invalid cbor.").fail();
-        } catch (RkpdException e) {
-            assertThat(e.getErrorCode()).isEqualTo(RkpdException.ErrorCode.INTERNAL_ERROR);
-            assertThat(e).hasMessageThat().isEqualTo("Response failed to parse.");
-        }
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_FEEDBACK_LOOP)
+    public void testRequestSignedCertCborErrorShouldConfirmCertificates() throws Exception {
+        FakeRkpServer server =
+                new FakeRkpServer(
+                        FakeRkpServer.Response.FETCH_EEK_OK,
+                        FakeRkpServer.Response.SIGN_CERTS_OK_INVALID_CBOR,
+                        FakeRkpServer.Response.CONFIRM_CERTS_OK);
+        Settings.setDeviceConfig(
+                sContext,
+                2 /* extraKeys */,
+                TIME_TO_REFRESH_HOURS /* expiringBy */,
+                server.getUrl());
+        ProvisioningAttempt metrics = ProvisioningAttempt.createScheduledAttemptMetrics(sContext);
+        SystemInterface mockSystem = Mockito.mock(SystemInterface.class);
+        doReturn("strongbox").when(mockSystem).getHalInstanceName();
+
+        RkpdException ex =
+                assertThrows(
+                        RkpdException.class,
+                        () ->
+                                mServerInterface.requestSignedCertificates(
+                                        new byte[0],
+                                        metrics,
+                                        Optional.of("requestId"),
+                                        Optional.of(mockSystem)));
+
+        assertThat(ex.getErrorCode()).isEqualTo(RkpdException.ErrorCode.INTERNAL_ERROR);
+        assertThat(ex).hasMessageThat().contains("Failed to parse signed certificates");
+
+        assertThat(server.getCapturedUri()).contains(":confirmCertificates");
+        assertThat(server.getCapturedParams()).containsKey("request_id");
     }
 
     @Test
@@ -443,32 +465,58 @@ public class ServerInterfaceTest {
 
     @Test
     @RequiresFlagsEnabled(Flags.FLAG_ENABLE_FEEDBACK_LOOP)
-    public void testConfirmCertificatesRetryOnServerFailure() throws Exception {
-        try (FakeRkpServer server =
+    public void testConfirmCertificatesErrorDoesNotRetryOnServerFailure() throws Exception {
+        FakeRkpServer server =
                 new FakeRkpServer(
                         FakeRkpServer.Response.FETCH_EEK_OK,
                         FakeRkpServer.Response.SIGN_CERTS_OK_VALID_CBOR,
-                        FakeRkpServer.Response.INTERNAL_ERROR)) {
-            Settings.setDeviceConfig(
-                    sContext,
-                    1 /* extraKeys */,
-                    TIME_TO_REFRESH_HOURS /* expiringBy */,
-                    server.getUrl());
-            Settings.setMaxRequestTime(sContext, 100);
-            mServerInterface.confirmCertificates(
-                    ConfirmCertificates.createSuccessInstance("strongbox"),
-                    "requestId",
-                    ProvisioningAttempt.createScheduledAttemptMetrics(sContext));
-            assertWithMessage("Expected RkpdException.").fail();
-        } catch (RkpdException e) {
-            assertThat(e.getErrorCode()).isEqualTo(RkpdException.ErrorCode.HTTP_SERVER_ERROR);
-            assertThat(e).hasMessageThat().contains("HTTP error status encountered");
-        }
+                        FakeRkpServer.Response.INTERNAL_ERROR);
+        Settings.setDeviceConfig(
+                sContext,
+                1 /* extraKeys */,
+                TIME_TO_REFRESH_HOURS /* expiringBy */,
+                server.getUrl());
+        Settings.setMaxRequestTime(sContext, 100);
+        ConfirmCertificates confirmCertificates =
+                ConfirmCertificates.createError(
+                        "strongbox",
+                        "error",
+                        new byte[] {1, 2, 3},
+                        PayloadType.DER_CERTIFICATE_CHAIN);
+
+        // Does not throw.
+        mServerInterface.confirmCertificates(
+                confirmCertificates,
+                "requestId",
+                ProvisioningAttempt.createScheduledAttemptMetrics(sContext));
     }
 
     @Test
     @RequiresFlagsEnabled(Flags.FLAG_ENABLE_FEEDBACK_LOOP)
-    public void testConfirmCertificatesSuccess() throws Exception {
+    public void testConfirmCertificatesSuccessInstanceDoesNotRetryOnServerFailure()
+            throws Exception {
+        FakeRkpServer server =
+                new FakeRkpServer(
+                        FakeRkpServer.Response.FETCH_EEK_OK,
+                        FakeRkpServer.Response.SIGN_CERTS_OK_VALID_CBOR,
+                        FakeRkpServer.Response.INTERNAL_ERROR);
+        Settings.setDeviceConfig(
+                sContext,
+                1 /* extraKeys */,
+                TIME_TO_REFRESH_HOURS /* expiringBy */,
+                server.getUrl());
+        Settings.setMaxRequestTime(sContext, 100);
+
+        // Does not throw.
+        mServerInterface.confirmCertificates(
+                ConfirmCertificates.createSuccess("strongbox"),
+                "requestId",
+                ProvisioningAttempt.createScheduledAttemptMetrics(sContext));
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_FEEDBACK_LOOP)
+    public void testConfirmCertificatesSuccessInstanceDoesNotResetDeviceConfig() throws Exception {
         try (FakeRkpServer server =
                 new FakeRkpServer(
                         FakeRkpServer.Response.FETCH_EEK_OK,
@@ -482,7 +530,7 @@ public class ServerInterfaceTest {
 
             // The method does not return anything, but should not throw an exception.
             mServerInterface.confirmCertificates(
-                    ConfirmCertificates.createSuccessInstance("strongbox"),
+                    ConfirmCertificates.createSuccess("strongbox"),
                     "requestId",
                     ProvisioningAttempt.createScheduledAttemptMetrics(sContext));
 
@@ -512,7 +560,7 @@ public class ServerInterfaceTest {
 
             // The method does not return anything, but should not throw an exception.
             mServerInterface.confirmCertificates(
-                    ConfirmCertificates.createErrorInstance(
+                    ConfirmCertificates.createError(
                             "strongbox",
                             "error",
                             new byte[] {1, 2, 3},
@@ -547,7 +595,7 @@ public class ServerInterfaceTest {
             assertThat(Settings.getUrl(sContext)).isNotEqualTo(Settings.getDefaultUrl());
 
             mServerInterface.confirmCertificates(
-                    ConfirmCertificates.createSuccessInstance("strongbox"),
+                    ConfirmCertificates.createSuccess("strongbox"),
                     "requestId",
                     ProvisioningAttempt.createScheduledAttemptMetrics(sContext));
 
@@ -560,5 +608,48 @@ public class ServerInterfaceTest {
             assertThat(Settings.getExtraSignedKeysAvailable(sContext))
                     .isEqualTo(Settings.EXTRA_SIGNED_KEYS_AVAILABLE_DEFAULT);
         }
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_FEEDBACK_LOOP)
+    public void testConfirmCertificatesErrorLongReasonIsTruncated() throws Exception {
+        ServerInterface spyServerInterface = Mockito.spy(mServerInterface);
+        ArgumentCaptor<ConfirmCertificates> captor =
+                ArgumentCaptor.forClass(ConfirmCertificates.class);
+        Mockito.doNothing()
+                .when(spyServerInterface)
+                .confirmCertificates(
+                        captor.capture(),
+                        Mockito.anyString(),
+                        Mockito.any(ProvisioningAttempt.class));
+
+        // Create an exception with a message and cause that will exceed 256 chars.
+        String longMessage = new String(new char[200]).replace('\0', 'A');
+        String longCauseMessage = new String(new char[200]).replace('\0', 'B');
+
+        spyServerInterface.confirmCertificatesError(
+                "strongbox",
+                new Exception(longMessage, new Throwable(longCauseMessage)),
+                new byte[] {1, 2, 3},
+                PayloadType.DER_CERTIFICATE_CHAIN,
+                "requestId",
+                ProvisioningAttempt.createScheduledAttemptMetrics(sContext));
+
+        byte[] cborBytes = captor.getValue().buildCborBytes();
+        List<co.nstant.in.cbor.model.DataItem> dataItems =
+                new co.nstant.in.cbor.CborDecoder(new ByteArrayInputStream(cborBytes)).decode();
+        co.nstant.in.cbor.model.Map confirmCertificatesInfo =
+                (co.nstant.in.cbor.model.Map) dataItems.get(0);
+        co.nstant.in.cbor.model.Map errorInfo =
+                (co.nstant.in.cbor.model.Map)
+                        confirmCertificatesInfo.get(
+                                new co.nstant.in.cbor.model.UnicodeString("error_info"));
+        co.nstant.in.cbor.model.UnicodeString reason =
+                (co.nstant.in.cbor.model.UnicodeString)
+                        errorInfo.get(new co.nstant.in.cbor.model.UnicodeString("reason"));
+
+        String expectedReason = (longMessage + ": " + longCauseMessage).substring(0, 256);
+        assertThat(reason.getString()).isEqualTo(expectedReason);
+        assertThat(reason.getString().length()).isEqualTo(256);
     }
 }

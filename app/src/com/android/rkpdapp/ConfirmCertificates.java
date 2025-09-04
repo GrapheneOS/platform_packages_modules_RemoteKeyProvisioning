@@ -22,7 +22,7 @@ import java.util.Locale;
 import java.util.Optional;
 
 public class ConfirmCertificates {
-    /** The type of payload to be sent to the server. */
+    /** Defines the type of payload that can be sent to the server. */
     public enum PayloadType {
         CERTIFICATE_BUNDLE,
         DER_CERTIFICATE_CHAIN;
@@ -32,26 +32,6 @@ public class ConfirmCertificates {
         }
     }
 
-    /** The payload to be sent to the server. */
-    private static class Payload {
-        /** The data to be sent to the server. */
-        private final byte[] data;
-
-        /** The type of payload to be sent to the server. */
-        private final PayloadType payloadType;
-
-        public Payload(byte[] data, PayloadType payloadType) {
-            if (data == null || data.length == 0) {
-                throw new IllegalArgumentException("Payload must not be null or empty.");
-            }
-
-            this.data = data;
-            this.payloadType = payloadType;
-        }
-    }
-
-    private static final String TAG = "RkpdConfirmCertificates";
-
     /** The HAL instance that received the signed certificates. */
     private String halInstance;
 
@@ -59,51 +39,76 @@ public class ConfirmCertificates {
     private Optional<String> errorReason;
 
     /** The payload to be sent to the server. */
-    private Optional<Payload> payload;
+    private Optional<byte[]> payload;
+
+    /** The payload type to be sent to the server. */
+    private Optional<PayloadType> payloadType;
+
+    /** Whether the instance is an error instance. */
+    private boolean isError;
 
     private ConfirmCertificates(
-            String halInstance, Optional<String> errorReason, Optional<Payload> payload) {
-        if (halInstance == null || halInstance.isEmpty()) {
-            throw new IllegalArgumentException("HAL instance must not be null or empty.");
-        }
-        this.halInstance = halInstance;
+            String halInstance,
+            Optional<String> errorReason,
+            Optional<byte[]> payload,
+            Optional<PayloadType> payloadType,
+            boolean isError) {
+        this.halInstance = (halInstance == null || halInstance.isEmpty()) ? "unknown" : halInstance;
         this.errorReason = errorReason;
         this.payload = payload;
+        this.payloadType = payloadType;
+        this.isError = isError;
     }
 
-    public static ConfirmCertificates createSuccessInstance(String halInstance) {
-        return new ConfirmCertificates(halInstance, Optional.empty(), Optional.empty());
-    }
-
-    public static ConfirmCertificates createErrorInstance(
-            String halInstance, String errorReason, byte[] payload, PayloadType payloadType) {
-        if (errorReason == null || errorReason.isEmpty()) {
-            throw new IllegalArgumentException("Error reason must not be null or empty.");
-        }
-
+    public static ConfirmCertificates createSuccess(String halInstance) {
         return new ConfirmCertificates(
                 halInstance,
-                Optional.of(errorReason),
-                Optional.of(new Payload(payload, payloadType)));
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                /* isError= */ false);
     }
 
-    public byte[] buildConfirmCertificatesInfo() throws CborException {
+    public static ConfirmCertificates createError(
+            String halInstance, String reason, byte[] payload, PayloadType payloadType) {
+        // Maximum length of the reason allowed by the server is 256.
+        if (reason != null && reason.length() > 256) {
+            reason = reason.substring(0, 256);
+        }
+        return new ConfirmCertificates(
+                halInstance,
+                Optional.ofNullable(reason),
+                Optional.ofNullable(payload),
+                Optional.of(payloadType),
+                /* isError= */ true);
+    }
+
+    public byte[] buildCborBytes() throws RkpdException {
+        Map errorInfo = new Map();
+        errorReason.ifPresent(
+                r -> errorInfo.put(new UnicodeString("reason"), new UnicodeString(r)));
+        payloadType.ifPresent(
+                pt ->
+                        errorInfo.put(
+                                new UnicodeString(pt.getValue()),
+                                new ByteString(payload.orElse(new byte[]{}))));
+
         Map confirmCertificatesInfo =
                 new Map().put(new UnicodeString("instance"), new UnicodeString(halInstance));
-        if (errorReason.isPresent() && payload.isPresent()) {
-            confirmCertificatesInfo.put(
-                    new UnicodeString("error_info"),
-                    new Map()
-                            .put(new UnicodeString("reason"), new UnicodeString(errorReason.get()))
-                            .put(
-                                    new UnicodeString(payload.get().payloadType.getValue()),
-                                    new ByteString(payload.get().data)));
+        if (!errorInfo.getKeys().isEmpty()) {
+            confirmCertificatesInfo.put(new UnicodeString("error_info"), errorInfo);
         }
-        return CborUtils.encodeCbor(confirmCertificatesInfo);
+        try {
+            return CborUtils.encodeCbor(confirmCertificatesInfo);
+        } catch (CborException e) {
+            throw new RkpdException(
+                    RkpdException.ErrorCode.INTERNAL_ERROR,
+                    "Failed to CBOR encode ConfirmCertificatesInfo to bytes",
+                    e);
+        }
     }
 
-    /** Returns true if the instance is an error instance. */
-    public boolean isErrorInstance() {
-        return errorReason.isPresent();
+    public boolean isError() {
+        return isError;
     }
 }
