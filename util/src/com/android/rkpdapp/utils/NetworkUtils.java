@@ -20,8 +20,6 @@ import android.content.Context;
 import android.content.pm.PackageManager;
 import android.os.SystemProperties;
 
-import com.android.rkpd.flags.Flags;
-
 public class NetworkUtils {
     private static final String GMS_PACKAGE = "com.google.android.gms";
     private static final String CHINA_GMS_FEATURE = "cn.google.services";
@@ -36,8 +34,7 @@ public class NetworkUtils {
      * @return True if user consent can be assumed else false.
      */
     public static boolean assumeNetworkConsent(Context context) {
-        if (Flags.allowNetworkConsentBypass() && SystemProperties.getBoolean(
-                "remote_provisioning.skip_network_consent_check", false)) {
+        if (SystemProperties.getBoolean("remote_provisioning.skip_network_consent_check", false)) {
             return true;
         }
 

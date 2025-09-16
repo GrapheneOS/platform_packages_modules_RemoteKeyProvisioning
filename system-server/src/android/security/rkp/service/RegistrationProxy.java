@@ -43,6 +43,7 @@ import com.android.internal.annotations.GuardedBy;
 import com.android.rkpdapp.IGetKeyCallback;
 import com.android.rkpdapp.IGetRegistrationCallback;
 import com.android.rkpdapp.IRegistration;
+import com.android.rkpdapp.utils.NetworkUtils;
 import com.android.rkpdapp.IRemoteProvisioning;
 import com.android.rkpdapp.IStoreUpgradedKeyCallback;
 
@@ -180,6 +181,13 @@ public class RegistrationProxy {
             @NonNull String irpcName, @NonNull Duration bindTimeout,
             @NonNull @CallbackExecutor Executor executor,
             @NonNull OutcomeReceiver<RegistrationProxy, Exception> receiver) {
+        if (!NetworkUtils.assumeNetworkConsent(context)) {
+            executor.execute(() -> receiver.onError(
+                    new RkpProxyException(RkpProxyException.ERROR_UNKNOWN,
+                            "User consent required to communicate with remote provisioning server,"
+                                    + " but no consent has been given.")));
+            return;
+        }
         try {
             // The connection object is used to get exactly one IRegistration binder. Once we
             // get it, we unbind the connection. This allows the bound service to be terminated
