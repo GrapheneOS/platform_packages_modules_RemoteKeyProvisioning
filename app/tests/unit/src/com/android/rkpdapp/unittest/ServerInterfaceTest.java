@@ -622,13 +622,15 @@ public class ServerInterfaceTest {
                         captor.capture(),
                         Mockito.anyString(),
                         Mockito.any(ProvisioningAttempt.class));
+        SystemInterface mockSystemInterface = Mockito.mock(SystemInterface.class);
+        doReturn("strongbox").when(mockSystemInterface).getHalInstanceName();
 
         // Create an exception with a message and cause that will exceed 256 chars.
         String longMessage = new String(new char[200]).replace('\0', 'A');
         String longCauseMessage = new String(new char[200]).replace('\0', 'B');
 
         spyServerInterface.confirmCertificatesError(
-                "strongbox",
+                Optional.of(mockSystemInterface),
                 new Exception(longMessage, new Throwable(longCauseMessage)),
                 new byte[] {1, 2, 3},
                 PayloadType.DER_CERTIFICATE_CHAIN,

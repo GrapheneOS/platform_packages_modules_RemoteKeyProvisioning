@@ -98,7 +98,7 @@ public class Provisioner {
                         associateCertsWithKeys(
                                 certChains,
                                 keysGenerated,
-                                systemInterface.getHalInstanceName(),
+                                systemInterface,
                                 geekResponse.requestId,
                                 metrics);
 
@@ -192,7 +192,7 @@ public class Provisioner {
     private List<ProvisionedKey> associateCertsWithKeys(
             List<byte[]> certChains,
             List<RkpKey> keysGenerated,
-            String halInstanceName,
+            SystemInterface systemInterface,
             String requestId,
             ProvisioningAttempt metrics)
             throws RkpdException, InterruptedException {
@@ -204,7 +204,7 @@ public class Provisioner {
             } catch (RkpdException e) {
                 new ServerInterface(mContext, mIsAsync)
                         .confirmCertificatesError(
-                                halInstanceName,
+                                Optional.of(systemInterface),
                                 e,
                                 chain,
                                 PayloadType.DER_CERTIFICATE_CHAIN,

@@ -173,18 +173,24 @@ public class ServerInterface {
     }
 
     public void confirmCertificatesError(
-            String halInstanceName,
+            Optional<SystemInterface> systemInterface,
             Exception e,
             byte[] payload,
             PayloadType payloadType,
             String requestId,
             ProvisioningAttempt metrics)
             throws RkpdException, InterruptedException {
+        if (!Flags.enableFeedbackLoop()) {
+            return;
+        }
+
+        String halName = systemInterface.isPresent() ?
+                systemInterface.get().getHalInstanceName() : "";
         String reason = e.getMessage();
         if (e.getCause() != null) {
             reason += ": " + e.getCause().getMessage();
         }
-        ConfirmCertificates errorInstance = ConfirmCertificates.createError(halInstanceName,
+        ConfirmCertificates errorInstance = ConfirmCertificates.createError(halName,
                 reason,
                 payload,
                 payloadType);
@@ -275,7 +281,7 @@ public class ServerInterface {
         } catch (RkpdException e) {
             metrics.setStatus(ProvisioningAttempt.Status.INTERNAL_ERROR);
             confirmCertificatesError(
-                systemInterface.get().getHalInstanceName(),
+                systemInterface,
                 e,
                 cborBytes,
                 PayloadType.CERTIFICATE_BUNDLE,
@@ -302,7 +308,7 @@ public class ServerInterface {
                     RkpdException.ErrorCode.INTERNAL_ERROR, "Algorithm not found", e);
         } catch (RkpdException e) {
             confirmCertificatesError(
-                    systemInterface.get().getHalInstanceName(),
+                    systemInterface,
                     e,
                     certChains.get(0),
                     PayloadType.DER_CERTIFICATE_CHAIN,
