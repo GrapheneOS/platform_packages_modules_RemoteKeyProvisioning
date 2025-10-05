@@ -14,13 +14,6 @@ container: "com.android.rkpd"
 #}
 
 flag {
-    name: "allow_network_consent_bypass"
-    namespace: "hardware_backed_security"
-    description: "When enabled, a system property may be set to indicate network access consent."
-    bug: "411197466"
-}
-
-flag {
     name: "enable_request_id_reuse"
     namespace: "hardware_backed_security"
     description: "When enabled, the same request ID will be used for fetchEEK, signCertificate and ConfirmCertificates requests."
