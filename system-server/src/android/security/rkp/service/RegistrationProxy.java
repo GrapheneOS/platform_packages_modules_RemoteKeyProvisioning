@@ -31,6 +31,7 @@ import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.ResolveInfoFlags;
 import android.content.pm.ResolveInfo;
 import android.content.pm.ServiceInfo;
+import android.os.Build;
 import android.os.CancellationSignal;
 import android.os.IBinder;
 import android.os.OperationCanceledException;
@@ -66,6 +67,7 @@ import java.util.stream.Collectors;
 @SystemApi(client = SYSTEM_SERVER)
 public class RegistrationProxy {
     static final String TAG = "RegistrationProxy";
+
     IRegistration mBinder;
 
     /** Deals with the {@code ServiceConnection} lifetime for the rkpd bound service. */
@@ -181,7 +183,8 @@ public class RegistrationProxy {
             @NonNull String irpcName, @NonNull Duration bindTimeout,
             @NonNull @CallbackExecutor Executor executor,
             @NonNull OutcomeReceiver<RegistrationProxy, Exception> receiver) {
-        if (!NetworkUtils.assumeNetworkConsent(context)) {
+        if (Build.VERSION.SDK_INT_FULL > Build.VERSION_CODES_FULL.BAKLAVA_1
+                && !NetworkUtils.assumeNetworkConsent(context)) {
             executor.execute(() -> receiver.onError(
                     new RkpProxyException(RkpProxyException.ERROR_UNKNOWN,
                             "User consent required to communicate with remote provisioning server,"
