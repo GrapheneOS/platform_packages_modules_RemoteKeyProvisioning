@@ -26,3 +26,10 @@ flag {
     description: "When enabled, the RKPD will send feedback to the RKP server using ConfirmCertificates API, and optionally divert a fraction of the traffic to pre-prod."
     bug: "406518005"
 }
+
+flag {
+    name: "report_device_reset"
+    namespace: "hardware_backed_security"
+    description: "When enabled, the RKPD will report device reset to the RKP server through unverifiedDeviceInfo."
+    bug: "381304415"
+}
