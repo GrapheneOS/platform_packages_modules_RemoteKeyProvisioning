@@ -55,16 +55,16 @@ public class WidevineHostTestHelperTests {
     }
 
     private boolean isProvisioning4() {
-        if (PropertyUtil.getFirstApiLevel() < android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            Log.i(TAG, "First API level less than U: " + PropertyUtil.getFirstApiLevel());
+        try {
+            String provisioningModel = sDrm.getPropertyString("provisioningModel");
+            int oemCryptoApiVersion =
+                    Integer.parseInt(sDrm.getPropertyString("oemCryptoApiVersion"));
+            return provisioningModel.equals("BootCertificateChain") && oemCryptoApiVersion < 20;
+        } catch (Exception e) {
+            // Catch any exception thrown here to avoid crashing the test.
+            Log.i(TAG, "Device doesn't support provisioning 4.0.");
             return false;
         }
-        // Check SoC API level
-        if (PropertyUtil.getVsrApiLevel() < android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            Log.i(TAG, "VSR API level less than U: " + PropertyUtil.getFirstApiLevel());
-            return false;
-        }
-        return sDrm.getPropertyString("provisioningModel").equals("BootCertificateChain");
     }
 
     private boolean isProvisioned() {
