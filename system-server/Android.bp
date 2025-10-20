@@ -37,6 +37,7 @@ java_sdk_library {
     ],
     static_libs: [
         "com.android.rkpdapp-aidl-java",
+        "rkp-util",
     ],
 }
 

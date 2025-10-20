@@ -29,6 +29,7 @@ import static org.mockito.Mockito.verify;
 
 import android.content.Context;
 import android.os.RemoteException;
+import android.platform.test.annotations.RequiresFlagsDisabled;
 import android.platform.test.annotations.RequiresFlagsEnabled;
 import android.platform.test.flag.junit.CheckFlagsRule;
 import android.platform.test.flag.junit.DeviceFlagsValueProvider;
@@ -101,6 +102,7 @@ public class ProvisionerTest {
     }
 
     @Test
+    @RequiresFlagsDisabled(Flags.FLAG_ENABLE_FEEDBACK_LOOP)
     public void testProvisionerUsesCorrectBatchSize() throws Exception {
         try (FakeRkpServer server = new FakeRkpServer(FakeRkpServer.Response.FETCH_EEK_OK,
                 FakeRkpServer.Response.SIGN_CERTS_OK_VALID_CBOR)) {
@@ -224,18 +226,21 @@ public class ProvisionerTest {
     }
 
     @Test
-    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_REQUEST_ID_REUSE)
+    @RequiresFlagsEnabled(
+            value = {Flags.FLAG_ENABLE_FEEDBACK_LOOP, Flags.FLAG_ENABLE_REQUEST_ID_REUSE})
     public void testProvisionerReusesRequestIdFromGeekResponse() throws Exception {
         try (FakeRkpServer server =
                 new FakeRkpServer(
                         FakeRkpServer.Response.FETCH_EEK_OK,
-                        FakeRkpServer.Response.SIGN_CERTS_OK_VALID_CBOR)) {
+                        FakeRkpServer.Response.SIGN_CERTS_OK_VALID_CBOR,
+                        FakeRkpServer.Response.CONFIRM_CERTS_OK)) {
             Settings.setDeviceConfig(sContext, 20, Duration.ofDays(1), server.getUrl());
             ProvisioningAttempt atom = ProvisioningAttempt.createScheduledAttemptMetrics(sContext);
             SystemInterface mockSystem = mock(SystemInterface.class);
             doReturn(13).when(mockSystem).getBatchSize();
             doReturn(FAKE_RKP_KEY).when(mockSystem).generateKey(eq(atom));
             doReturn(new byte[1]).when(mockSystem).generateCsr(eq(atom), notNull(), notNull());
+            doReturn("strongbox").when(mockSystem).getHalInstanceName();
 
             GeekResponse geekResponse = new GeekResponse();
             geekResponse.setChallenge(new byte[1]);
@@ -294,6 +299,40 @@ public class ProvisionerTest {
                     .isEqualTo(Duration.ofMillis(Settings.EXPIRING_BY_MS_DEFAULT));
             assertThat(Settings.getExtraSignedKeysAvailable(sContext))
                     .isEqualTo(Settings.EXTRA_SIGNED_KEYS_AVAILABLE_DEFAULT);
+        }
+    }
+
+    @Test
+    @RequiresFlagsEnabled(
+            value = {Flags.FLAG_ENABLE_FEEDBACK_LOOP, Flags.FLAG_ENABLE_REQUEST_ID_REUSE})
+    public void testProvisionerSuccessfulProvisioningTriggersConfirmCertificates()
+            throws Exception {
+        try (FakeRkpServer server =
+                new FakeRkpServer(
+                        FakeRkpServer.Response.FETCH_EEK_OK,
+                        FakeRkpServer.Response.SIGN_CERTS_OK_VALID_CBOR,
+                        FakeRkpServer.Response.CONFIRM_CERTS_OK)) {
+            Settings.setDeviceConfig(sContext, 20, Duration.ofDays(1), server.getUrl());
+            String initialUrl = Settings.getUrl(sContext);
+
+            ProvisioningAttempt atom = ProvisioningAttempt.createScheduledAttemptMetrics(sContext);
+            SystemInterface mockSystem = mock(SystemInterface.class);
+            doReturn(13).when(mockSystem).getBatchSize();
+            doReturn(FAKE_RKP_KEY).when(mockSystem).generateKey(eq(atom));
+            doReturn(new byte[1]).when(mockSystem).generateCsr(eq(atom), notNull(), notNull());
+            doReturn("strongbox").when(mockSystem).getHalInstanceName();
+
+            GeekResponse geekResponse = new GeekResponse();
+            geekResponse.setChallenge(new byte[1]);
+
+            mProvisioner.provisionKeys(atom, mockSystem, geekResponse);
+
+            assertThat(server.getCapturedUri()).contains(":confirmCertificates");
+            assertThat(server.getCapturedParams())
+                    .containsEntry("request_id", geekResponse.requestId);
+
+            // Verify that the URL was NOT reset for a success instance.
+            assertThat(server.getUrl()).isEqualTo(initialUrl);
         }
     }
 }

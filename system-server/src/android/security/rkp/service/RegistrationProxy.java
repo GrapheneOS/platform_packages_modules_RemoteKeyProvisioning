@@ -31,6 +31,7 @@ import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.ResolveInfoFlags;
 import android.content.pm.ResolveInfo;
 import android.content.pm.ServiceInfo;
+import android.os.Build;
 import android.os.CancellationSignal;
 import android.os.IBinder;
 import android.os.OperationCanceledException;
@@ -43,6 +44,7 @@ import com.android.internal.annotations.GuardedBy;
 import com.android.rkpdapp.IGetKeyCallback;
 import com.android.rkpdapp.IGetRegistrationCallback;
 import com.android.rkpdapp.IRegistration;
+import com.android.rkpdapp.utils.NetworkUtils;
 import com.android.rkpdapp.IRemoteProvisioning;
 import com.android.rkpdapp.IStoreUpgradedKeyCallback;
 
@@ -65,6 +67,7 @@ import java.util.stream.Collectors;
 @SystemApi(client = SYSTEM_SERVER)
 public class RegistrationProxy {
     static final String TAG = "RegistrationProxy";
+
     IRegistration mBinder;
 
     /** Deals with the {@code ServiceConnection} lifetime for the rkpd bound service. */
@@ -180,6 +183,14 @@ public class RegistrationProxy {
             @NonNull String irpcName, @NonNull Duration bindTimeout,
             @NonNull @CallbackExecutor Executor executor,
             @NonNull OutcomeReceiver<RegistrationProxy, Exception> receiver) {
+        if (Build.VERSION.SDK_INT_FULL > Build.VERSION_CODES_FULL.BAKLAVA_1
+                && !NetworkUtils.assumeNetworkConsent(context)) {
+            executor.execute(() -> receiver.onError(
+                    new RkpProxyException(RkpProxyException.ERROR_UNKNOWN,
+                            "User consent required to communicate with remote provisioning server,"
+                                    + " but no consent has been given.")));
+            return;
+        }
         try {
             // The connection object is used to get exactly one IRegistration binder. Once we
             // get it, we unbind the connection. This allows the bound service to be terminated

@@ -54,7 +54,6 @@ import java.security.NoSuchAlgorithmException;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -71,28 +70,29 @@ public class ServerInterface {
 
     private static final String TAG = "RkpdServerInterface";
     private static final String REQUEST_ID_PARAMETER = "request_id";
-    private static final Map<Operation, String> URL_PATHS =
-            Map.of(
-                    Operation.FETCH_GEEK, ":fetchEekChain",
-                    Operation.SIGN_CERTS, ":signCertificates",
-                    Operation.CONFIRM_CERTIFICATES, ":confirmCertificates");
 
     private final Context mContext;
     private final boolean mIsAsync;
 
     private enum Operation {
-        FETCH_GEEK(1),
-        SIGN_CERTS(2),
-        CONFIRM_CERTIFICATES(3);
+        FETCH_GEEK(1, ":fetchEekChain"),
+        SIGN_CERTS(2, ":signCertificates"),
+        CONFIRM_CERTIFICATES(3, ":confirmCertificates");
 
         private final int mTrafficTag;
+        private final String mUrlPath;
 
-        Operation(int trafficTag) {
+        Operation(int trafficTag, String urlPath) {
             mTrafficTag = trafficTag;
+            mUrlPath = urlPath;
         }
 
         public int getTrafficTag() {
             return mTrafficTag;
+        }
+
+        public String getUrlPath() {
+            return mUrlPath;
         }
 
         public ProvisioningAttempt.Status getHttpErrorStatus() {
@@ -172,32 +172,49 @@ public class ServerInterface {
         return SYNC_CONNECT_TIMEOUT_OPEN_MS;
     }
 
+    public void confirmCertificatesError(
+            Optional<SystemInterface> systemInterface,
+            Exception e,
+            byte[] payload,
+            PayloadType payloadType,
+            String requestId,
+            ProvisioningAttempt metrics)
+            throws RkpdException, InterruptedException {
+        if (!Flags.enableFeedbackLoop()) {
+            return;
+        }
+
+        String halName = systemInterface.isPresent() ?
+                systemInterface.get().getHalInstanceName() : "";
+        String reason = e.getMessage();
+        if (e.getCause() != null) {
+            reason += ": " + e.getCause().getMessage();
+        }
+        ConfirmCertificates errorInstance = ConfirmCertificates.createError(halName,
+                reason,
+                payload,
+                payloadType);
+        confirmCertificates(errorInstance, requestId, metrics);
+    }
+
     public void confirmCertificates(
             ConfirmCertificates confirmCertificates, String requestId, ProvisioningAttempt metrics)
             throws RkpdException, InterruptedException {
         if (!Flags.enableFeedbackLoop()) {
             return;
         }
-
-        byte[] cborBytes;
+        final byte[] response;
         try {
-            cborBytes = confirmCertificates.buildConfirmCertificatesInfo();
-        } catch (CborException e) {
-            Log.e(
-                    TAG,
-                    "Failed to build ConfirmCertificatesInfo to be sent to the server. Skipping"
-                        + " feedback loop and resetting to defaults.",
-                    e);
-            Settings.resetDefaultConfig(mContext);
+            response =
+                    connectAndGetData(
+                            metrics,
+                            generateUrl(Operation.CONFIRM_CERTIFICATES, requestId),
+                            confirmCertificates.buildCborBytes(),
+                            Operation.CONFIRM_CERTIFICATES);
+        } catch (RkpdException e) {
+            Log.e(TAG, "Failed to confirm certificates due to error.", e);
             return;
         }
-
-        final byte[] response =
-                connectAndGetData(
-                        metrics,
-                        generateUrl(Operation.CONFIRM_CERTIFICATES, requestId),
-                        cborBytes,
-                        Operation.CONFIRM_CERTIFICATES);
 
         try {
             // We don't really evaluate the response for now, but do expect it to be an array.
@@ -216,7 +233,7 @@ public class ServerInterface {
         // Reset the device config if we successfully sent an error instance to the server.
         // Important to do this after confirmCertificates is called so that the appropriate server
         // instance receives the request.
-        if (confirmCertificates.isErrorInstance()) {
+        if (confirmCertificates.isError()) {
             Log.i(TAG, "ConfirmCertificates is an error instance. Resetting to defaults.");
             Settings.resetDefaultConfig(mContext);
         }
@@ -258,36 +275,46 @@ public class ServerInterface {
                         generateUrl(Operation.SIGN_CERTS, reqId),
                         csr,
                         Operation.SIGN_CERTS);
-        List<byte[]> certChains = CborUtils.parseSignedCertificates(cborBytes);
-        if (certChains == null) {
+        List<byte[]> certChains;
+        try {
+            certChains = CborUtils.parseSignedCertificates(cborBytes);
+        } catch (RkpdException e) {
             metrics.setStatus(ProvisioningAttempt.Status.INTERNAL_ERROR);
-            throw new RkpdException(
-                    RkpdException.ErrorCode.INTERNAL_ERROR, "Response failed to parse.");
-        } else if (certChains.isEmpty()) {
+            confirmCertificatesError(
+                systemInterface,
+                e,
+                cborBytes,
+                PayloadType.CERTIFICATE_BUNDLE,
+                reqId,
+                metrics);
+            throw e;
+        }
+
+        if (certChains.isEmpty()) {
             metrics.setCertChainLength(0);
             metrics.setRootCertFingerprint("");
-        } else {
-            try {
-                X509Certificate[] certs = X509Utils.formatX509Certs(certChains.get(0));
-                metrics.setCertChainLength(certs.length);
-                byte[] pubKey = certs[certs.length - 1].getPublicKey().getEncoded();
-                byte[] pubKeyDigest = MessageDigest.getInstance("SHA-256").digest(pubKey);
-                metrics.setRootCertFingerprint(Base64.encodeToString(pubKeyDigest, Base64.DEFAULT));
-            } catch (NoSuchAlgorithmException e) {
-                throw new RkpdException(
-                        RkpdException.ErrorCode.INTERNAL_ERROR, "Algorithm not found", e);
-            } catch (RkpdException e) {
-                if (Flags.enableFeedbackLoop()) {
-                    ConfirmCertificates confirmCertificates =
-                            ConfirmCertificates.createErrorInstance(
-                                    systemInterface.get().getHalInstanceName(),
-                                    e.getMessage(),
-                                    certChains.get(0),
-                                    PayloadType.DER_CERTIFICATE_CHAIN);
-                    confirmCertificates(confirmCertificates, reqId, metrics);
-                }
-                throw e;
-            }
+            return certChains;
+        }
+
+        // Certificate chains are not empty.
+        try {
+            X509Certificate[] certs = X509Utils.formatX509Certs(certChains.get(0));
+            metrics.setCertChainLength(certs.length);
+            byte[] pubKey = certs[certs.length - 1].getPublicKey().getEncoded();
+            byte[] pubKeyDigest = MessageDigest.getInstance("SHA-256").digest(pubKey);
+            metrics.setRootCertFingerprint(Base64.encodeToString(pubKeyDigest, Base64.DEFAULT));
+        } catch (NoSuchAlgorithmException e) {
+            throw new RkpdException(
+                    RkpdException.ErrorCode.INTERNAL_ERROR, "Algorithm not found", e);
+        } catch (RkpdException e) {
+            confirmCertificatesError(
+                    systemInterface,
+                    e,
+                    certChains.get(0),
+                    PayloadType.DER_CERTIFICATE_CHAIN,
+                    reqId,
+                    metrics);
+            throw e;
         }
         return certChains;
     }
@@ -347,7 +374,7 @@ public class ServerInterface {
                         // path. It performs no further encoding on the input string. This is the
                         // correct method to use (instead of appendPath) since we do not want the
                         // special character `:` to be percent-encoded.
-                        .appendEncodedPath(URL_PATHS.get(operation));
+                        .appendEncodedPath(operation.getUrlPath());
         if (operation != Operation.FETCH_GEEK || Flags.enableRequestIdReuse()) {
             uriBuilder.appendQueryParameter(REQUEST_ID_PARAMETER, requestId);
         }

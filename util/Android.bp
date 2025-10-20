@@ -15,6 +15,15 @@ package {
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
+java_library {
+    name: "rkp-util",
+    srcs: ["src/com/android/rkpdapp/utils/NetworkUtils.java"],
+    installable: true,
+    apex_available: ["com.android.rkpd"],
+    min_sdk_version: "33",
+    sdk_version: "system_current",
+}
+
 java_binary {
     name: "RkpRegistrationCheck",
     srcs: ["src/**/RkpRegistrationCheck.java"],
