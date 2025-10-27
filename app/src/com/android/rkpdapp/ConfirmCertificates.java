@@ -14,21 +14,66 @@
 package com.android.rkpdapp;
 
 import co.nstant.in.cbor.CborException;
+import co.nstant.in.cbor.model.Array;
 import co.nstant.in.cbor.model.ByteString;
+import co.nstant.in.cbor.model.DataItem;
 import co.nstant.in.cbor.model.Map;
 import co.nstant.in.cbor.model.UnicodeString;
 import com.android.rkpdapp.utils.CborUtils;
-import java.util.Locale;
+import java.util.List;
 import java.util.Optional;
 
 public class ConfirmCertificates {
-    /** Defines the type of payload that can be sent to the server. */
-    public enum PayloadType {
-        CERTIFICATE_BUNDLE,
-        DER_CERTIFICATE_CHAIN;
+    public static final UnicodeString HAL_INSTANCE_KEY = new UnicodeString("instance");
+    public static final UnicodeString ERROR_INFO_KEY = new UnicodeString("error_info");
+    public static final UnicodeString REASON_KEY = new UnicodeString("reason");
+    public static final UnicodeString CHAINS_KEY = new UnicodeString("chains");
+    public static final UnicodeString CERTIFICATE_BUNDLE = new UnicodeString("certificate_bundle");
+    public static final UnicodeString DER_CERTIFICATE_CHAINS =
+            new UnicodeString("der_certificate_chains");
 
-        public String getValue() {
-            return name().toLowerCase(Locale.ROOT);
+    public abstract static class Payload {
+        private final UnicodeString label;
+        private final DataItem value;
+
+        Payload(UnicodeString label, DataItem value) {
+            this.label = label;
+            this.value = value;
+        }
+
+        public UnicodeString getLabel() {
+            return label;
+        }
+        public DataItem getValue() {
+            return value;
+        }
+    }
+
+    public static class DerCertificateChains extends Payload {
+        public DerCertificateChains(List<byte[]> derCertificateChains) {
+            super(DER_CERTIFICATE_CHAINS, encode(derCertificateChains));
+        }
+
+        public DerCertificateChains(byte[] derChain) {
+            this(derChain == null ? List.of() : List.of(derChain));
+        }
+
+        private static Map encode(List<byte[]> derCertificateChains) {
+            if (derCertificateChains == null) {
+                derCertificateChains = List.of();
+            }
+
+            Array payloadArray = new Array();
+            for (byte[] certChain : derCertificateChains) {
+                payloadArray.add(new ByteString(certChain));
+            }
+            return new Map().put(CHAINS_KEY, payloadArray);
+        }
+    }
+
+    public static class CertificateBundle extends Payload {
+        public CertificateBundle(byte[] certificateBundle) {
+            super(CERTIFICATE_BUNDLE, new ByteString(certificateBundle));
         }
     }
 
@@ -38,11 +83,7 @@ public class ConfirmCertificates {
     /** The error reason if any. */
     private Optional<String> errorReason;
 
-    /** The payload to be sent to the server. */
-    private Optional<byte[]> payload;
-
-    /** The payload type to be sent to the server. */
-    private Optional<PayloadType> payloadType;
+    private Optional<Payload> payload;
 
     /** Whether the instance is an error instance. */
     private boolean isError;
@@ -50,13 +91,11 @@ public class ConfirmCertificates {
     private ConfirmCertificates(
             String halInstance,
             Optional<String> errorReason,
-            Optional<byte[]> payload,
-            Optional<PayloadType> payloadType,
+            Optional<Payload> payload,
             boolean isError) {
         this.halInstance = (halInstance == null || halInstance.isEmpty()) ? "unknown" : halInstance;
         this.errorReason = errorReason;
         this.payload = payload;
-        this.payloadType = payloadType;
         this.isError = isError;
     }
 
@@ -65,12 +104,11 @@ public class ConfirmCertificates {
                 halInstance,
                 Optional.empty(),
                 Optional.empty(),
-                Optional.empty(),
                 /* isError= */ false);
     }
 
     public static ConfirmCertificates createError(
-            String halInstance, String reason, byte[] payload, PayloadType payloadType) {
+            String halInstance, String reason, Payload payload) {
         // Maximum length of the reason allowed by the server is 256.
         if (reason != null && reason.length() > 256) {
             reason = reason.substring(0, 256);
@@ -79,25 +117,19 @@ public class ConfirmCertificates {
                 halInstance,
                 Optional.ofNullable(reason),
                 Optional.ofNullable(payload),
-                Optional.of(payloadType),
                 /* isError= */ true);
     }
 
     public byte[] buildCborBytes() throws RkpdException {
-        Map errorInfo = new Map();
-        errorReason.ifPresent(
-                r -> errorInfo.put(new UnicodeString("reason"), new UnicodeString(r)));
-        payloadType.ifPresent(
-                pt ->
-                        errorInfo.put(
-                                new UnicodeString(pt.getValue()),
-                                new ByteString(payload.orElse(new byte[]{}))));
-
         Map confirmCertificatesInfo =
-                new Map().put(new UnicodeString("instance"), new UnicodeString(halInstance));
-        if (!errorInfo.getKeys().isEmpty()) {
-            confirmCertificatesInfo.put(new UnicodeString("error_info"), errorInfo);
+                new Map().put(HAL_INSTANCE_KEY, new UnicodeString(halInstance));
+        if (isError) {
+            Map errorInfo = new Map();
+            errorReason.ifPresent(r -> errorInfo.put(REASON_KEY, new UnicodeString(r)));
+            payload.ifPresent(p -> errorInfo.put(p.getLabel(), p.getValue()));
+            confirmCertificatesInfo.put(ERROR_INFO_KEY, errorInfo);
         }
+
         try {
             return CborUtils.encodeCbor(confirmCertificatesInfo);
         } catch (CborException e) {

@@ -29,7 +29,6 @@ import android.util.Base64;
 import androidx.test.core.app.ApplicationProvider;
 import com.android.rkpd.flags.Flags;
 import com.android.rkpdapp.ConfirmCertificates;
-import com.android.rkpdapp.ConfirmCertificates.PayloadType;
 import com.android.rkpdapp.GeekResponse;
 import com.android.rkpdapp.RkpdException;
 import com.android.rkpdapp.interfaces.ServerInterface;
@@ -481,8 +480,7 @@ public class ServerInterfaceTest {
                 ConfirmCertificates.createError(
                         "strongbox",
                         "error",
-                        new byte[] {1, 2, 3},
-                        PayloadType.DER_CERTIFICATE_CHAIN);
+                        new ConfirmCertificates.DerCertificateChains(new byte[] {1, 2, 3}));
 
         // Does not throw.
         mServerInterface.confirmCertificates(
@@ -563,8 +561,7 @@ public class ServerInterfaceTest {
                     ConfirmCertificates.createError(
                             "strongbox",
                             "error",
-                            new byte[] {1, 2, 3},
-                            PayloadType.DER_CERTIFICATE_CHAIN),
+                            new ConfirmCertificates.DerCertificateChains(new byte[] {1, 2, 3})),
                     "requestId",
                     ProvisioningAttempt.createScheduledAttemptMetrics(sContext));
 
@@ -632,8 +629,7 @@ public class ServerInterfaceTest {
         spyServerInterface.confirmCertificatesError(
                 Optional.of(mockSystemInterface),
                 new Exception(longMessage, new Throwable(longCauseMessage)),
-                new byte[] {1, 2, 3},
-                PayloadType.DER_CERTIFICATE_CHAIN,
+                new ConfirmCertificates.DerCertificateChains(new byte[] {1, 2, 3}),
                 "requestId",
                 ProvisioningAttempt.createScheduledAttemptMetrics(sContext));
 
