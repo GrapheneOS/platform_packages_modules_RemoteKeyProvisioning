@@ -25,6 +25,7 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.work.Worker;
 import androidx.work.WorkerParameters;
+import com.android.rkpd.flags.Flags;
 import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -46,8 +47,12 @@ public class WidevineProvisioner extends Worker {
 
     private static final int MAX_RETRIES = 3;
     private static final int TIMEOUT_MS = 20000;
+    private static final int MAX_PROVISIONING_ROUNDS = 2;
 
     private static final String TAG = "RkpdWidevine";
+    private static final String PROVISIONING_MODEL_PROPERTY = "provisioningModel";
+    private static final String PROVISIONING_MODEL_PROV4 = "BootCertificateChain";
+    private static final String PROVISIONING_MODEL_SIGMA = "Sigma";
 
     private static final byte[] EMPTY_BODY = new byte[0];
 
@@ -97,20 +102,19 @@ public class WidevineProvisioner extends Worker {
     }
 
     /**
-     * Checks the status of the system in order to determine if stage 1 certificate provisioning
-     * for Provisioning 4.0 needs to be performed.
-     *
-     * @return true if the device supports Provisioning 4.0 and the system ID indicates it has not
-     *         yet been provisioned.
+     * Helper method to check if provisioning is needed for a given MediaDrm instance.
+     * This avoids creating a new MediaDrm object for each check.
      */
-    public static boolean isWidevineProvisioningNeeded() {
-        try (MediaDrm drm = new MediaDrm(WIDEVINE_UUID)) {
-            if (!drm.getPropertyString("provisioningModel").equals("BootCertificateChain")) {
-                // Not a provisioning 4.0 device.
-                Log.i(TAG, "Not a WV provisioning 4.0 device. No provisioning required.");
-                return false;
-            }
-            // For Prov 4.0 devices, if the OEMCrypto API version is 20+, the device no longer
+    private static boolean isProvisioningNeeded(@NonNull MediaDrm drm) {
+        final String provisioningModel = drm.getPropertyString(PROVISIONING_MODEL_PROPERTY);
+        final boolean isProv4 = provisioningModel.equals(PROVISIONING_MODEL_PROV4);
+        final boolean isSigma = provisioningModel.equals(PROVISIONING_MODEL_SIGMA);
+        if (!isProv4 && !isSigma) {
+            Log.i(TAG, "Not a WV provisioning 4.0 or Sigma device. No provisioning required.");
+            return false;
+        }
+        if (isProv4) {
+            // For Prov 4.0 devices using OEMCrypto v20 or newer, the device no longer
             // needs a separate provisioning step for the OEM certificate.
             try {
                 int oemCryptoApiVersion =
@@ -125,13 +129,29 @@ public class WidevineProvisioner extends Worker {
                 // the legacy check just in case.
                 Log.w(TAG, "Failed to parse oemCryptoApiVersion", e);
             }
+        }
+        try {
             int systemId = Integer.parseInt(drm.getPropertyString("systemId"));
             if (systemId != Integer.MAX_VALUE) {
                 Log.i(TAG, "This device has already been provisioned with its WV cert.");
-                // First stage provisioning probably complete
                 return false;
             }
-            return true;
+        } catch (NumberFormatException e) {
+            Log.w(TAG, "Failed to parse systemId", e);
+        }
+        return true;
+    }
+
+    /**
+     * Checks the status of the system in order to determine if stage 1 certificate provisioning
+     * for Provisioning 4.0 or Sigma needs to be performed.
+     *
+     * @return true if the device supports Provisioning 4.0 or Sigma, and the system ID indicates
+     *         it has not yet been provisioned.
+     */
+    public static boolean isWidevineProvisioningNeeded() {
+        try (MediaDrm drm = new MediaDrm(WIDEVINE_UUID)) {
+            return isProvisioningNeeded(drm);
         } catch (UnsupportedSchemeException e) {
             // Suppress the exception. It isn't particularly informative and may confuse anyone
             // reading the logs.
@@ -145,15 +165,32 @@ public class WidevineProvisioner extends Worker {
 
     /**
      * Performs the full roundtrip necessary to provision widevine with the first stage cert
-     * in Provisioning 4.0.
+     * for Provisioning 4.0, or two roundtrips with the first stage cert for Sigma provisioning.
      *
      * @return A Result indicating whether the attempt succeeded, failed, or should be retried.
      */
     public Result provisionWidevine() {
         try {
             final MediaDrm drm = new MediaDrm(WIDEVINE_UUID);
-            final MediaDrm.ProvisionRequest request = drm.getProvisionRequest();
-            drm.provideProvisionResponse(fetchWidevineCertificate(request));
+            final String provisioningModel = drm.getPropertyString(PROVISIONING_MODEL_PROPERTY);
+            final boolean isSigma = provisioningModel.equals(PROVISIONING_MODEL_SIGMA);
+            if (isSigma && !Flags.enableWidevineMultipleRoundTrips()) {
+                Log.e(TAG, "Device is Sigma, but RKPD is not enabled for multiple provisioning "
+                        + "round trips.");
+                return Result.failure();
+            }
+            for (int round = 1; round <= MAX_PROVISIONING_ROUNDS; round++) {
+                Log.i(TAG, "WV provisioning model: " + provisioningModel + ", round: " + round);
+                final MediaDrm.ProvisionRequest request = drm.getProvisionRequest();
+                drm.provideProvisionResponse(fetchWidevineCertificate(request));
+                if (!isProvisioningNeeded(drm)) {
+                    Log.i(TAG, "Widevine provisioning successful.");
+                    return Result.success();
+                }
+            }
+            Log.e(TAG, "Widevine provisioning did not complete after "
+                    + MAX_PROVISIONING_ROUNDS + " rounds.");
+            return Result.failure();
         } catch (UnsupportedSchemeException e) {
             Log.e(TAG, "WV provisioning unsupported. Should not have been able to get here.", e);
             return Result.success();
@@ -167,8 +204,6 @@ public class WidevineProvisioner extends Worker {
             Log.e(TAG, "Safety catch-all in case of an unexpected run time exception:", e);
             return retryOrFail();
         }
-        Log.i(TAG, "Provisioning successful.");
-        return Result.success();
     }
 
     private byte[] fetchWidevineCertificate(MediaDrm.ProvisionRequest req) throws IOException {

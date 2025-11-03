@@ -22,7 +22,7 @@ import android.util.Log;
 import co.nstant.in.cbor.CborException;
 import com.android.rkpd.flags.Flags;
 import com.android.rkpdapp.ConfirmCertificates;
-import com.android.rkpdapp.ConfirmCertificates.PayloadType;
+import com.android.rkpdapp.ConfirmCertificates.DerCertificateChains;
 import com.android.rkpdapp.GeekResponse;
 import com.android.rkpdapp.RkpdException;
 import com.android.rkpdapp.database.InstantConverter;
@@ -206,8 +206,7 @@ public class Provisioner {
                         .confirmCertificatesError(
                                 Optional.of(systemInterface),
                                 e,
-                                chain,
-                                PayloadType.DER_CERTIFICATE_CHAIN,
+                                new DerCertificateChains(chain),
                                 requestId,
                                 metrics);
                 throw e;

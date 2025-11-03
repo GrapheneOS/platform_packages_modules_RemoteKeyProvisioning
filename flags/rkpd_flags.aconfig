@@ -33,3 +33,10 @@ flag {
     description: "When enabled, the RKPD will report device reset to the RKP server through unverifiedDeviceInfo."
     bug: "381304415"
 }
+
+flag {
+    name: "enable_widevine_multiple_round_trips"
+    namespace: "hardware_backed_security"
+    description: "When enabled, the RKPD WidevineProvisioner can perform multiple round trips to complete provisioning the initial OEM certificate on supported devices."
+    bug: "443155118"
+}

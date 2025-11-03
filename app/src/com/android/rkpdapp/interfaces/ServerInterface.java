@@ -29,7 +29,9 @@ import co.nstant.in.cbor.CborException;
 import co.nstant.in.cbor.model.MajorType;
 import com.android.rkpd.flags.Flags;
 import com.android.rkpdapp.ConfirmCertificates;
-import com.android.rkpdapp.ConfirmCertificates.PayloadType;
+import com.android.rkpdapp.ConfirmCertificates.CertificateBundle;
+import com.android.rkpdapp.ConfirmCertificates.DerCertificateChains;
+import com.android.rkpdapp.ConfirmCertificates.Payload;
 import com.android.rkpdapp.GeekResponse;
 import com.android.rkpdapp.RkpdException;
 import com.android.rkpdapp.metrics.ProvisioningAttempt;
@@ -175,8 +177,7 @@ public class ServerInterface {
     public void confirmCertificatesError(
             Optional<SystemInterface> systemInterface,
             Exception e,
-            byte[] payload,
-            PayloadType payloadType,
+            Payload payload,
             String requestId,
             ProvisioningAttempt metrics)
             throws RkpdException, InterruptedException {
@@ -190,10 +191,8 @@ public class ServerInterface {
         if (e.getCause() != null) {
             reason += ": " + e.getCause().getMessage();
         }
-        ConfirmCertificates errorInstance = ConfirmCertificates.createError(halName,
-                reason,
-                payload,
-                payloadType);
+        ConfirmCertificates errorInstance = ConfirmCertificates.createError(
+                halName, reason, payload);
         confirmCertificates(errorInstance, requestId, metrics);
     }
 
@@ -281,12 +280,7 @@ public class ServerInterface {
         } catch (RkpdException e) {
             metrics.setStatus(ProvisioningAttempt.Status.INTERNAL_ERROR);
             confirmCertificatesError(
-                systemInterface,
-                e,
-                cborBytes,
-                PayloadType.CERTIFICATE_BUNDLE,
-                reqId,
-                metrics);
+                    systemInterface, e, new CertificateBundle(cborBytes), reqId, metrics);
             throw e;
         }
 
@@ -308,12 +302,7 @@ public class ServerInterface {
                     RkpdException.ErrorCode.INTERNAL_ERROR, "Algorithm not found", e);
         } catch (RkpdException e) {
             confirmCertificatesError(
-                    systemInterface,
-                    e,
-                    certChains.get(0),
-                    PayloadType.DER_CERTIFICATE_CHAIN,
-                    reqId,
-                    metrics);
+                systemInterface, e, new DerCertificateChains(certChains.get(0)), reqId, metrics);
             throw e;
         }
         return certChains;
