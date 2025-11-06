@@ -20,7 +20,6 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.util.Log;
-
 import com.android.rkpdapp.database.ProvisionedKeyDao;
 import com.android.rkpdapp.database.RkpdDatabase;
 
@@ -30,7 +29,6 @@ import com.android.rkpdapp.database.RkpdDatabase;
  */
 public class PackageRemovalReceiver extends BroadcastReceiver {
     private static final String TAG = "RkpdBroadcast";
-    private static final int KEYSTORE_SERVICE_UID = 1017;
 
     @Override
     public void onReceive(Context context, Intent intent) {
@@ -41,7 +39,7 @@ public class PackageRemovalReceiver extends BroadcastReceiver {
     private void processPackageRemovalIntent(Context context, Intent intent) {
         ProvisionedKeyDao keyDao = RkpdDatabase.getDatabase(context).provisionedKeyDao();
         int uid = intent.getExtras().getInt(Intent.EXTRA_UID);
-        keyDao.deleteAllKeysForClientAndKeyId(KEYSTORE_SERVICE_UID, uid);
+        keyDao.deleteAllKeysForClientAndKeyId(ProvisionedKeyDao.KEYSTORE_SERVICE_UID, uid);
         Log.i(TAG, "Deleted associated keys for uid: " + uid);
     }
 }

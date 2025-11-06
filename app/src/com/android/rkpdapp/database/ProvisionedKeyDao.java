@@ -16,12 +16,14 @@
 
 package com.android.rkpdapp.database;
 
+import android.os.Process;
 import androidx.room.Dao;
+import androidx.room.Delete;
 import androidx.room.Insert;
 import androidx.room.Query;
 import androidx.room.Transaction;
 import androidx.room.Update;
-
+import com.android.rkpd.flags.Flags;
 import java.time.Instant;
 import java.util.List;
 
@@ -31,6 +33,11 @@ import java.util.List;
  */
 @Dao
 public abstract class ProvisionedKeyDao {
+    /**
+     * The uid of Keystore service. Even though this constant is stable and exposed by Keystore
+     * libraries, it is marked with @hide and cannot be accessed by mainline modules.
+     */
+    public static final int KEYSTORE_SERVICE_UID = 1017;
 
     /**
      * Insert keys to database.
@@ -49,6 +56,12 @@ public abstract class ProvisionedKeyDao {
      */
     @Query("SELECT * FROM provisioned_keys")
     public abstract List<ProvisionedKey> getAllKeys();
+
+    /**
+     * Deletes a list of keys from the database.
+     */
+    @Delete
+    public abstract void deleteKeys(List<ProvisionedKey> keys);
 
     /**
      * Deletes a specific key from the database.
@@ -95,6 +108,22 @@ public abstract class ProvisionedKeyDao {
     abstract ProvisionedKey getUnassignedKeyForIrpc(String irpcHal, Instant minExpiry);
 
     /**
+     * Get provisioned keys that can be assigned to clients, factoring in an expiration time to
+     * ensure that we do not return stale keys. We return the newest unassigned key, i.e. one with
+     * the farthest expiration time to allow RKPD automatically use the newest unassigned key for
+     *  confirming certificates.
+     *
+     * @param minExpiry Any keys that expire previous to this time will not be considered, as they
+     *                  are too stale.
+     */
+    @Query("SELECT * FROM provisioned_keys"
+            + " WHERE client_uid IS NULL AND irpc_hal = :irpcHal AND expiration_time >= :minExpiry"
+            + " ORDER BY expiration_time DESC"
+            + " LIMIT 1")
+    abstract ProvisionedKey getNewestUnassignedKeyForIrpc(String irpcHal, Instant minExpiry);
+
+
+    /**
      * Gets total number of keys that can be assigned for a specific IRPC.
      */
     @Query("SELECT COUNT(*) FROM provisioned_keys WHERE client_uid IS NULL AND irpc_hal = :irpcHal")
@@ -112,6 +141,13 @@ public abstract class ProvisionedKeyDao {
     @Query("SELECT * FROM provisioned_keys"
             + " WHERE client_uid = :clientUid AND irpc_hal = :irpcHal AND key_id = :keyId")
     public abstract ProvisionedKey getKeyForClientAndIrpc(String irpcHal, int clientUid, int keyId);
+
+    /**
+     * Un-assigns a specific key from the database by public key, making it available for reuse.
+     */
+    @Query("UPDATE provisioned_keys SET client_uid = NULL, key_id = NULL"
+            + " WHERE public_key = :publicKey")
+    public abstract void UnassignPublicKey(byte[] publicKey);
 
     /**
      * Stores the upgraded key blob.
@@ -142,7 +178,7 @@ public abstract class ProvisionedKeyDao {
             return existingKey;
         }
 
-        ProvisionedKey availableKey = getUnassignedKeyForIrpc(irpcHal, minExpiry);
+        ProvisionedKey availableKey = getAvailableKeyByHal(irpcHal, minExpiry, clientUid, keyId);
         if (availableKey == null) {
             return null;
         }
@@ -150,5 +186,14 @@ public abstract class ProvisionedKeyDao {
         availableKey.keyId = keyId;
         updateKey(availableKey);
         return availableKey;
+    }
+
+    private ProvisionedKey getAvailableKeyByHal(String irpcHal, Instant minExpiry, int clientUid,
+            int keyId) {
+        if (Flags.enableFeedbackLoop() && clientUid == KEYSTORE_SERVICE_UID
+            && keyId == Process.myPid()) {
+            return getNewestUnassignedKeyForIrpc(irpcHal, minExpiry);
+        }
+        return getUnassignedKeyForIrpc(irpcHal, minExpiry);
     }
 }

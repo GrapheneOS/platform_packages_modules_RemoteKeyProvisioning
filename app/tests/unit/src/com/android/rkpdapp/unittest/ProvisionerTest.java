@@ -16,8 +16,10 @@
 
 package com.android.rkpdapp.unittest;
 
+import static com.android.rkpdapp.unittest.Utils.generateEcdsaKeyPair;
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.notNull;
 import static org.mockito.Mockito.any;
@@ -51,8 +53,13 @@ import com.android.rkpdapp.provisioner.Provisioner;
 import com.android.rkpdapp.testutil.FakeRkpServer;
 import com.android.rkpdapp.utils.CborUtils;
 import com.android.rkpdapp.utils.Settings;
+import com.android.rkpdapp.utils.X509Utils;
 import com.google.crypto.tink.subtle.Random;
+import java.security.InvalidAlgorithmParameterException;
 import java.security.KeyPair;
+import java.security.KeyStore;
+import java.security.cert.Certificate;
+import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -73,6 +80,29 @@ public class ProvisionerTest {
 
     private static final RkpKey FAKE_RKP_KEY = new RkpKey(FAKE_RKP_KEY_BLOB_1, new byte[2],
             new Array(), "hal", new byte[3]);
+
+    // The RKP certificate chains returned by the fake RKP server.
+    private static final KeyPair ROOT_KEY;
+    private static final KeyPair TEST_KEY_1;
+    private static final KeyPair TEST_KEY_2;
+    private static final X509Certificate ROOT_CERT;
+    private static final X509Certificate TEST_CERT_1; // RKP cert signed by ROOT_KEY.
+    private static final X509Certificate TEST_CERT_2; // Another RKP cert signed by ROOT_KEY.
+    private static final byte[] RAW_PUBLIC_KEY1;
+
+    static {
+        try {
+            TEST_KEY_1 = generateEcdsaKeyPair();
+            TEST_KEY_2 = generateEcdsaKeyPair();
+            ROOT_KEY = generateEcdsaKeyPair();
+            ROOT_CERT = Utils.signPublicKey(ROOT_KEY, ROOT_KEY.getPublic());
+            TEST_CERT_1 = Utils.signPublicKey(ROOT_KEY, TEST_KEY_1.getPublic());
+            TEST_CERT_2 = Utils.signPublicKey(ROOT_KEY, TEST_KEY_2.getPublic());
+            RAW_PUBLIC_KEY1 = X509Utils.getAndFormatRawPublicKey(TEST_CERT_1);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     private static Context sContext;
     private Provisioner mProvisioner;
@@ -113,6 +143,7 @@ public class ProvisionerTest {
             doReturn(batchSize).when(mockSystem).getBatchSize();
             doReturn(FAKE_RKP_KEY).when(mockSystem).generateKey(eq(atom));
             doReturn(new byte[1]).when(mockSystem).generateCsr(eq(atom), notNull(), notNull());
+            doReturn("test-irpc").when(mockSystem).getHalInstanceName();
 
             GeekResponse geekResponse = new GeekResponse();
             geekResponse.setChallenge(new byte[1]);
@@ -229,22 +260,51 @@ public class ProvisionerTest {
     @RequiresFlagsEnabled(
             value = {Flags.FLAG_ENABLE_FEEDBACK_LOOP, Flags.FLAG_ENABLE_REQUEST_ID_REUSE})
     public void testProvisionerReusesRequestIdFromGeekResponse() throws Exception {
+        // This is how the server would encode the response. The shared chain is the root,
+        // and the unique chains are the leaf certs.
+        Array cborCertChains =
+                new Array()
+                        .add(new ByteString(ROOT_CERT.getEncoded())) // shared chain
+                        .add(
+                                new Array() // unique chains
+                                        .add(new ByteString(TEST_CERT_1.getEncoded()))
+                                        .add(new ByteString(TEST_CERT_2.getEncoded())));
+        String base64Encoded =
+                Base64.encodeToString(CborUtils.encodeCbor(cborCertChains), Base64.DEFAULT);
+        FakeRkpServer.Response signCertsResponse = new FakeRkpServer.Response(base64Encoded);
+
         try (FakeRkpServer server =
                 new FakeRkpServer(
                         FakeRkpServer.Response.FETCH_EEK_OK,
-                        FakeRkpServer.Response.SIGN_CERTS_OK_VALID_CBOR,
+                        signCertsResponse,
                         FakeRkpServer.Response.CONFIRM_CERTS_OK)) {
-            Settings.setDeviceConfig(sContext, 20, Duration.ofDays(1), server.getUrl());
+            // Need to provision 2 keys to match the 2 certs from the server
+            Settings.setDeviceConfig(sContext, 2, Duration.ofDays(1), server.getUrl());
             ProvisioningAttempt atom = ProvisioningAttempt.createScheduledAttemptMetrics(sContext);
             SystemInterface mockSystem = mock(SystemInterface.class);
             doReturn(13).when(mockSystem).getBatchSize();
-            doReturn(FAKE_RKP_KEY).when(mockSystem).generateKey(eq(atom));
+
+            RkpKey rkpKey1 = new RkpKey(FAKE_RKP_KEY_BLOB_1, new byte[0], null, "hal",
+                    RAW_PUBLIC_KEY1);
+            doReturn(rkpKey1).when(mockSystem).generateKey(eq(atom));
             doReturn(new byte[1]).when(mockSystem).generateCsr(eq(atom), notNull(), notNull());
-            doReturn("strongbox").when(mockSystem).getHalInstanceName();
+            doReturn("default").when(mockSystem).getHalInstanceName();
+
 
             GeekResponse geekResponse = new GeekResponse();
             geekResponse.setChallenge(new byte[1]);
-            mProvisioner.provisionKeys(atom, mockSystem, geekResponse);
+
+            X509Certificate attestationLeafCert = Utils.signPublicKey(
+                    TEST_KEY_1, generateEcdsaKeyPair().getPublic());
+            Provisioner testProvisioner = new Provisioner(sContext, mKeyDao, false) {
+                @Override
+                protected Certificate[] generateAttestationCertificate(
+                        KeyStore keystore, String keyAlias, String halInstanceName)
+                        throws RkpdException {
+                    return new Certificate[] { attestationLeafCert, TEST_CERT_1, ROOT_CERT };
+                }
+            };
+            testProvisioner.provisionKeys(atom, mockSystem, geekResponse);
 
             assertThat(server.getCapturedParams())
                     .containsEntry("request_id", geekResponse.requestId);
@@ -312,7 +372,7 @@ public class ProvisionerTest {
                         FakeRkpServer.Response.FETCH_EEK_OK,
                         FakeRkpServer.Response.SIGN_CERTS_OK_VALID_CBOR,
                         FakeRkpServer.Response.CONFIRM_CERTS_OK)) {
-            Settings.setDeviceConfig(sContext, 20, Duration.ofDays(1), server.getUrl());
+            Settings.setDeviceConfig(sContext, 1, Duration.ofDays(1), server.getUrl());
             String initialUrl = Settings.getUrl(sContext);
 
             ProvisioningAttempt atom = ProvisioningAttempt.createScheduledAttemptMetrics(sContext);
@@ -320,12 +380,20 @@ public class ProvisionerTest {
             doReturn(13).when(mockSystem).getBatchSize();
             doReturn(FAKE_RKP_KEY).when(mockSystem).generateKey(eq(atom));
             doReturn(new byte[1]).when(mockSystem).generateCsr(eq(atom), notNull(), notNull());
-            doReturn("strongbox").when(mockSystem).getHalInstanceName();
+            doReturn("default").when(mockSystem).getHalInstanceName();
 
             GeekResponse geekResponse = new GeekResponse();
             geekResponse.setChallenge(new byte[1]);
-
-            mProvisioner.provisionKeys(atom, mockSystem, geekResponse);
+            X509Certificate attestationLeafCert = Utils.signPublicKey(
+                    TEST_KEY_1, generateEcdsaKeyPair().getPublic());
+            Provisioner testProvisioner = new Provisioner(sContext, mKeyDao, false) {
+                @Override
+                protected Certificate[] generateAttestationCertificate(
+                        KeyStore keystore, String keyAlias, String halInstanceName) {
+                    return new Certificate[] { attestationLeafCert, TEST_CERT_1, ROOT_CERT };
+                }
+            };
+            testProvisioner.provisionKeys(atom, mockSystem, geekResponse);
 
             assertThat(server.getCapturedUri()).contains(":confirmCertificates");
             assertThat(server.getCapturedParams())
@@ -333,6 +401,206 @@ public class ProvisionerTest {
 
             // Verify that the URL was NOT reset for a success instance.
             assertThat(server.getUrl()).isEqualTo(initialUrl);
+        }
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_FEEDBACK_LOOP)
+    public void testGenerateAttestationCertificateFailureTriggersConfirmCertificatesAndDeletesKeys()
+            throws Exception {
+        Array cborCertChains =
+                new Array()
+                        .add(new ByteString(ROOT_CERT.getEncoded())) // shared chain
+                        .add(
+                                new Array() // unique chains
+                                        .add(new ByteString(TEST_CERT_1.getEncoded())));
+        String base64Encoded =
+                Base64.encodeToString(CborUtils.encodeCbor(cborCertChains), Base64.DEFAULT);
+        FakeRkpServer.Response signCertsResponse = new FakeRkpServer.Response(base64Encoded);
+        try (FakeRkpServer server =
+                new FakeRkpServer(
+                        FakeRkpServer.Response.FETCH_EEK_OK,
+                        signCertsResponse,
+                        FakeRkpServer.Response.CONFIRM_CERTS_OK)) {
+            Settings.setDeviceConfig(sContext, 1, Duration.ofDays(1), server.getUrl());
+            ProvisioningAttempt atom = ProvisioningAttempt.createScheduledAttemptMetrics(sContext);
+            SystemInterface mockSystem = mock(SystemInterface.class);
+            doReturn(1).when(mockSystem).getBatchSize();
+            RkpKey rkpKey = new RkpKey(FAKE_RKP_KEY_BLOB_1, new byte[0], null, "hal",
+                    RAW_PUBLIC_KEY1);
+            doReturn(rkpKey).when(mockSystem).generateKey(eq(atom));
+            doReturn(new byte[1]).when(mockSystem).generateCsr(eq(atom), notNull(), notNull());
+            doReturn("strongbox").when(mockSystem).getHalInstanceName();
+
+            GeekResponse geekResponse = new GeekResponse();
+            geekResponse.setChallenge(new byte[1]);
+
+            Provisioner testProvisioner =
+                    new Provisioner(sContext, mKeyDao, false) {
+                        @Override
+                        protected Certificate[] generateAttestationCertificate(
+                                KeyStore keystore, String keyAlias,
+                                String halInstanceName)
+                                throws RkpdException {
+                            // After inserting keys, we want to simulate a failure to check that
+                            // the keys are rolled back.
+                            assertThat(mKeyDao.getAllKeys()).isNotEmpty();
+                            throw new RkpdException(RkpdException.ErrorCode.INTERNAL_ERROR,
+                                    "Error generating attestation certificate",
+                                    new InvalidAlgorithmParameterException("test exception"));
+                        }
+                    };
+
+            RkpdException e =
+                    assertThrows(
+                            RkpdException.class,
+                            () -> testProvisioner.provisionKeys(atom, mockSystem, geekResponse));
+
+            assertThat(e.getErrorCode()).isEqualTo(RkpdException.ErrorCode.INTERNAL_ERROR);
+            assertThat(e).hasMessageThat().contains("Error generating attestation certificate");
+            // Confirm that confirmCertificates was called.
+            assertThat(server.getCapturedUri()).contains(":confirmCertificates");
+            // Verify that the keys were deleted.
+            assertThat(mKeyDao.getAllKeys()).isEmpty();
+        }
+    }
+
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_FEEDBACK_LOOP)
+    public void testProvisionKeysHalNotStrongBoxOrDefaultDoesNotTriggerConfirmCertificates()
+            throws Exception {
+        try (FakeRkpServer server =
+                new FakeRkpServer(
+                        FakeRkpServer.Response.FETCH_EEK_OK,
+                        FakeRkpServer.Response.SIGN_CERTS_OK_VALID_CBOR,
+                        FakeRkpServer.Response.CONFIRM_CERTS_OK)) {
+            Settings.setDeviceConfig(sContext, 1, Duration.ofDays(1), server.getUrl());
+            String initialUrl = Settings.getUrl(sContext);
+
+            ProvisioningAttempt atom = ProvisioningAttempt.createScheduledAttemptMetrics(sContext);
+            SystemInterface mockSystem = mock(SystemInterface.class);
+            doReturn(13).when(mockSystem).getBatchSize();
+            doReturn(FAKE_RKP_KEY).when(mockSystem).generateKey(eq(atom));
+            doReturn(new byte[1]).when(mockSystem).generateCsr(eq(atom), notNull(), notNull());
+            doReturn("some-other-hal").when(mockSystem).getHalInstanceName();
+
+            GeekResponse geekResponse = new GeekResponse();
+            geekResponse.setChallenge(new byte[1]);
+            Provisioner testProvisioner = new Provisioner(sContext, mKeyDao, false) {
+                @Override
+                protected Certificate[] generateAttestationCertificate(
+                        KeyStore keystore, String keyAlias, String halInstanceName)
+                        throws RkpdException {
+                    fail("generateAttestationCertificate should not have been called for HAL "
+                            + halInstanceName);
+                    return null;
+                }
+            };
+            testProvisioner.provisionKeys(atom, mockSystem, geekResponse);
+
+            assertThat(server.getCapturedUri()).contains(":confirmCertificates");
+            // Verify that the URL was NOT reset for a success instance.
+            assertThat(server.getUrl()).isEqualTo(initialUrl);
+        }
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_FEEDBACK_LOOP)
+    public void testProvisionKeysConfirmCertificatesUnassignsKeyUsedForGeneratingAttestationCert()
+            throws Exception {
+        Array cborCertChains =
+                new Array()
+                        .add(new ByteString(ROOT_CERT.getEncoded())) // shared chain
+                        .add(
+                                new Array() // unique chains
+                                        .add(new ByteString(TEST_CERT_1.getEncoded())));
+        String base64Encoded =
+                Base64.encodeToString(CborUtils.encodeCbor(cborCertChains), Base64.DEFAULT);
+        FakeRkpServer.Response signCertsResponse = new FakeRkpServer.Response(base64Encoded);
+        try (FakeRkpServer server =
+                new FakeRkpServer(
+                        FakeRkpServer.Response.FETCH_EEK_OK,
+                        signCertsResponse,
+                        FakeRkpServer.Response.CONFIRM_CERTS_OK)) {
+            Settings.setDeviceConfig(sContext, 1, Duration.ofDays(1), server.getUrl());
+            ProvisioningAttempt atom = ProvisioningAttempt.createScheduledAttemptMetrics(sContext);
+            SystemInterface mockSystem = mock(SystemInterface.class);
+            doReturn(1).when(mockSystem).getBatchSize();
+            RkpKey rkpKey = new RkpKey(FAKE_RKP_KEY_BLOB_1, new byte[0], null, "default",
+                    RAW_PUBLIC_KEY1);
+            doReturn(rkpKey).when(mockSystem).generateKey(eq(atom));
+            doReturn(new byte[1]).when(mockSystem).generateCsr(eq(atom), notNull(), notNull());
+            doReturn("default").when(mockSystem).getHalInstanceName();
+
+            GeekResponse geekResponse = new GeekResponse();
+            geekResponse.setChallenge(new byte[1]);
+
+            X509Certificate attestationLeafCert = Utils.signPublicKey(
+                    TEST_KEY_1, generateEcdsaKeyPair().getPublic());
+            Provisioner testProvisioner =
+                    new Provisioner(sContext, mKeyDao, false) {
+                        @Override
+                        protected Certificate[] generateAttestationCertificate(
+                                KeyStore keystore, String keyAlias,
+                                String halInstanceName)
+                                throws RkpdException {
+                            // Before generating the attestation certificate, assign the key to a
+                            // fake client. This is to simulate the key being used by a client.
+                            ProvisionedKey key = mKeyDao.getOrAssignKey(
+                                    halInstanceName, Instant.now(), 123, 456);
+                            assertThat(key).isNotNull();
+                            assertThat(key.clientUid).isEqualTo(123);
+                            assertThat(key.keyId).isEqualTo(456);
+
+                            // Now, generate the attestation certificate. The second certificate
+                            // in the chain is the RKP cert, which should be the same as the
+                            // key that was just assigned.
+                            return new Certificate[] {
+                                    attestationLeafCert, TEST_CERT_1, ROOT_CERT };
+                        }
+                    };
+
+            testProvisioner.provisionKeys(atom, mockSystem, geekResponse);
+
+            // After provisioning, the key should be unassigned.
+            List<ProvisionedKey> keys = mKeyDao.getAllKeys();
+            assertThat(keys).hasSize(1);
+            assertThat(keys.get(0).clientUid).isNull();
+            assertThat(keys.get(0).keyId).isNull();
+        }
+    }
+
+    @Test
+    @RequiresFlagsDisabled(Flags.FLAG_ENABLE_FEEDBACK_LOOP)
+    public void testGenerateAttestationCertificateNotCalledWhenFlagIsDisabled() throws Exception {
+        try (FakeRkpServer server =
+                new FakeRkpServer(
+                        FakeRkpServer.Response.FETCH_EEK_OK,
+                        FakeRkpServer.Response.SIGN_CERTS_OK_VALID_CBOR,
+                        FakeRkpServer.Response.CONFIRM_CERTS_OK)) {
+            Settings.setDeviceConfig(sContext, 1, Duration.ofDays(1), server.getUrl());
+            ProvisioningAttempt atom = ProvisioningAttempt.createScheduledAttemptMetrics(sContext);
+            SystemInterface mockSystem = mock(SystemInterface.class);
+            doReturn(1).when(mockSystem).getBatchSize();
+            doReturn(FAKE_RKP_KEY).when(mockSystem).generateKey(eq(atom));
+            doReturn(new byte[1]).when(mockSystem).generateCsr(eq(atom), notNull(), notNull());
+            doReturn("strongbox").when(mockSystem).getHalInstanceName();
+
+            GeekResponse geekResponse = new GeekResponse();
+            geekResponse.setChallenge(new byte[1]);
+            Provisioner testProvisioner = new Provisioner(sContext, mKeyDao, false) {
+                @Override
+                protected Certificate[] generateAttestationCertificate(
+                        KeyStore keystore, String keyAlias, String halInstanceName) {
+                    fail("generateAttestationCertificate should not be called when feedback loop"
+                            + " is disabled.");
+                    return null;
+                }
+            };
+
+            // This should succeed without calling the failing method above.
+            testProvisioner.provisionKeys(atom, mockSystem, geekResponse);
         }
     }
 }

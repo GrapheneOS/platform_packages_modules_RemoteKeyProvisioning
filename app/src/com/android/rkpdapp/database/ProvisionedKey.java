@@ -22,7 +22,6 @@ import androidx.room.Entity;
 import androidx.room.Ignore;
 import androidx.room.Index;
 import androidx.room.PrimaryKey;
-
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
@@ -44,6 +43,9 @@ public class ProvisionedKey {
     @NonNull
     public String irpcHal;
 
+    // Note that this is the "raw" public key, not the encoded COSE key. The raw public key is
+    // obtained by padding the x and y coordinates with leading zeroes out to 32 bytes each,
+    // then concatenating them.
     @ColumnInfo(name = "public_key")
     @NonNull
     public byte[] publicKey;

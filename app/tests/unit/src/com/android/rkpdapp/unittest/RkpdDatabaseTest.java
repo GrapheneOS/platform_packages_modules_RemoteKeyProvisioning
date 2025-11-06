@@ -17,44 +17,49 @@
 package com.android.rkpdapp.unittest;
 
 import static com.google.common.truth.Truth.assertThat;
-
 import static org.junit.Assert.fail;
 
 import android.content.Context;
 import android.database.sqlite.SQLiteConstraintException;
-
+import android.os.Process;
+import android.platform.test.annotations.RequiresFlagsDisabled;
+import android.platform.test.annotations.RequiresFlagsEnabled;
+import android.platform.test.flag.junit.CheckFlagsRule;
+import android.platform.test.flag.junit.DeviceFlagsValueProvider;
 import androidx.room.Room;
 import androidx.test.core.app.ApplicationProvider;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
-
+import com.android.rkpd.flags.Flags;
 import com.android.rkpdapp.RkpdException;
 import com.android.rkpdapp.database.InstantConverter;
 import com.android.rkpdapp.database.ProvisionedKey;
 import com.android.rkpdapp.database.ProvisionedKeyDao;
 import com.android.rkpdapp.database.RkpdDatabase;
-
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.runner.RunWith;
 
 @RunWith(AndroidJUnit4.class)
 public class RkpdDatabaseTest {
     private static final String DB_NAME = "test_db";
     private static final String TEST_HAL_1 = "testIrpc";
     private static final String TEST_HAL_2 = "someOtherIrpc";
+    private static final String STRONGBOX_HAL = "strongboxIrpc";
+    private static final String DEFAULT_HAL = "defaultIrpc";
     private static final byte[] TEST_KEY_BLOB_1 = new byte[]{0x01, 0x02, 0x03};
     private static final byte[] TEST_KEY_BLOB_2 = new byte[]{0x11, 0x12, 0x13};
     private static final byte[] TEST_KEY_BLOB_3 = new byte[]{0x21, 0x22, 0x23};
+    private static final byte[] TEST_KEY_BLOB_4 = new byte[]{0x31, 0x32, 0x33};
     private static final Instant TEST_KEY_EXPIRY = Instant.now().plus(Duration.ofHours(1));
+    private static final Instant TEST_KEY_EXPIRY_2 = Instant.now().plus(Duration.ofHours(2));
     private static final int FAKE_CLIENT_UID = 1;
     private static final int FAKE_CLIENT_UID_2 = 2;
-    private static final int KEYSTORE_CLIENT_UID = 1017;
     private static final int FAKE_KEY_ID = 1;
     private static final int FAKE_CLIENT_UID_3 = 3;
     private static final int FAKE_KEY_ID_2 = 2;
@@ -63,6 +68,9 @@ public class RkpdDatabaseTest {
 
     private ProvisionedKeyDao mKeyDao;
     private RkpdDatabase mDatabase;
+
+    @Rule
+    public final CheckFlagsRule mCheckFlagsRule = DeviceFlagsValueProvider.createCheckFlagsRule();
 
     @Before
     public void setUp() {
@@ -360,6 +368,71 @@ public class RkpdDatabaseTest {
 
         assertThat(mKeyDao.getOrAssignKey(TEST_HAL_1, Instant.now(), FAKE_CLIENT_UID,
                 FAKE_KEY_ID)).isNull();
+    }
+
+    @Test
+    @RequiresFlagsDisabled(Flags.FLAG_ENABLE_FEEDBACK_LOOP)
+    public void testGetOrAssignKeyReturnsOldestKey() throws Exception {
+        ProvisionedKey key1 = new ProvisionedKey(TEST_KEY_BLOB_3, TEST_HAL_1, TEST_KEY_BLOB_3,
+                TEST_KEY_BLOB_3, TEST_KEY_EXPIRY);
+        ProvisionedKey key2 = new ProvisionedKey(TEST_KEY_BLOB_4, TEST_HAL_1, TEST_KEY_BLOB_4,
+                TEST_KEY_BLOB_4, TEST_KEY_EXPIRY_2);
+        mKeyDao.insertKeys(List.of(key1, key2));
+        ProvisionedKey assignedKey = mKeyDao.getOrAssignKey(TEST_HAL_1, Instant.now(),
+                FAKE_CLIENT_UID, FAKE_KEY_ID);
+        assertThat(assignedKey.keyBlob).isEqualTo(TEST_KEY_BLOB_3);
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_FEEDBACK_LOOP)
+    public void testGetOrAssignKeyReturnsOldestKeyForStrongbox() throws Exception {
+        ProvisionedKey key1 = new ProvisionedKey(TEST_KEY_BLOB_3, STRONGBOX_HAL, TEST_KEY_BLOB_3,
+                TEST_KEY_BLOB_3, TEST_KEY_EXPIRY);
+        ProvisionedKey key2 = new ProvisionedKey(TEST_KEY_BLOB_4, STRONGBOX_HAL, TEST_KEY_BLOB_4,
+                TEST_KEY_BLOB_4, TEST_KEY_EXPIRY_2);
+        mKeyDao.insertKeys(List.of(key1, key2));
+        ProvisionedKey assignedKey = mKeyDao.getOrAssignKey(STRONGBOX_HAL, Instant.now(),
+                FAKE_CLIENT_UID, FAKE_KEY_ID);
+        assertThat(assignedKey.keyBlob).isEqualTo(TEST_KEY_BLOB_3);
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_FEEDBACK_LOOP)
+    public void testGetOrAssignKeyReturnsOldestKeyForDefault() throws Exception {
+        ProvisionedKey key1 = new ProvisionedKey(TEST_KEY_BLOB_3, DEFAULT_HAL, TEST_KEY_BLOB_3,
+                TEST_KEY_BLOB_3, TEST_KEY_EXPIRY);
+        ProvisionedKey key2 = new ProvisionedKey(TEST_KEY_BLOB_4, DEFAULT_HAL, TEST_KEY_BLOB_4,
+                TEST_KEY_BLOB_4, TEST_KEY_EXPIRY_2);
+        mKeyDao.insertKeys(List.of(key1, key2));
+        ProvisionedKey assignedKey = mKeyDao.getOrAssignKey(DEFAULT_HAL, Instant.now(),
+                FAKE_CLIENT_UID, FAKE_KEY_ID);
+        assertThat(assignedKey.keyBlob).isEqualTo(TEST_KEY_BLOB_3);
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_FEEDBACK_LOOP)
+    public void testGetOrAssignKeyReturnsOldestKeyForOtherHal() throws Exception {
+        ProvisionedKey key1 = new ProvisionedKey(TEST_KEY_BLOB_3, TEST_HAL_1, TEST_KEY_BLOB_3,
+                TEST_KEY_BLOB_3, TEST_KEY_EXPIRY);
+        ProvisionedKey key2 = new ProvisionedKey(TEST_KEY_BLOB_4, TEST_HAL_1, TEST_KEY_BLOB_4,
+                TEST_KEY_BLOB_4, TEST_KEY_EXPIRY_2);
+        mKeyDao.insertKeys(List.of(key1, key2));
+        ProvisionedKey assignedKey = mKeyDao.getOrAssignKey(TEST_HAL_1, Instant.now(),
+                FAKE_CLIENT_UID, FAKE_KEY_ID);
+        assertThat(assignedKey.keyBlob).isEqualTo(TEST_KEY_BLOB_3);
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_FEEDBACK_LOOP)
+    public void testGetOrAssignKeyReturnsNewestKeyForRkpd() throws Exception {
+        ProvisionedKey key1 = new ProvisionedKey(TEST_KEY_BLOB_3, TEST_HAL_1, TEST_KEY_BLOB_3,
+                TEST_KEY_BLOB_3, TEST_KEY_EXPIRY);
+        ProvisionedKey key2 = new ProvisionedKey(TEST_KEY_BLOB_4, TEST_HAL_1, TEST_KEY_BLOB_4,
+                TEST_KEY_BLOB_4, TEST_KEY_EXPIRY_2);
+        mKeyDao.insertKeys(List.of(key1, key2));
+        ProvisionedKey assignedKey = mKeyDao.getOrAssignKey(TEST_HAL_1, Instant.now(),
+                ProvisionedKeyDao.KEYSTORE_SERVICE_UID, Process.myPid());
+        assertThat(assignedKey.keyBlob).isEqualTo(TEST_KEY_BLOB_4);
     }
 
     @Test
