@@ -18,6 +18,8 @@ package com.android.rkpdapp.provisioner;
 
 import android.content.Context;
 import android.os.RemoteException;
+import android.security.keystore.KeyGenParameterSpec;
+import android.security.keystore.KeyProperties;
 import android.util.Log;
 import co.nstant.in.cbor.CborException;
 import com.android.rkpd.flags.Flags;
@@ -35,7 +37,17 @@ import com.android.rkpdapp.metrics.ProvisioningAttempt;
 import com.android.rkpdapp.utils.Settings;
 import com.android.rkpdapp.utils.StatsProcessor;
 import com.android.rkpdapp.utils.X509Utils;
+import java.io.IOException;
+import java.security.InvalidAlgorithmParameterException;
+import java.security.KeyPairGenerator;
+import java.security.KeyStore;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
+import java.security.cert.Certificate;
+import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
+import java.security.spec.ECGenParameterSpec;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -52,6 +64,8 @@ public class Provisioner {
     private static final String TAG = "RkpdProvisioner";
     private static final int FAILURE_MAXIMUM = 5;
     private static final Object provisionKeysLock = new Object();
+    private static final String ANDROID_KEYSTORE = "AndroidKeyStore";
+    private static final String KEY_ALIAS_PREFIX = "rkpd_post_provisioning_test_key";
 
     private final Context mContext;
     private final ProvisionedKeyDao mKeyDao;
@@ -103,6 +117,15 @@ public class Provisioner {
                                 metrics);
 
                 mKeyDao.insertKeys(keys);
+                if (systemInterface.getHalInstanceName().equals("default")
+                        || systemInterface.getHalInstanceName().equals("strongbox")) {
+                generateAttestationCertificate(
+                        certChains,
+                        keys,
+                        geekResponse.requestId,
+                        metrics,
+                        systemInterface);
+                }
                 Log.i(TAG, "Total provisioned keys: " + keys.size());
                 metrics.setStatus(ProvisioningAttempt.Status.KEYS_SUCCESSFULLY_PROVISIONED);
                 new ServerInterface(mContext, mIsAsync)
@@ -123,6 +146,106 @@ public class Provisioner {
                 throw e;
             }
         }
+    }
+
+    private void generateAttestationCertificate(
+            List<byte[]> certChains, List<ProvisionedKey> keys, String requestId,
+            ProvisioningAttempt metrics, SystemInterface systemInterface)
+            throws RkpdException, InterruptedException {
+        if (!Flags.enableFeedbackLoop()) {
+            return;
+        }
+
+        String keyAlias = KEY_ALIAS_PREFIX + "_" + systemInterface.getHalInstanceName();
+        KeyStore keystore;
+        try {
+            keystore = KeyStore.getInstance(ANDROID_KEYSTORE);
+            keystore.load(null);
+            if (keystore.containsAlias(keyAlias)) {
+                keystore.deleteEntry(keyAlias);
+            }
+        } catch (KeyStoreException | CertificateException |
+            IOException | NoSuchAlgorithmException e) {
+            Log.e(TAG, "Error loading keystore or removing existing rkpd assigned keys. " +
+                    "Skipping certificate confirmation.", e);
+            return;
+        }
+
+        byte[] rawPublicKey;
+        try {
+            Certificate[] attestationCertChain = generateAttestationCertificate(
+                    keystore, keyAlias, systemInterface.getHalInstanceName());
+            rawPublicKey = getRkpRawPublicKeyFromAttestationCertChain(attestationCertChain);
+        } catch (RkpdException e) {
+            Log.e(TAG, "Error generating attestation certificate. Reporting to the server"
+                    + " and deleting provisioned keys from this batch.", e);
+            mKeyDao.deleteKeys(keys);
+            new ServerInterface(mContext, mIsAsync)
+                .confirmCertificatesError(
+                        Optional.of(systemInterface),
+                        e,
+                        new DerCertificateChains(certChains),
+                        requestId,
+                        metrics);
+            throw e;
+        }
+        // Successfully generated attestation certificate, unassign and make available for reuse.
+        mKeyDao.UnassignPublicKey(rawPublicKey);
+    }
+
+    /**
+     * Generates an attestation certificate for the given keystore and key alias. This is a
+     * protected method so that it can be overridden in unit tests. The reason we need to override
+     * this method in unit tests is because RKPD is "locked" for access during the test execution,
+     * so keystore is unable to generate an attestation using RKPD.
+     */
+    protected Certificate[] generateAttestationCertificate(
+            KeyStore keystore, String keyAlias, String halInstanceName) throws RkpdException {
+        KeyGenParameterSpec keyGenParameterSpec =
+            new KeyGenParameterSpec.Builder(keyAlias, KeyProperties.PURPOSE_VERIFY)
+                    .setDigests(KeyProperties.DIGEST_SHA256, KeyProperties.DIGEST_SHA512)
+                    .setAlgorithmParameterSpec(new ECGenParameterSpec("secp256r1"))
+                    .setAttestationChallenge(new byte[] {1})
+                    .setDevicePropertiesAttestationIncluded(true)
+                    .setIsStrongBoxBacked(halInstanceName.contains("strongbox"))
+                    .build();
+
+        try {
+            // One or more of the following keystore APIs may internally make a call to RKPD to use
+            // the newly provisioned key, so a failure here is indicative of bad certs received.
+            KeyPairGenerator keyPairGenerator =
+                    KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_EC, ANDROID_KEYSTORE);
+            keyPairGenerator.initialize(keyGenParameterSpec);
+            keyPairGenerator.generateKeyPair();
+            return keystore.getCertificateChain(keyAlias);
+        } catch (
+            KeyStoreException | InvalidAlgorithmParameterException |
+            NoSuchAlgorithmException | NoSuchProviderException e) {
+            throw new RkpdException(RkpdException.ErrorCode.INTERNAL_ERROR,
+                    "Error generating attestation certificate", e);
+        }
+    }
+
+    /**
+     * Accepts an attestation certificate chain and returns the raw public key corresponding to the
+     * RKP certificate.
+     */
+    private byte[] getRkpRawPublicKeyFromAttestationCertChain(Certificate[] attestationCertChain)
+            throws RkpdException {
+        X509Certificate[] x509Certificates = Arrays.stream(attestationCertChain)
+                .map(x -> (X509Certificate) x)
+                .toList()
+                .toArray(new X509Certificate[0]);
+        if (x509Certificates.length < 2) {
+            throw new RkpdException(RkpdException.ErrorCode.INTERNAL_ERROR,
+                    "Attestation certificate chain is too short. Expected at least 2 certificates,"
+                            + " but got "
+                            + x509Certificates.length);
+        }
+
+        // Keymint certificate chain is ordered from leaf-to-root. The RKP certificate is the second
+        // certificate in the chain (index 1).
+        return X509Utils.getAndFormatRawPublicKey(x509Certificates[1]);
     }
 
     private List<RkpKey> generateKeys(ProvisioningAttempt metrics, int numKeysRequired,

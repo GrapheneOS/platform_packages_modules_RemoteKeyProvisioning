@@ -22,11 +22,9 @@ import com.android.os.rkpd.RkpdClientOperation.Operation;
 import com.android.os.rkpd.RkpdClientOperation.Result;
 import com.android.os.rkpd.RkpdExtensionAtoms;
 import com.android.tradefed.testtype.DeviceJUnit4ClassRunner;
-
+import java.util.List;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-
-import java.util.List;
 
 @RunWith(DeviceJUnit4ClassRunner.class)
 public final class RkpdClientOperationAtomTests extends AtomsHostTest {

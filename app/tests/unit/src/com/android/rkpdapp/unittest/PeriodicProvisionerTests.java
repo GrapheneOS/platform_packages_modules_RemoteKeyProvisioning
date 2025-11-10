@@ -183,6 +183,8 @@ public class PeriodicProvisionerTests {
             doReturn("test-irpc").when(mockHal).getServiceName();
             doReturn(new byte[1]).when(mockHal).generateCsr(any(), any(), any());
             doReturn(5).when(mockHal).getBatchSize();
+            doReturn(FAKE_RKP_KEY).when(mockHal).generateKey(any());
+            doReturn("test-irpc").when(mockHal).getHalInstanceName();
 
             ServiceManagerInterface.setInstances(new SystemInterface[]{mockHal});
             assertThat(mProvisioner.doWork()).isEqualTo(ListenableWorker.Result.success());
@@ -233,15 +235,15 @@ public class PeriodicProvisionerTests {
     @RequiresFlagsDisabled(Flags.FLAG_ENABLE_FEEDBACK_LOOP)
     public void provisioningExpiresOldKeys() throws Exception {
         ProvisionedKeyDao dao = RkpdDatabase.getDatabase(sContext).provisionedKeyDao();
-        ProvisionedKey oldKey = new ProvisionedKey(new byte[1], "fake-irpc", new byte[2],
+        ProvisionedKey oldKey = new ProvisionedKey(new byte[1], "test-irpc", new byte[2],
                 new byte[3],
                 Instant.now().minus(RegistrationBinder.MIN_KEY_LIFETIME.multipliedBy(2)));
         // Add 2 hours so that this key does not get deleted in case getKeyWorker comes alive.
-        ProvisionedKey freshKey = new ProvisionedKey(new byte[11], "fake-irpc", new byte[12],
+        ProvisionedKey freshKey = new ProvisionedKey(new byte[11], "test-irpc", new byte[12],
                 new byte[13],
                 Instant.now().plus(RegistrationBinder.MIN_KEY_LIFETIME.multipliedBy(2)));
         dao.insertKeys(List.of(oldKey, freshKey));
-        assertThat(dao.getTotalKeysForIrpc("fake-irpc")).isEqualTo(2);
+        assertThat(dao.getTotalKeysForIrpc("test-irpc")).isEqualTo(2);
 
         try (FakeRkpServer fakeRkpServer = new FakeRkpServer(
                 FakeRkpServer.Response.FETCH_EEK_OK,
@@ -251,12 +253,14 @@ public class PeriodicProvisionerTests {
             doReturn("test-irpc").when(mockHal).getServiceName();
             doReturn(new byte[1]).when(mockHal).generateCsr(any(), any(), any());
             doReturn(20).when(mockHal).getBatchSize();
+            doReturn(FAKE_RKP_KEY).when(mockHal).generateKey(any());
+            doReturn("test-irpc").when(mockHal).getHalInstanceName();
             ServiceManagerInterface.setInstances(new SystemInterface[]{mockHal});
             assertThat(mProvisioner.doWork()).isEqualTo(ListenableWorker.Result.success());
         }
 
         // old key should be gone, fresh key hangs around
-        assertThat(dao.getTotalKeysForIrpc("fake-irpc")).isEqualTo(1);
+        assertThat(dao.getTotalKeysForIrpc("test-irpc")).isEqualTo(1);
     }
 
     @Test
