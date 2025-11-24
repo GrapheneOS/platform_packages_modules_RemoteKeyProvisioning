@@ -206,7 +206,6 @@ public class Provisioner {
                     .setDigests(KeyProperties.DIGEST_SHA256, KeyProperties.DIGEST_SHA512)
                     .setAlgorithmParameterSpec(new ECGenParameterSpec("secp256r1"))
                     .setAttestationChallenge(new byte[] {1})
-                    .setDevicePropertiesAttestationIncluded(true)
                     .setIsStrongBoxBacked(halInstanceName.contains("strongbox"))
                     .build();
 

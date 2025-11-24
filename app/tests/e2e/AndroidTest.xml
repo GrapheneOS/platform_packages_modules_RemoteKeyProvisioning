@@ -24,6 +24,12 @@
 
     <target_preparer class="com.android.tradefed.targetprep.RunOnSystemUserTargetPreparer"/>
 
+    <target_preparer class="com.android.tradefed.targetprep.RunCommandTargetPreparer">
+        <!-- RkpdAppIntegrationTests requires wifi -->
+        <option name="run-command" value="settings put global wifi_on 1" />
+        <option name="run-command" value="svc wifi enable" />
+    </target_preparer>
+
     <test class="com.android.tradefed.testtype.AndroidJUnitTest" >
         <option name="package" value="com.android.rkpdapp.e2etest" />
         <option name="runner" value="androidx.test.runner.AndroidJUnitRunner" />
