@@ -18,11 +18,9 @@ package com.android.rkpdapp.e2etest;
 
 import static android.security.keystore.KeyProperties.KEY_ALGORITHM_EC;
 import static android.security.keystore.KeyProperties.PURPOSE_SIGN;
-
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
 import static com.google.common.truth.TruthJUnit.assume;
-
 import static org.junit.Assert.assertThrows;
 
 import android.content.Context;
@@ -34,11 +32,9 @@ import android.security.KeyStoreException;
 import android.security.keystore.KeyGenParameterSpec;
 import android.system.keystore2.ResponseCode;
 import android.util.Log;
-
 import androidx.test.core.app.ApplicationProvider;
 import androidx.work.ListenableWorker;
 import androidx.work.testing.TestWorkerBuilder;
-
 import com.android.rkpdapp.database.ProvisionedKey;
 import com.android.rkpdapp.database.ProvisionedKeyDao;
 import com.android.rkpdapp.database.RkpdDatabase;
@@ -51,19 +47,8 @@ import com.android.rkpdapp.testutil.SystemInterfaceSelector;
 import com.android.rkpdapp.testutil.SystemPropertySetter;
 import com.android.rkpdapp.utils.Settings;
 import com.android.rkpdapp.utils.X509Utils;
-
 import com.google.common.primitives.Bytes;
-
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TestName;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-
+import java.io.ByteArrayOutputStream;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.security.KeyPairGenerator;
@@ -77,6 +62,15 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.Executors;
+import org.junit.After;
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.BeforeClass;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.TestName;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 
 @RunWith(Parameterized.class)
 public class KeystoreIntegrationTest {
@@ -428,7 +422,15 @@ public class KeystoreIntegrationTest {
                 .map(x -> (X509Certificate) x)
                 .toList()
                 .toArray(new X509Certificate[0]);
-        assertThat(X509Utils.isCertChainValid(x509Certificates)).isTrue();
+        try {
+            ByteArrayOutputStream os = new ByteArrayOutputStream();
+            for (X509Certificate cert : x509Certificates) {
+                os.write(cert.getEncoded());
+            }
+            X509Utils.formatX509Certs(os.toByteArray());
+        } catch (Exception e) {
+            assertWithMessage("Error validating certificate chain: " + e).fail();
+        }
         assertThat(Bytes.concat(SUBJECT_PUBKEY_ASN1_PREFIX, attestationKey.publicKey))
                 .isEqualTo(certChain[1].getPublicKey().getEncoded());
 
