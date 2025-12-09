@@ -176,7 +176,7 @@ public class Provisioner {
             Certificate[] attestationCertChain = generateAttestationCertificate(
                     keystore, keyAlias, systemInterface.getHalInstanceName());
             rawPublicKey = getRkpRawPublicKeyFromAttestationCertChain(attestationCertChain);
-        } catch (RkpdException e) {
+        } catch (Exception e) {
             Log.e(TAG, "Error generating attestation certificate. Reporting to the server"
                     + " and deleting provisioned keys from this batch.", e);
             mKeyDao.deleteKeys(keys);
@@ -323,7 +323,7 @@ public class Provisioner {
             X509Certificate[] certChain;
             try {
                 certChain = X509Utils.formatX509Certs(chain);
-            } catch (RkpdException e) {
+            } catch (Exception e) {
                 new ServerInterface(mContext, mIsAsync)
                         .confirmCertificatesError(
                                 Optional.of(systemInterface),

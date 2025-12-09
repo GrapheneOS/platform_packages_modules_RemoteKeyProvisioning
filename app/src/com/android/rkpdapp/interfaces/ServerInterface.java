@@ -277,7 +277,7 @@ public class ServerInterface {
         List<byte[]> certChains;
         try {
             certChains = CborUtils.parseSignedCertificates(cborBytes);
-        } catch (RkpdException e) {
+        } catch (Exception e) {
             metrics.setStatus(ProvisioningAttempt.Status.INTERNAL_ERROR);
             confirmCertificatesError(
                     systemInterface, e, new CertificateBundle(cborBytes), reqId, metrics);
@@ -300,7 +300,7 @@ public class ServerInterface {
         } catch (NoSuchAlgorithmException e) {
             throw new RkpdException(
                     RkpdException.ErrorCode.INTERNAL_ERROR, "Algorithm not found", e);
-        } catch (RkpdException e) {
+        } catch (Exception e) {
             confirmCertificatesError(
                 systemInterface, e, new DerCertificateChains(certChains.get(0)), reqId, metrics);
             throw e;
