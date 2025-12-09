@@ -192,7 +192,7 @@ public class ServerInterface {
             reason += ": " + e.getCause().getMessage();
         }
         ConfirmCertificates errorInstance = ConfirmCertificates.createError(
-                halName, reason, payload);
+                halName, reason, Log.getStackTraceString(e), payload);
         confirmCertificates(errorInstance, requestId, metrics);
     }
 
