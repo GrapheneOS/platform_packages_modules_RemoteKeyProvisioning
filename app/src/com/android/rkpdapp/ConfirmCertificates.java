@@ -27,6 +27,7 @@ public class ConfirmCertificates {
     public static final UnicodeString HAL_INSTANCE_KEY = new UnicodeString("instance");
     public static final UnicodeString ERROR_INFO_KEY = new UnicodeString("error_info");
     public static final UnicodeString REASON_KEY = new UnicodeString("reason");
+    public static final UnicodeString STACK_TRACE_KEY = new UnicodeString("stack_trace");
     public static final UnicodeString CHAINS_KEY = new UnicodeString("chains");
     public static final UnicodeString CERTIFICATE_BUNDLE = new UnicodeString("certificate_bundle");
     public static final UnicodeString DER_CERTIFICATE_CHAINS =
@@ -83,6 +84,9 @@ public class ConfirmCertificates {
     /** The error reason if any. */
     private Optional<String> errorReason;
 
+    /** The stack trace if captured. */
+    private Optional<String> stackTrace;
+
     private Optional<Payload> payload;
 
     /** Whether the instance is an error instance. */
@@ -91,10 +95,12 @@ public class ConfirmCertificates {
     private ConfirmCertificates(
             String halInstance,
             Optional<String> errorReason,
+            Optional<String> stackTrace,
             Optional<Payload> payload,
             boolean isError) {
         this.halInstance = (halInstance == null || halInstance.isEmpty()) ? "unknown" : halInstance;
         this.errorReason = errorReason;
+        this.stackTrace = stackTrace;
         this.payload = payload;
         this.isError = isError;
     }
@@ -104,11 +110,12 @@ public class ConfirmCertificates {
                 halInstance,
                 Optional.empty(),
                 Optional.empty(),
+                Optional.empty(),
                 /* isError= */ false);
     }
 
     public static ConfirmCertificates createError(
-            String halInstance, String reason, Payload payload) {
+            String halInstance, String reason, String stackTrace, Payload payload) {
         // Maximum length of the reason allowed by the server is 256.
         if (reason != null && reason.length() > 256) {
             reason = reason.substring(0, 256);
@@ -116,6 +123,7 @@ public class ConfirmCertificates {
         return new ConfirmCertificates(
                 halInstance,
                 Optional.ofNullable(reason),
+                Optional.ofNullable(stackTrace),
                 Optional.ofNullable(payload),
                 /* isError= */ true);
     }
@@ -126,6 +134,7 @@ public class ConfirmCertificates {
         if (isError) {
             Map errorInfo = new Map();
             errorReason.ifPresent(r -> errorInfo.put(REASON_KEY, new UnicodeString(r)));
+            stackTrace.ifPresent(s -> errorInfo.put(STACK_TRACE_KEY, new UnicodeString(s)));
             payload.ifPresent(p -> errorInfo.put(p.getLabel(), p.getValue()));
             confirmCertificatesInfo.put(ERROR_INFO_KEY, errorInfo);
         }
