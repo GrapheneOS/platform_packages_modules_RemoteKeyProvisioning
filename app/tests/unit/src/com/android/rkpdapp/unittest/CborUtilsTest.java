@@ -19,7 +19,6 @@ package com.android.rkpdapp.unittest;
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 
 import android.content.Context;
@@ -153,6 +152,10 @@ public class CborUtilsTest {
 
     @Test
     public void testCreateCertificateRequest() throws Exception {
+        Map unverifiedDeviceInfo = new Map();
+        unverifiedDeviceInfo
+                .put(new UnicodeString("fingerprint"), new UnicodeString(Build.FINGERPRINT));
+
         new CborEncoder(mBaos).encode(new CborBuilder()
                 .addMap()
                     .put("a", "b")
@@ -188,7 +191,7 @@ public class CborUtilsTest {
                                                   challenge,
                                                   protectedDataPayload,
                                                   macedKeysToSign,
-                                                  CborUtils.buildUnverifiedDeviceInfo());
+                                                  unverifiedDeviceInfo);
         ByteArrayInputStream bais = new ByteArrayInputStream(certReq);
         List<DataItem> dataItems = new CborDecoder(bais).decode();
         assertEquals(1, dataItems.size());
@@ -209,16 +212,6 @@ public class CborUtilsTest {
         assertEquals(MajorType.ARRAY, dataItems.get(2).getMajorType());
         // MacedKeysToSign
         assertEquals(MajorType.ARRAY, dataItems.get(3).getMajorType());
-    }
-
-    @Test
-    public void testBuildUnverifiedDeviceInfo() {
-        Map devInfo = CborUtils.buildUnverifiedDeviceInfo();
-        assertEquals("Unverified device info only has one entry.", 1, devInfo.getKeys().size());
-        DataItem fingerprint = devInfo.get(new UnicodeString("fingerprint"));
-        assertNotNull("Device info doesn't contain fingerprint", fingerprint);
-        assertEquals(MajorType.UNICODE_STRING, fingerprint.getMajorType());
-        assertEquals(Build.FINGERPRINT, fingerprint.toString());
     }
 
     @Test

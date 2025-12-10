@@ -16,6 +16,7 @@
 
 package com.android.rkpdapp.interfaces;
 
+import android.content.Context;
 import android.hardware.security.keymint.DeviceInfo;
 import android.hardware.security.keymint.IRemotelyProvisionedComponent;
 import android.hardware.security.keymint.MacedPublicKey;
@@ -35,7 +36,9 @@ import com.android.rkpdapp.database.RkpKey;
 import com.android.rkpdapp.metrics.ProvisioningAttempt;
 import com.android.rkpdapp.utils.CborUtils;
 import com.android.rkpdapp.utils.StopWatch;
+import com.android.rkpdapp.utils.UnverifiedDeviceInfo;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Provides convenience methods for interfacing with the IRemotelyProvisionedComponent
@@ -114,9 +117,21 @@ public class SystemInterface {
      * @param geekResponse Contains the challenge and GEEK chain for older implementations. Only has
      *                    challenge for the newer ones.
      * @param keysToSign array of keys to be signed.
+     * @param context The Android context.
      */
     public byte[] generateCsr(ProvisioningAttempt metrics, GeekResponse geekResponse,
+            List<RkpKey> keysToSign, Context context) throws CborException, RkpdException {
+        return generateCsr(metrics, geekResponse, keysToSign, Optional.ofNullable(context));
+    }
+
+    public byte[] generateCsr(ProvisioningAttempt metrics, GeekResponse geekResponse,
             List<RkpKey> keysToSign) throws CborException, RkpdException {
+        return generateCsr(metrics, geekResponse, keysToSign, Optional.empty());
+    }
+
+    private byte[] generateCsr(ProvisioningAttempt metrics, GeekResponse geekResponse,
+            List<RkpKey> keysToSign, Optional<Context> context)
+            throws CborException, RkpdException {
         byte[] challenge = geekResponse.getChallenge();
         byte[] csrTag;
         MacedPublicKey[] macedKeysToSign = keysToSign.stream()
@@ -147,7 +162,7 @@ public class SystemInterface {
                             challenge,
                             protectedData.protectedData,
                             CborUtils.encodeCbor(mac0Message),
-                            CborUtils.buildUnverifiedDeviceInfo());
+                            new UnverifiedDeviceInfo(context).buildMap());
                 } catch (CborException | RkpdException e) {
                     Log.e(TAG, "Failed to parse/build CBOR", e);
                     metrics.setStatus(ProvisioningAttempt.Status.GENERATE_CSR_FAILED);
@@ -157,7 +172,7 @@ public class SystemInterface {
                 byte[] csrBytes = mBinder.generateCertificateRequestV2(macedKeysToSign, challenge);
                 Array array = (Array) CborUtils.decodeCbor(csrBytes, "CSR request",
                         MajorType.ARRAY);
-                array.add(CborUtils.buildUnverifiedDeviceInfo());
+                array.add(new UnverifiedDeviceInfo(context).buildMap());
                 return CborUtils.encodeCbor(array);
             }
         } catch (RemoteException e) {

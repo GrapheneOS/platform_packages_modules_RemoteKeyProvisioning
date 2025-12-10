@@ -176,7 +176,7 @@ public class CborUtils {
      * IRemotelyProvisionedComponent HAL AIDL files.
      */
     public static byte[] buildCertificateRequest(byte[] deviceInfo, byte[] challenge,
-            byte[] protectedData, byte[] macedKeysToSign, Map unverifiedDeviceInfo)
+            byte[] protectedData, byte[] macedKeysToSign, Map unverifiedDeviceInfoMap)
             throws RkpdException {
         // This CBOR library doesn't support adding already serialized CBOR structures into a
         // CBOR builder. Because of this, we have to first deserialize the provided parameters
@@ -189,7 +189,7 @@ public class CborUtils {
                     MajorType.ARRAY);
             Map verifiedDeviceInfoMap = (Map) decodeCbor(deviceInfo, "DeviceInfo", MajorType.MAP);
 
-            if (unverifiedDeviceInfo.get(new UnicodeString("fingerprint")) == null) {
+            if (unverifiedDeviceInfoMap.get(new UnicodeString("fingerprint")) == null) {
                 Log.e(TAG, "UnverifiedDeviceInfo is missing a fingerprint entry");
                 throw new RkpdException(RkpdException.ErrorCode.INTERNAL_ERROR,
                         "UnverifiedDeviceInfo missing fingerprint entry.");
@@ -200,7 +200,7 @@ public class CborUtils {
                     .addArray()
                         .addArray()
                             .add(verifiedDeviceInfoMap)
-                            .add(unverifiedDeviceInfo)
+                            .add(unverifiedDeviceInfoMap)
                             .end()
                         .add(challenge)
                         .add(protectedDataArray)
@@ -212,17 +212,6 @@ public class CborUtils {
             Log.e(TAG, "Malformed CBOR", e);
             throw new RkpdException(RkpdException.ErrorCode.INTERNAL_ERROR, "Malformed CBOR", e);
         }
-    }
-
-    /**
-     * Produce a CBOR Map object which contains the unverified device information for a certificate
-     * signing request.
-     *
-     * @return the CBOR Map object.
-     */
-    public static Map buildUnverifiedDeviceInfo() {
-        return new Map()
-                .put(new UnicodeString("fingerprint"), new UnicodeString(Build.FINGERPRINT));
     }
 
     /**

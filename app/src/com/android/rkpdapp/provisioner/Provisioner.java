@@ -288,7 +288,9 @@ public class Provisioner {
             throw new RkpdException(RkpdException.ErrorCode.INTERNAL_ERROR,
                     "Request at least 1 key to be signed. Num requested: " + batch_size);
         }
-        byte[] certRequest = systemInterface.generateCsr(metrics, response, keysGenerated);
+        byte[] certRequest = Flags.reportDeviceReset() ?
+            systemInterface.generateCsr(metrics, response, keysGenerated, mContext) :
+            systemInterface.generateCsr(metrics, response, keysGenerated);
         if (certRequest == null) {
             throw new RkpdException(RkpdException.ErrorCode.INTERNAL_ERROR,
                     "Failed to serialize payload");
