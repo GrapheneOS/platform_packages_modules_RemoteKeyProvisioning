@@ -29,8 +29,10 @@ import androidx.work.ListenableWorker;
 import androidx.work.testing.TestWorkerBuilder;
 
 import com.android.compatibility.common.util.PropertyUtil;
+import com.android.rkpdapp.interfaces.ServerInterface;
 import com.android.rkpdapp.provisioner.WidevineProvisioner;
 
+import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -52,6 +54,15 @@ public class WidevineHostTestHelperTests {
             Log.i(TAG, "Device doesn't support widevine, all tests should pass.");
             sSupportsWidevine = false;
         }
+    }
+
+    @Before
+    public void setUp() {
+        assume()
+                .withMessage("Widevine Integration tests rely on network availability.")
+                .that(
+                    ServerInterface.isNetworkConnected(ApplicationProvider.getApplicationContext()))
+                .isTrue();
     }
 
     private boolean isProvisioning4() {

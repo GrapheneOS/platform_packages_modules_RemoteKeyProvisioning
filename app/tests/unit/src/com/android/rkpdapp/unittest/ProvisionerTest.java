@@ -349,7 +349,7 @@ public class ProvisionerTest {
                             RkpdException.class,
                             () -> mProvisioner.provisionKeys(atom, mockSystem, geekResponse));
             assertThat(e.getErrorCode()).isEqualTo(RkpdException.ErrorCode.INTERNAL_ERROR);
-            assertThat(e).hasMessageThat().contains("Could not validate certificate chain");
+            assertThat(e).hasMessageThat().contains("Certificate chain is empty");
 
             // Verify that confirmCertificates was called and device config was reset since we sent
             // an error instance of ConfirmCertificates.
