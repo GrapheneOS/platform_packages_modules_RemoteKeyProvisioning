@@ -480,6 +480,7 @@ public class ServerInterfaceTest {
                 ConfirmCertificates.createError(
                         "strongbox",
                         "error",
+                        "stackTrace",
                         new ConfirmCertificates.DerCertificateChains(new byte[] {1, 2, 3}));
 
         // Does not throw.
@@ -561,6 +562,7 @@ public class ServerInterfaceTest {
                     ConfirmCertificates.createError(
                             "strongbox",
                             "error",
+                            "stackTrace",
                             new ConfirmCertificates.DerCertificateChains(new byte[] {1, 2, 3})),
                     "requestId",
                     ProvisioningAttempt.createScheduledAttemptMetrics(sContext));
