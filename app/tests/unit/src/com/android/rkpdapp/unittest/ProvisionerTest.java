@@ -288,6 +288,8 @@ public class ProvisionerTest {
                     RAW_PUBLIC_KEY1);
             doReturn(rkpKey1).when(mockSystem).generateKey(eq(atom));
             doReturn(new byte[1]).when(mockSystem).generateCsr(eq(atom), notNull(), notNull());
+            doReturn(new byte[1]).when(mockSystem).generateCsr(
+                    eq(atom), notNull(), notNull(), any(Context.class));
             doReturn("default").when(mockSystem).getHalInstanceName();
 
 
@@ -339,6 +341,8 @@ public class ProvisionerTest {
             doReturn(13).when(mockSystem).getBatchSize();
             doReturn(FAKE_RKP_KEY).when(mockSystem).generateKey(eq(atom));
             doReturn(new byte[1]).when(mockSystem).generateCsr(eq(atom), notNull(), notNull());
+            doReturn(new byte[1]).when(mockSystem).generateCsr(
+                    eq(atom), notNull(), notNull(), any(Context.class));
             doReturn("strongbox").when(mockSystem).getHalInstanceName();
 
             GeekResponse geekResponse = new GeekResponse();
@@ -380,6 +384,8 @@ public class ProvisionerTest {
             doReturn(13).when(mockSystem).getBatchSize();
             doReturn(FAKE_RKP_KEY).when(mockSystem).generateKey(eq(atom));
             doReturn(new byte[1]).when(mockSystem).generateCsr(eq(atom), notNull(), notNull());
+            doReturn(new byte[1]).when(mockSystem).generateCsr(
+                    eq(atom), notNull(), notNull(), any(Context.class));
             doReturn("default").when(mockSystem).getHalInstanceName();
 
             GeekResponse geekResponse = new GeekResponse();
@@ -430,6 +436,8 @@ public class ProvisionerTest {
                     RAW_PUBLIC_KEY1);
             doReturn(rkpKey).when(mockSystem).generateKey(eq(atom));
             doReturn(new byte[1]).when(mockSystem).generateCsr(eq(atom), notNull(), notNull());
+            doReturn(new byte[1]).when(mockSystem).generateCsr(
+                    eq(atom), notNull(), notNull(), any(Context.class));
             doReturn("strongbox").when(mockSystem).getHalInstanceName();
 
             GeekResponse geekResponse = new GeekResponse();
@@ -483,6 +491,8 @@ public class ProvisionerTest {
             doReturn(13).when(mockSystem).getBatchSize();
             doReturn(FAKE_RKP_KEY).when(mockSystem).generateKey(eq(atom));
             doReturn(new byte[1]).when(mockSystem).generateCsr(eq(atom), notNull(), notNull());
+            doReturn(new byte[1]).when(mockSystem).generateCsr(
+                    eq(atom), notNull(), notNull(), any(Context.class));
             doReturn("some-other-hal").when(mockSystem).getHalInstanceName();
 
             GeekResponse geekResponse = new GeekResponse();
@@ -531,6 +541,8 @@ public class ProvisionerTest {
                     RAW_PUBLIC_KEY1);
             doReturn(rkpKey).when(mockSystem).generateKey(eq(atom));
             doReturn(new byte[1]).when(mockSystem).generateCsr(eq(atom), notNull(), notNull());
+            doReturn(new byte[1]).when(mockSystem).generateCsr(
+                    eq(atom), notNull(), notNull(), any(Context.class));
             doReturn("default").when(mockSystem).getHalInstanceName();
 
             GeekResponse geekResponse = new GeekResponse();
@@ -585,6 +597,8 @@ public class ProvisionerTest {
             doReturn(1).when(mockSystem).getBatchSize();
             doReturn(FAKE_RKP_KEY).when(mockSystem).generateKey(eq(atom));
             doReturn(new byte[1]).when(mockSystem).generateCsr(eq(atom), notNull(), notNull());
+            doReturn(new byte[1]).when(mockSystem).generateCsr(
+                    eq(atom), notNull(), notNull(), any(Context.class));
             doReturn("strongbox").when(mockSystem).getHalInstanceName();
 
             GeekResponse geekResponse = new GeekResponse();
