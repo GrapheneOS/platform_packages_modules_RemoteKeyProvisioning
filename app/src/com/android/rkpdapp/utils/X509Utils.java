@@ -137,6 +137,15 @@ public class X509Utils {
             CertPathValidator validator = CertPathValidator.getInstance("PKIX");
             PKIXParameters parameters = new PKIXParameters(trustedAnchors);
             parameters.setRevocationEnabled(false);
+            // To avoid issues with incorrect system time on the device, we need to pick a
+            // validation date when the certificate chain was known to be valid. The earliest
+            // time the chain could have been valid is when the last certificate in the chain
+            // became valid.
+            Date validationDate = Arrays.stream(certChain)
+                    .map(X509Certificate::getNotBefore)
+                    .max(Date::compareTo)
+                    .get();
+            parameters.setDate(validationDate);
             validator.validate(fact.generateCertPath(Arrays.asList(certChain)), parameters);
         } catch (CertificateException | CertPathValidatorException e) {
             throw new RkpdException(RkpdException.ErrorCode.INTERNAL_ERROR,

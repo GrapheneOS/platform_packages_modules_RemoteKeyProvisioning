@@ -182,6 +182,66 @@ public class X509UtilsTest {
         return (X509Certificate) certFactory.generateCertificate(in);
     }
 
+    @Test
+    public void testFormatX509CertsWithExpiredChain() throws Exception {
+        KeyPair root = generateEcdsaKeyPair();
+        KeyPair leaf = generateEcdsaKeyPair();
+
+        // Root is valid for a 20 day period, starting 30 days ago.
+        X509Certificate rootCert = signPublicKey(root, root.getPublic(),
+                Instant.now().minus(Duration.ofDays(30)),
+                Instant.now().minus(Duration.ofDays(10)));
+        // Leaf is valid for a 4 day period, starting 15 days ago.
+        X509Certificate leafCert = signPublicKey(root, leaf.getPublic(),
+                Instant.now().minus(Duration.ofDays(15)),
+                Instant.now().minus(Duration.ofDays(11)));
+
+        X509Certificate[] certs = new X509Certificate[]{leafCert, rootCert};
+
+        // This should not throw, because validation is pinned to the latest 'notBefore' date.
+        // If the production code is changed to use the current system time, this test
+        // will fail with a CertificateExpiredException.
+        X509Utils.formatX509Certs(certChainToByteArray(certs));
+    }
+
+    @Test
+    public void testFormatX509CertsWithFutureDates() throws Exception {
+        KeyPair root = generateEcdsaKeyPair();
+        KeyPair leaf = generateEcdsaKeyPair();
+
+        // Root is valid for a 20 day period, starting 10 days in the future.
+        X509Certificate rootCert = signPublicKey(root, root.getPublic(),
+                Instant.now().plus(Duration.ofDays(10)),
+                Instant.now().plus(Duration.ofDays(30)));
+        // Leaf is valid for a 4 day period, starting 15 days in the future.
+        X509Certificate leafCert = signPublicKey(root, leaf.getPublic(),
+                Instant.now().plus(Duration.ofDays(15)),
+                Instant.now().plus(Duration.ofDays(19)));
+
+        X509Certificate[] certs = new X509Certificate[]{leafCert, rootCert};
+
+        // This should not throw, as the certificates are valid in a future window.
+        X509Utils.formatX509Certs(certChainToByteArray(certs));
+    }
+
+    @Test
+    public void testFormatX509CertsFailsForExpiredChain() throws Exception {
+        KeyPair root = generateEcdsaKeyPair();
+        KeyPair leaf = generateEcdsaKeyPair();
+        // NotBefore for both certs is Now.
+        X509Certificate rootCert = signPublicKey(root, root.getPublic(),
+                Instant.now().minusSeconds(1)); // Expired.
+        X509Certificate leafCert = signPublicKey(root, leaf.getPublic(),
+                Instant.now().minusSeconds(1)); // Expired.
+        X509Certificate[] certs = new X509Certificate[]{leafCert, rootCert};
+
+        RkpdException e = assertThrows(RkpdException.class,
+                () -> X509Utils.formatX509Certs(certChainToByteArray(certs)));
+
+        assertThat(e).hasMessageThat().contains("Certificate chain validation failed.");
+        assertThat(e.getCause()).hasMessageThat().contains("timestamp check failed");
+    }
+
     private byte[] certChainToByteArray(X509Certificate[] certChain) throws Exception {
         ByteArrayOutputStream os = new ByteArrayOutputStream();
         for (X509Certificate cert : certChain) {
