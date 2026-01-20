@@ -28,6 +28,7 @@ import android.hardware.security.keymint.IRemotelyProvisionedComponent;
 import android.os.Process;
 import android.os.ServiceManager;
 import android.os.SystemProperties;
+import android.platform.test.annotations.RequiresFlagsEnabled;
 import android.security.KeyStoreException;
 import android.security.keystore.KeyGenParameterSpec;
 import android.system.keystore2.ResponseCode;
@@ -35,6 +36,8 @@ import android.util.Log;
 import androidx.test.core.app.ApplicationProvider;
 import androidx.work.ListenableWorker;
 import androidx.work.testing.TestWorkerBuilder;
+import com.android.rkpd.flags.Flags;
+import com.android.rkpdapp.ThreadPool;
 import com.android.rkpdapp.database.ProvisionedKey;
 import com.android.rkpdapp.database.ProvisionedKeyDao;
 import com.android.rkpdapp.database.RkpdDatabase;
@@ -59,9 +62,14 @@ import java.security.cert.X509Certificate;
 import java.security.spec.ECGenParameterSpec;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -379,6 +387,47 @@ public class KeystoreIntegrationTest {
         }
     }
 
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_FEEDBACK_LOOP)
+    public void testLargeNumberOfAttestationRequests_doesNotDeadlock() throws Exception {
+        // Spin up more threads than the number of keystore threads (20), but less than the number
+        // of threads in the RKPD thread pool (32).
+        final int numThreads = ThreadPool.NUMBER_OF_THREADS - 1;
+        final String baseAlias = "testKey_" + mName.getMethodName();
+        ExecutorService executor = Executors.newFixedThreadPool(numThreads);
+        List<Future<?>> futures = new ArrayList<>();
+        CountDownLatch latch = new CountDownLatch(1);
+
+        for (int i = 0; i < numThreads; i++) {
+            final String alias = baseAlias + "_" + i;
+            futures.add(
+                    executor.submit(
+                            () -> {
+                                try {
+                                    latch.await();
+                                    // This will trigger provisioning where feedback loop will try
+                                    // to generate a key, which will request a key from RKPD, which
+                                    // requires a thread. When all threads are busy provisioning,
+                                    // this leads to a deadlock.
+                                    createKeystoreKeyBackedByRkp(alias);
+                                } catch (Exception e) {
+                                    // Exceptions are expected for some of the threads because they
+                                    // will time out waiting for a key. The important thing is that
+                                    // we don't deadlock.
+                                    Log.i(TAG, "Caught expected exception for alias " + alias, e);
+                                }
+                            }));
+        }
+
+        // Make sure all these threads send their key creation requests at the exact same moment.
+        latch.countDown();
+        executor.shutdown();
+
+        // If we deadlock, this will time out.
+        boolean terminated = executor.awaitTermination(30, TimeUnit.SECONDS);
+        assertThat(terminated).isEqualTo(true);
+    }
+
     private void provisionFreshKeys() {
         PeriodicProvisioner provisioner = TestWorkerBuilder.from(
                 sContext,
@@ -388,16 +437,24 @@ public class KeystoreIntegrationTest {
     }
 
     private void createKeystoreKeyBackedByRkp() throws Exception {
+        createKeystoreKeyBackedByRkp(getTestKeyAlias());
+    }
+
+    private void createKeystoreKeyBackedByRkp(String alias) throws Exception {
         try (SystemPropertySetter ignored = SystemPropertySetter.setRkpOnly(mInstanceName)) {
-            createKeystoreKey();
+            createKeystoreKey(alias);
         }
     }
 
     private void createKeystoreKey() throws Exception {
-        KeyPairGenerator generator = KeyPairGenerator.getInstance(KEY_ALGORITHM_EC,
-                "AndroidKeyStore");
+        createKeystoreKey(getTestKeyAlias());
+    }
+
+    private void createKeystoreKey(String alias) throws Exception {
+        KeyPairGenerator generator =
+                KeyPairGenerator.getInstance(KEY_ALGORITHM_EC, "AndroidKeyStore");
         generator.initialize(
-                new KeyGenParameterSpec.Builder(getTestKeyAlias(), PURPOSE_SIGN)
+                new KeyGenParameterSpec.Builder(alias, PURPOSE_SIGN)
                         .setAlgorithmParameterSpec(new ECGenParameterSpec("secp256r1"))
                         .setAttestationChallenge((new byte[64]))
                         .setIsStrongBoxBacked(isStrongBoxTest())

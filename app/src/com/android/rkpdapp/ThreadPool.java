@@ -25,9 +25,10 @@ import java.util.concurrent.TimeUnit;
  * This class provides a global thread pool to RKPD app.
  */
 public class ThreadPool {
-    public static final int NUMBER_OF_THREADS = 4;
+    public static final int NUMBER_OF_THREADS = 32;
+
     /*
-     * This thread pool has a minimum of 0 threads and a maximum of up to 4. If
+     * This thread pool has a minimum of 0 threads and a maximum of up to 32. If
      * a thread is idle for more than 60 seconds, it is terminated. RKPD is idle
      * most of the time. So, this way we can don't keep unused threads around.
      */
