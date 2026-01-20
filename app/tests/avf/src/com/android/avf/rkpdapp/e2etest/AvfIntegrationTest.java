@@ -18,11 +18,9 @@ package com.android.avf.rkpdapp.e2etest;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
-import static com.google.common.truth.TruthJUnit.assume;
 
 import android.hardware.security.keymint.IRemotelyProvisionedComponent;
 import android.os.Process;
-import android.os.SystemProperties;
 
 import androidx.work.ListenableWorker;
 import androidx.work.testing.TestWorkerBuilder;
@@ -32,7 +30,6 @@ import com.android.microdroid.test.device.MicrodroidDeviceTestBase;
 import com.android.rkpdapp.database.ProvisionedKey;
 import com.android.rkpdapp.database.ProvisionedKeyDao;
 import com.android.rkpdapp.database.RkpdDatabase;
-import com.android.rkpdapp.interfaces.ServerInterface;
 import com.android.rkpdapp.interfaces.ServiceManagerInterface;
 import com.android.rkpdapp.interfaces.SystemInterface;
 import com.android.rkpdapp.provisioner.PeriodicProvisioner;
@@ -74,15 +71,7 @@ public class AvfIntegrationTest extends MicrodroidDeviceTestBase {
 
     @Before
     public void setUp() throws Exception {
-        assume().withMessage("AVF key provisioning is not supported on CF.")
-                .that(isCuttlefish())
-                .isFalse();
-        assume().withMessage("The RKP server hostname is not configured -- assume RKP disabled.")
-                .that(SystemProperties.get("remote_provisioning.hostname"))
-                .isNotEmpty();
-        assume().withMessage("RKP Integration tests rely on network availability.")
-                .that(ServerInterface.isNetworkConnected(getContext()))
-                .isTrue();
+        assumeVmAttestationSupportedWithInternet();
 
         mPeriodicProvisionerLock = PeriodicProvisioner.lock();
         Settings.clearPreferences(getContext());
