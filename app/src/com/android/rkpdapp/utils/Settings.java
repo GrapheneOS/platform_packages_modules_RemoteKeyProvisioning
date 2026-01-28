@@ -20,10 +20,9 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.SystemProperties;
 import android.util.Log;
-
+import com.android.rkpd.flags.Flags;
 import com.android.rkpdapp.GeekResponse;
 import com.android.rkpdapp.database.InstantConverter;
-
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.time.Duration;
@@ -190,6 +189,9 @@ public class Settings {
         }
         if (url != null && !sharedPref.getString(KEY_URL, "").equals(url)) {
             editor.putString(KEY_URL, url);
+            wereUpdatesMade = true;
+        } else if (Flags.enableFeedbackLoop() && url == null && sharedPref.contains(KEY_URL)) {
+            editor.remove(KEY_URL); // Reset to the default URL by removing the stored value.
             wereUpdatesMade = true;
         }
         if (wereUpdatesMade) {
