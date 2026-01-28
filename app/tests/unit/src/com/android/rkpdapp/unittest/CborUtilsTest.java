@@ -19,10 +19,12 @@ package com.android.rkpdapp.unittest;
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 
 import android.content.Context;
 import android.os.Build;
+import android.os.SystemProperties;
 import android.platform.test.annotations.Presubmit;
 import android.platform.test.annotations.RequiresFlagsEnabled;
 import android.platform.test.flag.junit.CheckFlagsRule;
@@ -38,6 +40,7 @@ import co.nstant.in.cbor.model.DataItem;
 import co.nstant.in.cbor.model.MajorType;
 import co.nstant.in.cbor.model.Map;
 import co.nstant.in.cbor.model.UnicodeString;
+import co.nstant.in.cbor.model.UnsignedInteger;
 import com.android.rkpd.flags.Flags;
 import com.android.rkpdapp.RkpdException;
 import com.android.rkpdapp.utils.CborUtils;
@@ -218,19 +221,45 @@ public class CborUtilsTest {
     public void testBuildProvisioningInfo() throws CborException {
         Context context = ApplicationProvider.getApplicationContext();
         Settings.generateAndSetId(context);
+        final String hostname = "some-hostname.com";
+        SystemProperties.set("remote_provisioning.hostname", hostname);
 
         byte[] cbor = CborUtils.buildProvisioningInfo(context);
-        DataItem info = new CborDecoder(new ByteArrayInputStream(cbor)).decode().get(0);
+        DataItem dataItem = new CborDecoder(new ByteArrayInputStream(cbor)).decode().get(0);
 
-        assertEquals(
-                info,
-                new CborBuilder()
-                    .addMap()
-                        .put("fingerprint", Build.FINGERPRINT)
-                        .put("id", Settings.getId(context))
-                        .put("version", context.getApplicationInfo().compileSdkVersion)
-                        .end()
-                    .build()
-                    .get(0));
+        assertEquals(MajorType.MAP, dataItem.getMajorType());
+        Map info = (Map) dataItem;
+
+        assertEquals(4, info.getKeys().size());
+        assertEquals(new UnicodeString(Build.FINGERPRINT),
+                info.get(new UnicodeString("fingerprint")));
+        assertEquals(new UnsignedInteger(Settings.getId(context)),
+                info.get(new UnicodeString("id")));
+        assertEquals(new UnsignedInteger(context.getApplicationInfo().compileSdkVersion),
+                info.get(new UnicodeString("version")));
+        assertEquals(new UnicodeString(hostname),
+                info.get(new UnicodeString("default_hostname")));
+    }
+
+    @Test
+    public void testBuildProvisioningInfoNoHostname() throws CborException {
+        Context context = ApplicationProvider.getApplicationContext();
+        Settings.generateAndSetId(context);
+        SystemProperties.set("remote_provisioning.hostname", ""); // Clear.
+
+        byte[] cbor = CborUtils.buildProvisioningInfo(context);
+        DataItem dataItem = new CborDecoder(new ByteArrayInputStream(cbor)).decode().get(0);
+
+        assertEquals(MajorType.MAP, dataItem.getMajorType());
+        Map info = (Map) dataItem;
+
+        assertEquals(3, info.getKeys().size());
+        assertEquals(new UnicodeString(Build.FINGERPRINT),
+                info.get(new UnicodeString("fingerprint")));
+        assertEquals(new UnsignedInteger(Settings.getId(context)),
+                info.get(new UnicodeString("id")));
+        assertEquals(new UnsignedInteger(context.getApplicationInfo().compileSdkVersion),
+                info.get(new UnicodeString("version")));
+        assertNull(info.get(new UnicodeString("default_hostname")));
     }
 }
