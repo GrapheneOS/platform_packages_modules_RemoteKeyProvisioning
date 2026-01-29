@@ -32,6 +32,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
@@ -53,8 +54,6 @@ public class WidevineProvisioner extends Worker {
     private static final String PROVISIONING_MODEL_PROPERTY = "provisioningModel";
     private static final String PROVISIONING_MODEL_PROV4 = "BootCertificateChain";
     private static final String PROVISIONING_MODEL_SIGMA = "Sigma";
-
-    private static final byte[] EMPTY_BODY = new byte[0];
 
     private static final Map<String, String> REQ_PROPERTIES = new HashMap<>();
     static {
@@ -207,28 +206,26 @@ public class WidevineProvisioner extends Worker {
     }
 
     private byte[] fetchWidevineCertificate(MediaDrm.ProvisionRequest req) throws IOException {
-        final byte[] data = req.getData();
-        final String signedUrl = String.format(
-                "%s&signedRequest=%s",
-                req.getDefaultUrl(),
-                new String(data));
-        return sendNetworkRequest(signedUrl);
+        return sendNetworkRequest(req.getDefaultUrl(), req.getData());
     }
 
-    private byte[] sendNetworkRequest(String url) throws IOException {
+    private byte[] sendNetworkRequest(String url, byte[] data) throws IOException {
         HttpURLConnection con = (HttpURLConnection) new URL(url).openConnection();
         con.setRequestMethod("POST");
         con.setDoOutput(true);
         con.setDoInput(true);
         con.setConnectTimeout(TIMEOUT_MS);
         con.setReadTimeout(TIMEOUT_MS);
-        con.setChunkedStreamingMode(0);
+
+        final byte[] jsonBodyBytes = packageSignedRequestJson(data);
+        con.setFixedLengthStreamingMode(jsonBodyBytes.length);
+
         for (Map.Entry<String, String> prop : REQ_PROPERTIES.entrySet()) {
             con.setRequestProperty(prop.getKey(), prop.getValue());
         }
 
         try (OutputStream os = con.getOutputStream()) {
-            os.write(EMPTY_BODY);
+            os.write(jsonBodyBytes);
         }
         if (con.getResponseCode() != 200) {
             Log.e(TAG, "Server request for WV certs failed. Error: " + con.getResponseCode());
@@ -248,5 +245,12 @@ public class WidevineProvisioner extends Worker {
             throw new IOException("WV server returned an empty response.");
         }
         return respData;
+    }
+
+    private byte[] packageSignedRequestJson(byte[] requestData) {
+        String payload = "{ \"signedRequest\": \""
+                + new String(requestData, StandardCharsets.US_ASCII)
+                + "\"}";
+        return payload.getBytes(StandardCharsets.US_ASCII);
     }
 }
