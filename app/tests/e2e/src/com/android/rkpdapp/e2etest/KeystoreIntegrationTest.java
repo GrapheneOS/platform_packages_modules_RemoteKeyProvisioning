@@ -343,8 +343,9 @@ public class KeystoreIntegrationTest {
 
     @Test
     public void testRetryNeverWhenDeviceNotRegistered() throws Exception {
-        try (FakeRkpServer server = new FakeRkpServer(FakeRkpServer.Response.FETCH_EEK_OK,
-                     FakeRkpServer.Response.SIGN_CERTS_DEVICE_UNREGISTERED)) {
+        try (FakeRkpServer server = new FakeRkpServer(
+                FakeRkpServer.Response.FETCH_EEK_OK_WITH_URL,
+                FakeRkpServer.Response.SIGN_CERTS_DEVICE_UNREGISTERED)) {
             Settings.setDeviceConfig(sContext, 1, Duration.ofDays(1), server.getUrl());
             createKeystoreKeyBackedByRkp();
             Assert.fail("Expected a keystore exception");

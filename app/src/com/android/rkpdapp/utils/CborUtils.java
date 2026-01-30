@@ -22,6 +22,7 @@ import android.content.Context;
 import android.content.pm.PackageManager;
 import android.hardware.security.keymint.MacedPublicKey;
 import android.os.Build;
+import android.os.SystemProperties;
 import android.util.Log;
 import co.nstant.in.cbor.CborBuilder;
 import co.nstant.in.cbor.CborDecoder;
@@ -143,13 +144,17 @@ public class CborUtils {
     public static byte[] buildProvisioningInfo(Context context) {
         try {
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            new CborEncoder(baos).encode(new CborBuilder()
-                    .addMap()
-                        .put("fingerprint", Build.FINGERPRINT)
-                        .put("id", Settings.getId(context))
-                        .put("version", getPackageVersion(context))
-                        .end()
-                    .build());
+            CborBuilder builder = new CborBuilder();
+            co.nstant.in.cbor.builder.MapBuilder<CborBuilder> mapBuilder = builder.addMap()
+                    .put("fingerprint", Build.FINGERPRINT)
+                    .put("id", Settings.getId(context))
+                    .put("version", getPackageVersion(context));
+
+            final String hostname = SystemProperties.get("remote_provisioning.hostname");
+            if (hostname != null && !hostname.isEmpty()) {
+                mapBuilder.put("default_hostname", hostname);
+            }
+            new CborEncoder(baos).encode(mapBuilder.end().build());
             return baos.toByteArray();
         } catch (CborException e) {
             Log.e(TAG, "CBOR serialization failed.", e);

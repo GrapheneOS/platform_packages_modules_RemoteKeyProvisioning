@@ -20,16 +20,25 @@ import static com.google.common.truth.Truth.assertWithMessage;
 
 import android.security.NetworkSecurityPolicy;
 import android.util.Base64;
+import co.nstant.in.cbor.CborDecoder;
+import co.nstant.in.cbor.CborEncoder;
+import co.nstant.in.cbor.model.Array;
+import co.nstant.in.cbor.model.DataItem;
+import co.nstant.in.cbor.model.UnicodeString;
+import com.android.rkpdapp.GeekResponse;
 import com.google.protobuf.ByteString;
 import fi.iki.elonen.NanoHTTPD;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
 
 public class FakeRkpServer implements AutoCloseable {
-    private static final String EEK_RESPONSE_OK =
+    public static final String EEK_RESPONSE_OK =
             "g4KCAYOEQ6EBJqBYTaUBAgMmIAEhWCD3FIrbl/TMU+/SZBHE43UfZh+kcQxsz/oJRoB0h1TyrSJY"
                     + "IF5/W/bs5PYZzP8TN/0PociT2xgGdsRd5tdqd4bDLa+PWEAvl45C+74HLZVHhUeTQLAf1JtHpMRE"
                     + "qfKhB4cQx5/LEfS/n+g74Oc0TBX8e8N+MwX00TQ87QIEYHoV4HnTiv8khEOhASagWE2lAQIDJiAB"
@@ -71,6 +80,7 @@ public class FakeRkpServer implements AutoCloseable {
     public static class Response {
         // canned responses for :fetchEekChain
         public static final Response FETCH_EEK_OK = new Response(EEK_RESPONSE_OK);
+        public static final Response FETCH_EEK_OK_WITH_URL = new Response(0, "dynamic");
         public static final Response FETCH_EEK_RKP_DISABLED =
                 new Response(EEK_RESPONSE_RKP_DISABLED);
 
@@ -113,7 +123,22 @@ public class FakeRkpServer implements AutoCloseable {
             mMime = mime;
         }
 
-        NanoHTTPD.Response toNanoResponse() {
+        public static Response createGeekResponseWithUrl(String url) throws Exception {
+            byte[] decodedResponse = Base64.decode(FakeRkpServer.EEK_RESPONSE_OK, Base64.DEFAULT);
+            ByteArrayInputStream bais = new ByteArrayInputStream(decodedResponse);
+            List<DataItem> dataItems = new CborDecoder(bais).decode();
+            Array topLevel = (Array) dataItems.get(0);
+            co.nstant.in.cbor.model.Map config = (co.nstant.in.cbor.model.Map)
+                topLevel.getDataItems().get(2); // DataItems are mutable,
+                                                // so modify the config map in place.
+            config.put(new UnicodeString(GeekResponse.PROVISIONING_URL), new UnicodeString(url));
+
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            new CborEncoder(baos).encode(topLevel);
+            return new Response(Base64.encodeToString(baos.toByteArray(), Base64.DEFAULT));
+        }
+
+        public NanoHTTPD.Response toNanoResponse() {
             NanoHTTPD.Response.IStatus status = new NanoHTTPD.Response.IStatus() {
                 @Override
                 public String getDescription() {
@@ -182,7 +207,20 @@ public class FakeRkpServer implements AutoCloseable {
                 (session, bodySize) -> {
                     session.getInputStream().readNBytes(bodySize);
                     if (session.getUri().contains(":fetchEekChain")) {
-                        return fetchEekResponse.toNanoResponse();
+                        Response responseToServe = fetchEekResponse;
+                        if (responseToServe == Response.FETCH_EEK_OK_WITH_URL) {
+                            String url = "http://" + session.getHeaders().get("host") + "/";
+                            try {
+                                responseToServe = Response.createGeekResponseWithUrl(url);
+                            } catch (Exception e) {
+                                StringWriter stack = new StringWriter();
+                                e.printStackTrace(new PrintWriter(stack));
+                                assertWithMessage(
+                                        "Error creating geek response with dynamic URL: " + stack)
+                                        .fail();
+                            }
+                        }
+                        return responseToServe.toNanoResponse();
                     } else if (session.getUri().contains(":signCertificates")) {
                         return signCertResponse.toNanoResponse();
                     } else if (session.getUri().contains(":confirmCertificates")) {
