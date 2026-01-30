@@ -375,6 +375,7 @@ public class ServerInterface {
                             // Not really needed, but just in case.
                             .replaceFirst("%3A", ":"));
         } catch (MalformedURLException e) {
+            Settings.resetDefaultConfig(mContext);
             throw new RkpdException(RkpdException.ErrorCode.HTTP_CLIENT_ERROR, "Bad URL", e);
         }
     }
