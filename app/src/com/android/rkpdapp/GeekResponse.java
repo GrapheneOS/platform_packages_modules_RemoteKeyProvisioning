@@ -31,6 +31,7 @@ import com.android.rkpdapp.database.InstantConverter;
 import com.android.rkpdapp.utils.CborUtils;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.time.Duration;
@@ -189,11 +190,12 @@ public class GeekResponse {
             try {
                 URI uri = new URI(receivedUrl);
                 if (uri.isAbsolute()) {
+                    var unused = uri.toURL(); // Throws an exception if the URL is malformed.
                     resp.provisioningUrl = receivedUrl;
                 } else {
                     Log.e(TAG, "Ignoring relative URI received from server: " + receivedUrl);
                 }
-            } catch (URISyntaxException e) {
+            } catch (URISyntaxException | MalformedURLException e) {
                 Log.e(TAG, "Ignoring invalid URL syntax received from server: " + receivedUrl, e);
             }
         }

@@ -420,4 +420,79 @@ public class GeekResponseTest {
 
         assertNull(resp.provisioningUrl);
     }
+
+    @Test
+    public void testParseInvalidUrlValidUri() throws Exception {
+        String[] invalidUrls = {"mailto:java-net@java.sun.com", "rkp.vivo.com.cn"};
+        for (String url : invalidUrls) {
+            Map deviceConfigInvalidUrl =
+                    new Map()
+                            .put(
+                                    new UnicodeString(GeekResponse.PROVISIONING_URL),
+                                    new UnicodeString(url));
+
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            new CborEncoder(baos)
+                    .encode(
+                            new CborBuilder()
+                                    .addArray()
+                                    .addArray() // GEEK Curve to Chains
+                                    .addArray()
+                                    .add(new UnsignedInteger(GeekResponse.EC_CURVE_25519))
+                                    .add(GEEK_CHAIN_1)
+                                    .end()
+                                    .addArray()
+                                    .add(new UnsignedInteger(GeekResponse.EC_CURVE_P256))
+                                    .add(GEEK_CHAIN_2)
+                                    .end()
+                                    .end()
+                                    .add(CHALLENGE)
+                                    .add(deviceConfigInvalidUrl)
+                                    .end()
+                                    .build());
+            GeekResponse resp = GeekResponse.parse(baos.toByteArray());
+            baos.reset();
+
+            assertNull(resp.provisioningUrl);
+        }
+    }
+
+    @Test
+    public void testParseValidUrls() throws Exception {
+        String[] validUrls = {
+            "https://remoteprovisioning.googleapis.com/v1",
+            "https://rkp.vivo.com.cn/v1"
+        };
+        for (String url : validUrls) {
+            Map deviceConfigValidUrl =
+                    new Map()
+                            .put(
+                                    new UnicodeString(GeekResponse.PROVISIONING_URL),
+                                    new UnicodeString(url));
+
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            new CborEncoder(baos)
+                    .encode(
+                            new CborBuilder()
+                                    .addArray()
+                                    .addArray() // GEEK Curve to Chains
+                                    .addArray()
+                                    .add(new UnsignedInteger(GeekResponse.EC_CURVE_25519))
+                                    .add(GEEK_CHAIN_1)
+                                    .end()
+                                    .addArray()
+                                    .add(new UnsignedInteger(GeekResponse.EC_CURVE_P256))
+                                    .add(GEEK_CHAIN_2)
+                                    .end()
+                                    .end()
+                                    .add(CHALLENGE)
+                                    .add(deviceConfigValidUrl)
+                                    .end()
+                                    .build());
+            GeekResponse resp = GeekResponse.parse(baos.toByteArray());
+            baos.reset();
+
+            assertEquals(url, resp.provisioningUrl);
+        }
+    }
 }

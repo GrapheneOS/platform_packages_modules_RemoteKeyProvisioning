@@ -654,4 +654,26 @@ public class ServerInterfaceTest {
         assertThat(reason.getString()).isEqualTo(expectedReason);
         assertThat(reason.getString().length()).isEqualTo(256);
     }
+
+    @Test
+    public void malformedUrlResetsConfig() throws Exception {
+        Settings.setMaxRequestTime(sContext, 100);
+        assertThat(Settings.getUrl(sContext)).isEmpty(); // Initially unset.
+        final String badUrl = "bad url";
+
+        // Override the default config.
+        Settings.setDeviceConfig(sContext, 1 /* extraKeys */,
+                TIME_TO_REFRESH_HOURS /* expiringBy */, badUrl);
+        assertThat(Settings.getUrl(sContext)).isEqualTo(badUrl);
+
+        ProvisioningAttempt metrics =
+                ProvisioningAttempt.createScheduledAttemptMetrics(sContext);
+        RkpdException e =
+                assertThrows(
+                        RkpdException.class, () -> mServerInterface.fetchGeek(metrics));
+
+        assertThat(e.getErrorCode()).isEqualTo(RkpdException.ErrorCode.HTTP_CLIENT_ERROR);
+        assertThat(e).hasMessageThat().contains("Bad URL");
+        assertThat(Settings.getUrl(sContext)).isEmpty(); // Unset.
+    }
 }
