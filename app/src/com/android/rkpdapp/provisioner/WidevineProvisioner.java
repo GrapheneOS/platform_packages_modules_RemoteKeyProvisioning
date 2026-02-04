@@ -112,23 +112,6 @@ public class WidevineProvisioner extends Worker {
             Log.i(TAG, "Not a WV provisioning 4.0 or Sigma device. No provisioning required.");
             return false;
         }
-        if (isProv4) {
-            // For Prov 4.0 devices using OEMCrypto v20 or newer, the device no longer
-            // needs a separate provisioning step for the OEM certificate.
-            try {
-                int oemCryptoApiVersion =
-                        Integer.parseInt(drm.getPropertyString("oemCryptoApiVersion"));
-                if (oemCryptoApiVersion >= 20) {
-                    Log.i(TAG, "Device has OEMCrypto v" + oemCryptoApiVersion
-                            + ". No separate provisioning for OEM certificate required.");
-                    return false;
-                }
-            } catch (NumberFormatException e) {
-                // This shouldn't happen on a compliant device, but if it does, proceed with
-                // the legacy check just in case.
-                Log.w(TAG, "Failed to parse oemCryptoApiVersion", e);
-            }
-        }
         try {
             int systemId = Integer.parseInt(drm.getPropertyString("systemId"));
             if (systemId != Integer.MAX_VALUE) {
