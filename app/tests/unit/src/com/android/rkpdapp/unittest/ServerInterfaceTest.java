@@ -200,6 +200,29 @@ public class ServerInterfaceTest {
     }
 
     @Test
+    public void testFetchGeekNullResponseResetsConfig() throws Exception {
+        // Use a response that is not valid CBOR for a GEEK response, which will cause
+        // GeekResponse.parse to return null.
+        try (FakeRkpServer server =
+                new FakeRkpServer(
+                        FakeRkpServer.Response.SIGN_CERTS_OK_INVALID_CBOR,
+                        FakeRkpServer.Response.INTERNAL_ERROR)) {
+            final String badUrl = server.getUrl();
+            Settings.setDeviceConfig(sContext, 1, TIME_TO_REFRESH_HOURS, badUrl);
+            assertThat(Settings.getUrl(sContext)).isEqualTo(badUrl);
+
+            ProvisioningAttempt metrics =
+                    ProvisioningAttempt.createScheduledAttemptMetrics(sContext);
+            RkpdException e =
+                    assertThrows(RkpdException.class, () -> mServerInterface.fetchGeek(metrics));
+
+            assertThat(e.getErrorCode()).isEqualTo(RkpdException.ErrorCode.HTTP_SERVER_ERROR);
+            assertThat(e).hasMessageThat().contains("Response failed to parse.");
+            assertThat(Settings.getUrl(sContext)).isEqualTo(Settings.getDefaultUrl());
+        }
+    }
+
+    @Test
     public void testRequestSignedCertUnregistered() throws Exception {
         try (FakeRkpServer server = new FakeRkpServer(
                 FakeRkpServer.Response.FETCH_EEK_OK,
