@@ -681,7 +681,7 @@ public class ServerInterfaceTest {
     @Test
     public void malformedUrlResetsConfig() throws Exception {
         Settings.setMaxRequestTime(sContext, 100);
-        assertThat(Settings.getUrl(sContext)).isEmpty(); // Initially unset.
+        assertThat(Settings.getUrl(sContext)).isEqualTo(Settings.getDefaultUrl());
         final String badUrl = "bad url";
 
         // Override the default config.
@@ -697,6 +697,8 @@ public class ServerInterfaceTest {
 
         assertThat(e.getErrorCode()).isEqualTo(RkpdException.ErrorCode.HTTP_CLIENT_ERROR);
         assertThat(e).hasMessageThat().contains("Bad URL");
-        assertThat(Settings.getUrl(sContext)).isEmpty(); // Unset.
+
+        // Verify that the config is reset to the default.
+        assertThat(Settings.getUrl(sContext)).isEqualTo(Settings.getDefaultUrl());
     }
 }
