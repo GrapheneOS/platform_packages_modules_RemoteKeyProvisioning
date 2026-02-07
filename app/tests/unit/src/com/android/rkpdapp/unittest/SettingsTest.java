@@ -17,29 +17,24 @@
 package com.android.rkpdapp.unittest;
 
 import static com.google.common.truth.Truth.assertThat;
-
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import android.content.Context;
-
 import androidx.test.core.app.ApplicationProvider;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
-
 import com.android.rkpdapp.testutil.SystemPropertySetter;
 import com.android.rkpdapp.utils.Settings;
-
+import java.time.Duration;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-
-import java.time.Duration;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 
 @RunWith(AndroidJUnit4.class)
 public class SettingsTest {
@@ -144,13 +139,12 @@ public class SettingsTest {
     public void testFailureCounter() {
         assertEquals(1, Settings.incrementFailureCounter(sContext));
         assertEquals(1, Settings.getFailureCounter(sContext));
-        for (int i = 1; i < 10; i++) {
-            assertEquals(i + 1, Settings.incrementFailureCounter(sContext));
+        for (int i = 2; i <= Settings.FAILURE_MAXIMUM; i++) {
+            assertEquals(i, Settings.incrementFailureCounter(sContext));
+            assertEquals(i, Settings.getFailureCounter(sContext));
         }
         Settings.clearFailureCounter(sContext);
         assertEquals(0, Settings.getFailureCounter(sContext));
-        Settings.incrementFailureCounter(sContext);
-        assertEquals(1, Settings.getFailureCounter(sContext));
     }
 
     @Test
@@ -225,5 +219,21 @@ public class SettingsTest {
         Settings.setLastBadCertTimeRange(sContext, now, now);
         assertEquals(now, Settings.getLastBadCertTimeStart(sContext));
         assertEquals(now, Settings.getLastBadCertTimeEnd(sContext));
+    }
+
+    @Test
+    public void testFailureCounterResets() {
+        for (int i = 1; i <= Settings.FAILURE_MAXIMUM; i++) {
+            assertEquals(i, Settings.incrementFailureCounter(sContext));
+            assertEquals(i, Settings.getFailureCounter(sContext));
+        }
+
+        // The next failure should reset the counter.
+        assertEquals(0, Settings.incrementFailureCounter(sContext));
+        assertEquals(0, Settings.getFailureCounter(sContext));
+
+        // And it should start from 1 again.
+        assertEquals(1, Settings.incrementFailureCounter(sContext));
+        assertEquals(1, Settings.getFailureCounter(sContext));
     }
 }

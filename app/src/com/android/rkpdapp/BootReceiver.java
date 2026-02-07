@@ -22,18 +22,15 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.UserManager;
 import android.util.Log;
-
 import androidx.work.Constraints;
 import androidx.work.ExistingPeriodicWorkPolicy;
 import androidx.work.NetworkType;
 import androidx.work.OneTimeWorkRequest;
 import androidx.work.PeriodicWorkRequest;
 import androidx.work.WorkManager;
-
 import com.android.rkpdapp.provisioner.PeriodicProvisioner;
 import com.android.rkpdapp.provisioner.WidevineProvisioner;
 import com.android.rkpdapp.utils.Settings;
-
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -57,6 +54,7 @@ public class BootReceiver extends BroadcastReceiver {
                     0);
             return;
         }
+        Settings.resetDefaultConfig(context);
         Settings.generateAndSetId(context);
 
         Constraints rkpConstraints = new Constraints.Builder()

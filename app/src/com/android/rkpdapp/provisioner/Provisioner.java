@@ -62,7 +62,6 @@ import java.util.Optional;
  */
 public class Provisioner {
     private static final String TAG = "RkpdProvisioner";
-    private static final int FAILURE_MAXIMUM = 5;
     private static final Object provisionKeysLock = new Object();
     private static final String ANDROID_KEYSTORE = "AndroidKeyStore";
     private static final String KEY_ALIAS_PREFIX = "rkpd_post_provisioning_test_key";
@@ -136,13 +135,6 @@ public class Provisioner {
                                 metrics);
             } catch (InterruptedException e) {
                 metrics.setStatus(ProvisioningAttempt.Status.INTERRUPTED);
-                throw e;
-            } catch (RkpdException e) {
-                if (Settings.getFailureCounter(mContext) > FAILURE_MAXIMUM) {
-                    Log.e(TAG, "Too many failures, resetting defaults.");
-                    Settings.resetDefaultConfig(mContext);
-                }
-                // Rethrow to provide failure signal to caller
                 throw e;
             }
         }

@@ -36,7 +36,7 @@ import java.util.Random;
  * reasonable default values.
  */
 public class Settings {
-
+    public static final int FAILURE_MAXIMUM = 5;
     public static final int ID_UPPER_BOUND = 1000000;
     public static final int EXTRA_SIGNED_KEYS_AVAILABLE_DEFAULT = 6;
     // Check for expiring certs in the next 3 days
@@ -261,9 +261,14 @@ public class Settings {
      */
     public static int incrementFailureCounter(Context context) {
         SharedPreferences sharedPref = getSharedPreferences(context);
+        int failures = sharedPref.getInt(KEY_FAILURE_COUNTER, 0) + 1;
+        if (failures > FAILURE_MAXIMUM) {
+            Log.i(TAG, "Failure limit exceeded. Resetting to default configuration.");
+            resetDefaultConfig(context);
+            return getFailureCounter(context);
+        }
         SharedPreferences.Editor editor = sharedPref.edit();
-        int failures = sharedPref.getInt(KEY_FAILURE_COUNTER, 0 /* defaultValue */);
-        editor.putInt(KEY_FAILURE_COUNTER, ++failures);
+        editor.putInt(KEY_FAILURE_COUNTER, failures);
         editor.apply();
         return failures;
     }
