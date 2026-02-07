@@ -28,11 +28,10 @@ import static org.mockito.Mockito.verify;
 import android.app.ActivityThread;
 import android.app.Application;
 import android.content.Context;
+import android.hardware.security.keymint.IRemotelyProvisionedComponent;
 import android.os.RemoteException;
-
 import androidx.test.core.app.ApplicationProvider;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
-
 import com.android.rkpdapp.IGetRegistrationCallback;
 import com.android.rkpdapp.IRemoteProvisioning;
 import com.android.rkpdapp.interfaces.ServiceManagerInterface;
@@ -40,13 +39,13 @@ import com.android.rkpdapp.interfaces.SystemInterface;
 import com.android.rkpdapp.service.RemoteProvisioningService;
 import com.android.rkpdapp.testutil.SystemPropertySetter;
 import com.android.rkpdapp.utils.Settings;
-
+import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-
-import java.time.Duration;
 
 @RunWith(AndroidJUnit4.class)
 public class RemoteProvisioningServiceTest {
@@ -124,6 +123,23 @@ public class RemoteProvisioningServiceTest {
             IGetRegistrationCallback callback = mock(IGetRegistrationCallback.class);
             mBinder.getRegistration(0, "non-existent", callback);
             verify(callback).onError(matches("Invalid HAL name: non-existent"));
+        }
+    }
+
+    @Test
+    public void getRegistrationWithUnsupportedHal() throws Exception {
+        try (SystemPropertySetter ignored = SystemPropertySetter.setHostname("something")) {
+            IRemotelyProvisionedComponent mockRpc = mock(IRemotelyProvisionedComponent.class);
+            doThrow(new UnsupportedOperationException("test exception"))
+                    .when(mockRpc).getHardwareInfo();
+
+            Map<String, IRemotelyProvisionedComponent> binders = new HashMap<>();
+            binders.put("unsupported-irpc", mockRpc);
+            ServiceManagerInterface.setBinders(binders);
+
+            IGetRegistrationCallback callback = mock(IGetRegistrationCallback.class);
+            mBinder.getRegistration(0, "unsupported-irpc", callback);
+            verify(callback).onError(matches("Unsupported HAL name: unsupported-irpc"));
         }
     }
 }

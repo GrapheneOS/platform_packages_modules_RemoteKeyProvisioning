@@ -24,7 +24,6 @@ import android.os.IBinder;
 import android.os.Process;
 import android.os.RemoteException;
 import android.util.Log;
-
 import com.android.rkpdapp.IGetRegistrationCallback;
 import com.android.rkpdapp.IRegistration;
 import com.android.rkpdapp.IRemoteProvisioning;
@@ -83,6 +82,11 @@ public class RemoteProvisioningService extends Service {
                     callback.onError("Invalid HAL name: " + irpcName);
                     metric.setResult(RkpdClientOperation.Result.ERROR_INVALID_HAL);
                     return;
+                } catch (UnsupportedOperationException e) {
+                    Log.e(TAG, "HAL '" + irpcName + "' is not supported", e);
+                    callback.onError("Unsupported HAL name: " + irpcName);
+                    metric.setResult(RkpdClientOperation.Result.ERROR_INVALID_HAL);
+                    return;
                 }
 
                 ProvisionedKeyDao dao = RkpdDatabase.getDatabase(context).provisionedKeyDao();
@@ -96,6 +100,15 @@ public class RemoteProvisioningService extends Service {
                 Log.e(TAG, "Error notifying callback binder", e);
                 metric.setResult(RkpdClientOperation.Result.ERROR_INTERNAL);
                 throw e.rethrowAsRuntimeException();
+            } catch (Exception e) {
+                Log.e(TAG, "Unexpected error in getRegistration", e);
+                metric.setResult(RkpdClientOperation.Result.ERROR_INTERNAL);
+                try {
+                    callback.onError("Unexpected internal error in RKP service");
+                } catch (RemoteException re) {
+                    Log.e(TAG, "Unable to send error to client", re);
+                    throw re.rethrowAsRuntimeException();
+                }
             }
         }
 
