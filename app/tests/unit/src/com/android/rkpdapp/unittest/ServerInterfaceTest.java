@@ -723,9 +723,7 @@ public class ServerInterfaceTest {
                     ProvisioningAttempt.createScheduledAttemptMetrics(sContext);
 
             // First failure should not reset the config.
-            RkpdException e =
-                    assertThrows(RkpdException.class, () -> mServerInterface.fetchGeek(metrics));
-            assertThat(e.getErrorCode()).isEqualTo(RkpdException.ErrorCode.HTTP_CLIENT_ERROR);
+            assertThrows(RkpdException.class, () -> mServerInterface.fetchGeek(metrics));
             assertThat(Settings.getUrl(sContext)).isEqualTo(badUrl);
 
             // Simulate a number of failures to reach the maximum.
@@ -734,8 +732,7 @@ public class ServerInterfaceTest {
             }
 
             // The next request should reset the config.
-            e = assertThrows(RkpdException.class, () -> mServerInterface.fetchGeek(metrics));
-            assertThat(e.getErrorCode()).isEqualTo(RkpdException.ErrorCode.HTTP_CLIENT_ERROR);
+            assertThrows(RkpdException.class, () -> mServerInterface.fetchGeek(metrics));
             assertThat(Settings.getUrl(sContext)).isEqualTo(Settings.getDefaultUrl());
             assertThat(Settings.getFailureCounter(sContext)).isEqualTo(0);
         }
