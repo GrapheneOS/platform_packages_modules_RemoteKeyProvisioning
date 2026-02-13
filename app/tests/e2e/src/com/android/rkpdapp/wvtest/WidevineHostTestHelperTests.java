@@ -70,7 +70,7 @@ public class WidevineHostTestHelperTests {
             String provisioningModel = sDrm.getPropertyString("provisioningModel");
             int oemCryptoApiVersion =
                     Integer.parseInt(sDrm.getPropertyString("oemCryptoApiVersion"));
-            return provisioningModel.equals("BootCertificateChain") && oemCryptoApiVersion < 20;
+            return provisioningModel.equals("BootCertificateChain");
         } catch (Exception e) {
             // Catch any exception thrown here to avoid crashing the test.
             Log.i(TAG, "Device doesn't support provisioning 4.0.");
