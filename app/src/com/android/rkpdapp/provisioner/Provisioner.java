@@ -223,6 +223,10 @@ public class Provisioner {
      */
     private byte[] getRkpRawPublicKeyFromAttestationCertChain(Certificate[] attestationCertChain)
             throws RkpdException {
+        if (attestationCertChain == null) {
+            throw new RkpdException(
+                RkpdException.ErrorCode.INTERNAL_ERROR, "Attestation certificate chain is null");
+        }
         X509Certificate[] x509Certificates = Arrays.stream(attestationCertChain)
                 .map(x -> (X509Certificate) x)
                 .toList()
