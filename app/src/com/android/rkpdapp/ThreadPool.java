@@ -26,12 +26,6 @@ import java.util.concurrent.TimeUnit;
  */
 public class ThreadPool {
     public static final int NUMBER_OF_THREADS = 32;
-
-    /*
-     * This thread pool has a minimum of 8 threads and a maximum of up to 32. If
-     * a thread is idle for more than 60 seconds, it is terminated. RKPD is idle
-     * most of the time. So, this way we can don't keep unused threads around.
-     */
     public static final ExecutorService EXECUTOR;
 
     static {
