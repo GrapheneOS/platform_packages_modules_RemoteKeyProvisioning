@@ -248,11 +248,6 @@ public class ServerInterface {
      * @return A List of byte arrays, where each array contains an entire DER-encoded certificate
      *     chain for one attestation key pair.
      */
-    public List<byte[]> requestSignedCertificates(byte[] csr, ProvisioningAttempt metrics)
-            throws RkpdException, InterruptedException {
-        return requestSignedCertificates(csr, metrics, Optional.empty(), Optional.empty());
-    }
-
     public List<byte[]> requestSignedCertificates(
             byte[] csr, ProvisioningAttempt metrics, String requestId)
             throws RkpdException, InterruptedException {
@@ -352,9 +347,7 @@ public class ServerInterface {
                     RkpdException.ErrorCode.HTTP_SERVER_ERROR,
                     "Response failed to parse.");
         }
-        if (Flags.enableRequestIdReuse()) {
-            resp.setRequestId(requestId);
-        }
+        resp.setRequestId(requestId);
         return resp;
     }
 
@@ -367,9 +360,7 @@ public class ServerInterface {
                         // correct method to use (instead of appendPath) since we do not want the
                         // special character `:` to be percent-encoded.
                         .appendEncodedPath(operation.getUrlPath());
-        if (operation != Operation.FETCH_GEEK || Flags.enableRequestIdReuse()) {
-            uriBuilder.appendQueryParameter(REQUEST_ID_PARAMETER, requestId);
-        }
+        uriBuilder.appendQueryParameter(REQUEST_ID_PARAMETER, requestId);
         try {
             return new URL(
                     uriBuilder
