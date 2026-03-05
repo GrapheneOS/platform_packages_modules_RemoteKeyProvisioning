@@ -468,11 +468,11 @@ public class ServerInterfaceTest {
         ServerInterface serverInterface = Mockito.spy(mServerInterface);
         Mockito.when(serverInterface.getRegionalProperty()).thenReturn("cn");
         assertThat(serverInterface.getConnectTimeoutMs()).isEqualTo(
-                ServerInterface.SYNC_CONNECT_TIMEOUT_RETRICTED_MS);
+                ServerInterface.SYNC_CONNECT_TIMEOUT_RESTRICTED_MS);
 
         Mockito.when(serverInterface.getRegionalProperty()).thenReturn("cn,us");
         assertThat(serverInterface.getConnectTimeoutMs()).isEqualTo(
-                ServerInterface.SYNC_CONNECT_TIMEOUT_RETRICTED_MS);
+                ServerInterface.SYNC_CONNECT_TIMEOUT_RESTRICTED_MS);
 
         Mockito.when(serverInterface.getRegionalProperty()).thenReturn(null);
         assertThat(serverInterface.getConnectTimeoutMs()).isEqualTo(
