@@ -296,15 +296,14 @@ public class Provisioner {
                     "Failed to serialize payload");
         }
 
-        return (Flags.enableFeedbackLoop()) ?
-            new ServerInterface(mContext, mIsAsync)
-                    .requestSignedCertificates(
-                            certRequest,
-                            metrics,
-                            Optional.of(response.requestId),
-                            Optional.of(systemInterface)) :
-        new ServerInterface(mContext, mIsAsync)
-                        .requestSignedCertificates(certRequest, metrics, response.requestId);
+        Optional<SystemInterface> systemInterfaceOptional =
+                Flags.enableFeedbackLoop() ? Optional.of(systemInterface) : Optional.empty();
+        return new ServerInterface(mContext, mIsAsync)
+                .requestSignedCertificates(
+                        certRequest,
+                        metrics,
+                        response.requestId,
+                        systemInterfaceOptional);
     }
 
     private List<ProvisionedKey> associateCertsWithKeys(

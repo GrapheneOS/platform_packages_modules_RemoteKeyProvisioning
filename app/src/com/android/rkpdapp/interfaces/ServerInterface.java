@@ -249,20 +249,11 @@ public class ServerInterface {
      *     chain for one attestation key pair.
      */
     public List<byte[]> requestSignedCertificates(
-            byte[] csr, ProvisioningAttempt metrics, String requestId)
-            throws RkpdException, InterruptedException {
-        return requestSignedCertificates(csr, metrics, Optional.of(requestId), Optional.empty());
-    }
-
-    public List<byte[]> requestSignedCertificates(
             byte[] csr,
             ProvisioningAttempt metrics,
-            Optional<String> requestId,
+            String reqId,
             Optional<SystemInterface> systemInterface)
             throws RkpdException, InterruptedException {
-        String reqId = requestId.orElseGet(() -> UUID.randomUUID().toString());
-        Log.i(TAG, "request_id: " + reqId);
-
         final byte[] cborBytes =
                 connectAndGetData(
                         metrics,
