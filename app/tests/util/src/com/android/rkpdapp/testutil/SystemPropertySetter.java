@@ -50,6 +50,19 @@ public class SystemPropertySetter implements AutoCloseable {
                 String.valueOf(skipNetworkConsent));
     }
 
+    /**
+     * Sets the system property to set the connect timeout ms.
+     * @param connectTimeoutMs int
+     * @return an instance of SystemPropertySetter.
+     */
+    public static SystemPropertySetter setConnectTimeoutMs(int connectTimeoutMs) {
+        String propertyString = "remote_provisioning.connect_timeout_millis";
+        if (SystemProperties.get(propertyString).isEmpty()) {
+            return null;
+        }
+        return new SystemPropertySetter(propertyString, String.valueOf(connectTimeoutMs));
+    }
+
     private SystemPropertySetter(String key, String value) {
         mKey = key;
         mOriginalValue = SystemProperties.get(key, "");
