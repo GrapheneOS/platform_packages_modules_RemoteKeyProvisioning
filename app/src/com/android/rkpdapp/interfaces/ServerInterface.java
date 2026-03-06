@@ -64,7 +64,7 @@ import java.util.UUID;
  * Provides convenience methods for interfacing with the remote provisioning server.
  */
 public class ServerInterface {
-    public static final int SYNC_CONNECT_TIMEOUT_RETRICTED_MS = 400;
+    public static final int SYNC_CONNECT_TIMEOUT_RESTRICTED_MS = 400;
     public static final int SYNC_CONNECT_TIMEOUT_OPEN_MS = 1000;
     public static final int TIMEOUT_MS = 20000;
 
@@ -169,7 +169,7 @@ public class ServerInterface {
         String[] regions = regionProperty.split(",");
         if (Arrays.stream(regions).anyMatch(x -> x.equalsIgnoreCase("cn"))) {
             Log.i(TAG, "Possible restricted network. Taking a lower connect timeout");
-            return SYNC_CONNECT_TIMEOUT_RETRICTED_MS;
+            return SYNC_CONNECT_TIMEOUT_RESTRICTED_MS;
         }
         return SYNC_CONNECT_TIMEOUT_OPEN_MS;
     }
