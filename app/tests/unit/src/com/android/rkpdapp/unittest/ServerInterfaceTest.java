@@ -232,7 +232,7 @@ public class ServerInterfaceTest {
             ProvisioningAttempt metrics = ProvisioningAttempt.createScheduledAttemptMetrics(
                     sContext);
             mServerInterface.requestSignedCertificates(new byte[0], metrics,
-                    Optional.empty(), Optional.empty());
+                    "requestId", Optional.empty());
             assertWithMessage("Should fail due to unregistered device.").fail();
         } catch (RkpdException e) {
             assertThat(e.getErrorCode()).isEqualTo(RkpdException.ErrorCode.DEVICE_NOT_REGISTERED);
@@ -250,7 +250,7 @@ public class ServerInterfaceTest {
             ProvisioningAttempt metrics = ProvisioningAttempt.createScheduledAttemptMetrics(
                     sContext);
             mServerInterface.requestSignedCertificates(new byte[0], metrics,
-                    Optional.empty(), Optional.empty());
+                    "requestId", Optional.empty());
             assertWithMessage("Should fail due to client error.").fail();
         } catch (RkpdException e) {
             assertThat(e.getErrorCode()).isEqualTo(RkpdException.ErrorCode.HTTP_CLIENT_ERROR);
@@ -281,7 +281,7 @@ public class ServerInterfaceTest {
                                 mServerInterface.requestSignedCertificates(
                                         new byte[0],
                                         metrics,
-                                        Optional.of("requestId"),
+                                        "requestId",
                                         Optional.of(mockSystem)));
 
         assertThat(ex.getErrorCode()).isEqualTo(RkpdException.ErrorCode.INTERNAL_ERROR);
@@ -301,7 +301,7 @@ public class ServerInterfaceTest {
             ProvisioningAttempt metrics = ProvisioningAttempt.createScheduledAttemptMetrics(
                     sContext);
             List<byte[]> certChains = mServerInterface.requestSignedCertificates(new byte[0],
-                    metrics, Optional.empty(), Optional.empty());
+                    metrics, "requestId", Optional.empty());
             assertThat(certChains).isEmpty();
             assertThat(certChains).isNotNull();
         }
