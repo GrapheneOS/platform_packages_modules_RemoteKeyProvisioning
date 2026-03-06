@@ -157,7 +157,6 @@ public class ServerInterfaceTest {
     }
 
     @Test
-    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_REQUEST_ID_REUSE)
     public void testFetchGeekIncludesRequestId() throws Exception {
         try (FakeRkpServer server =
                 new FakeRkpServer(
