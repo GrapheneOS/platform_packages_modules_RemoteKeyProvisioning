@@ -64,7 +64,7 @@ import java.util.UUID;
  * Provides convenience methods for interfacing with the remote provisioning server.
  */
 public class ServerInterface {
-    public static final int SYNC_CONNECT_TIMEOUT_RETRICTED_MS = 400;
+    public static final int SYNC_CONNECT_TIMEOUT_RESTRICTED_MS = 400;
     public static final int SYNC_CONNECT_TIMEOUT_OPEN_MS = 1000;
     public static final int TIMEOUT_MS = 20000;
 
@@ -169,7 +169,7 @@ public class ServerInterface {
         String[] regions = regionProperty.split(",");
         if (Arrays.stream(regions).anyMatch(x -> x.equalsIgnoreCase("cn"))) {
             Log.i(TAG, "Possible restricted network. Taking a lower connect timeout");
-            return SYNC_CONNECT_TIMEOUT_RETRICTED_MS;
+            return SYNC_CONNECT_TIMEOUT_RESTRICTED_MS;
         }
         return SYNC_CONNECT_TIMEOUT_OPEN_MS;
     }
@@ -248,26 +248,12 @@ public class ServerInterface {
      * @return A List of byte arrays, where each array contains an entire DER-encoded certificate
      *     chain for one attestation key pair.
      */
-    public List<byte[]> requestSignedCertificates(byte[] csr, ProvisioningAttempt metrics)
-            throws RkpdException, InterruptedException {
-        return requestSignedCertificates(csr, metrics, Optional.empty(), Optional.empty());
-    }
-
-    public List<byte[]> requestSignedCertificates(
-            byte[] csr, ProvisioningAttempt metrics, String requestId)
-            throws RkpdException, InterruptedException {
-        return requestSignedCertificates(csr, metrics, Optional.of(requestId), Optional.empty());
-    }
-
     public List<byte[]> requestSignedCertificates(
             byte[] csr,
             ProvisioningAttempt metrics,
-            Optional<String> requestId,
+            String reqId,
             Optional<SystemInterface> systemInterface)
             throws RkpdException, InterruptedException {
-        String reqId = requestId.orElseGet(() -> UUID.randomUUID().toString());
-        Log.i(TAG, "request_id: " + reqId);
-
         final byte[] cborBytes =
                 connectAndGetData(
                         metrics,
@@ -352,9 +338,7 @@ public class ServerInterface {
                     RkpdException.ErrorCode.HTTP_SERVER_ERROR,
                     "Response failed to parse.");
         }
-        if (Flags.enableRequestIdReuse()) {
-            resp.setRequestId(requestId);
-        }
+        resp.setRequestId(requestId);
         return resp;
     }
 
@@ -367,9 +351,7 @@ public class ServerInterface {
                         // correct method to use (instead of appendPath) since we do not want the
                         // special character `:` to be percent-encoded.
                         .appendEncodedPath(operation.getUrlPath());
-        if (operation != Operation.FETCH_GEEK || Flags.enableRequestIdReuse()) {
-            uriBuilder.appendQueryParameter(REQUEST_ID_PARAMETER, requestId);
-        }
+        uriBuilder.appendQueryParameter(REQUEST_ID_PARAMETER, requestId);
         try {
             return new URL(
                     uriBuilder

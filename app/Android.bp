@@ -63,6 +63,7 @@ android_app {
     min_sdk_version: "33",
     updatable: true,
     privileged: true,
+    preinstall_allowlist: ":preinstalled-packages-com.android.rkpdapp.xml",
     libs: [
         "framework-annotations-lib",
         "framework-connectivity.stubs.module_lib",
@@ -96,4 +97,9 @@ android_app {
     lint: {
         baseline_filename: "lint-baseline.xml",
     },
+}
+
+filegroup {
+    name: "preinstalled-packages-com.android.rkpdapp.xml",
+    srcs: ["sysconfig/preinstalled-packages-com.android.rkpdapp.xml"],
 }
