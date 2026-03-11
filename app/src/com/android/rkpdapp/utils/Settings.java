@@ -18,6 +18,7 @@ package com.android.rkpdapp.utils;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.os.Process;
 import android.os.SystemProperties;
 import android.util.Log;
 import com.android.rkpd.flags.Flags;
@@ -36,6 +37,12 @@ import java.util.Random;
  * reasonable default values.
  */
 public class Settings {
+    /**
+     * The uid of Keystore service. Even though this constant is stable and exposed by Keystore
+     * libraries, it is marked with @hide and cannot be accessed by mainline modules.
+     */
+    public static final int KEYSTORE_SERVICE_UID = 1017;
+
     public static final int FAILURE_MAXIMUM = 5;
     public static final int ID_UPPER_BOUND = 1000000;
     public static final int EXTRA_SIGNED_KEYS_AVAILABLE_DEFAULT = 6;
@@ -373,6 +380,17 @@ public class Settings {
         SharedPreferences.Editor editor = sharedPref.edit();
         editor.clear();
         editor.apply();
+    }
+
+    /**
+     * Returns true if the call is for feedback loop.
+     *
+     * @param clientUid Uid for RKPD's client that needs to set up the key for its own client.
+     * @param keyId     Client provided identifier to set up the key with.
+     */
+    public static boolean isCallForFeedbackLoop(int clientUid, int keyId) {
+        return Flags.enableFeedbackLoop() && clientUid == KEYSTORE_SERVICE_UID
+                && keyId == Process.myPid();
     }
 
     private static SharedPreferences getSharedPreferences(Context context) {
