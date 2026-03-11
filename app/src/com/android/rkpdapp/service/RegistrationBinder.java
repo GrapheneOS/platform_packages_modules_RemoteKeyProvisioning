@@ -21,15 +21,15 @@ import android.os.IBinder;
 import android.os.RemoteException;
 import android.os.Trace;
 import android.util.Log;
-
 import androidx.annotation.GuardedBy;
-
+import co.nstant.in.cbor.CborException;
 import com.android.rkpdapp.GeekResponse;
 import com.android.rkpdapp.IGetKeyCallback;
 import com.android.rkpdapp.IRegistration;
 import com.android.rkpdapp.IStoreUpgradedKeyCallback;
 import com.android.rkpdapp.RemotelyProvisionedKey;
 import com.android.rkpdapp.RkpdException;
+import com.android.rkpdapp.ThreadPool;
 import com.android.rkpdapp.database.ProvisionedKey;
 import com.android.rkpdapp.database.ProvisionedKeyDao;
 import com.android.rkpdapp.interfaces.ServerInterface;
@@ -38,7 +38,6 @@ import com.android.rkpdapp.metrics.ProvisioningAttempt;
 import com.android.rkpdapp.metrics.RkpdClientOperation;
 import com.android.rkpdapp.provisioner.Provisioner;
 import com.android.rkpdapp.utils.Settings;
-
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
@@ -46,8 +45,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
-
-import co.nstant.in.cbor.CborException;
 
 /**
  * Implementation of com.android.rkpdapp.IRegistration, which fetches keys for a (caller UID,
@@ -227,8 +224,16 @@ public final class RegistrationBinder extends IRegistration.Stub {
                         + " is already associated with a getKey operation that is in-progress");
             }
 
+            ExecutorService executor = mThreadPool;
+            if (Settings.isCallForFeedbackLoop(mClientUid, keyId)) {
+                // Keystore's callback from RKPD as part of attestation generation for certificate
+                // confirmation should not have to wait in line behind threads from RKPD's main
+                // thread pool.
+                executor = ThreadPool.FEEDBACK_EXECUTOR;
+            }
+
             mTasks.put(callback.asBinder(),
-                    mThreadPool.submit(() -> getKeyThreadWorker(keyId, callback)));
+                    executor.submit(() -> getKeyThreadWorker(keyId, callback)));
         }
         Trace.endSection();
     }

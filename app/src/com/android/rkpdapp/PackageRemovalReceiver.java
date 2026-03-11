@@ -22,6 +22,7 @@ import android.content.Intent;
 import android.util.Log;
 import com.android.rkpdapp.database.ProvisionedKeyDao;
 import com.android.rkpdapp.database.RkpdDatabase;
+import com.android.rkpdapp.utils.Settings;
 
 /**
  * A receiver class that listens for package removed broadcast and removes the
@@ -39,7 +40,7 @@ public class PackageRemovalReceiver extends BroadcastReceiver {
     private void processPackageRemovalIntent(Context context, Intent intent) {
         ProvisionedKeyDao keyDao = RkpdDatabase.getDatabase(context).provisionedKeyDao();
         int uid = intent.getExtras().getInt(Intent.EXTRA_UID);
-        keyDao.deleteAllKeysForClientAndKeyId(ProvisionedKeyDao.KEYSTORE_SERVICE_UID, uid);
+        keyDao.deleteAllKeysForClientAndKeyId(Settings.KEYSTORE_SERVICE_UID, uid);
         Log.i(TAG, "Deleted associated keys for uid: " + uid);
     }
 }

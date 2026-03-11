@@ -35,6 +35,7 @@ import com.android.rkpdapp.database.InstantConverter;
 import com.android.rkpdapp.database.ProvisionedKey;
 import com.android.rkpdapp.database.ProvisionedKeyDao;
 import com.android.rkpdapp.database.RkpdDatabase;
+import com.android.rkpdapp.utils.Settings;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -431,7 +432,7 @@ public class RkpdDatabaseTest {
                 TEST_KEY_BLOB_4, TEST_KEY_EXPIRY_2);
         mKeyDao.insertKeys(List.of(key1, key2));
         ProvisionedKey assignedKey = mKeyDao.getOrAssignKey(TEST_HAL_1, Instant.now(),
-                ProvisionedKeyDao.KEYSTORE_SERVICE_UID, Process.myPid());
+                Settings.KEYSTORE_SERVICE_UID, Process.myPid());
         assertThat(assignedKey.keyBlob).isEqualTo(TEST_KEY_BLOB_4);
     }
 

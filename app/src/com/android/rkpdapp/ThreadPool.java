@@ -27,6 +27,7 @@ import java.util.concurrent.TimeUnit;
 public class ThreadPool {
     public static final int NUMBER_OF_THREADS = 32;
     public static final ExecutorService EXECUTOR;
+    public static final ExecutorService FEEDBACK_EXECUTOR;
 
     static {
         ThreadPoolExecutor executor =
@@ -36,5 +37,13 @@ public class ThreadPool {
                     /*workQueue=*/ new LinkedBlockingQueue<Runnable>());
         executor.allowCoreThreadTimeOut(true);
         EXECUTOR = executor;
+
+        ThreadPoolExecutor feedbackExecutor =
+                new ThreadPoolExecutor(/*corePoolSize=*/ NUMBER_OF_THREADS,
+                    /*maximumPoolSize=*/ NUMBER_OF_THREADS,
+                    /*keepAliveTime=*/ 1L, /*unit=*/ TimeUnit.SECONDS,
+                    /*workQueue=*/ new LinkedBlockingQueue<Runnable>());
+        feedbackExecutor.allowCoreThreadTimeOut(true);
+        FEEDBACK_EXECUTOR = feedbackExecutor;
     }
 }
