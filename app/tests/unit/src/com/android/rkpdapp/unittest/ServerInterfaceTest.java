@@ -35,6 +35,7 @@ import com.android.rkpdapp.interfaces.ServerInterface;
 import com.android.rkpdapp.interfaces.SystemInterface;
 import com.android.rkpdapp.metrics.ProvisioningAttempt;
 import com.android.rkpdapp.testutil.FakeRkpServer;
+import com.android.rkpdapp.testutil.SystemPropertySetter;
 import com.android.rkpdapp.utils.Settings;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -464,26 +465,33 @@ public class ServerInterfaceTest {
 
     @Test
     public void testServerConnectionTimeout() {
-        ServerInterface serverInterface = Mockito.spy(mServerInterface);
-        Mockito.when(serverInterface.getRegionalProperty()).thenReturn("cn");
-        assertThat(serverInterface.getConnectTimeoutMs()).isEqualTo(
-                ServerInterface.SYNC_CONNECT_TIMEOUT_RESTRICTED_MS);
+        // If the property is not set, then we will get null from
+        // SystemPropertySetter.setConnectTimeoutMs(), but that means the tests will run properly.
+        // If the property is set, then we the system property will be set to 0 and reset after the
+        // test.
+        // Either way, the test should pass.
+        try (SystemPropertySetter setter = SystemPropertySetter.setConnectTimeoutMs(0)) {
+            ServerInterface serverInterface = Mockito.spy(mServerInterface);
+            Mockito.when(serverInterface.getRegionalProperty()).thenReturn("cn");
+            assertThat(serverInterface.getConnectTimeoutMs()).isEqualTo(
+                    ServerInterface.SYNC_CONNECT_TIMEOUT_RESTRICTED_MS);
 
-        Mockito.when(serverInterface.getRegionalProperty()).thenReturn("cn,us");
-        assertThat(serverInterface.getConnectTimeoutMs()).isEqualTo(
-                ServerInterface.SYNC_CONNECT_TIMEOUT_RESTRICTED_MS);
+            Mockito.when(serverInterface.getRegionalProperty()).thenReturn("cn,us");
+            assertThat(serverInterface.getConnectTimeoutMs()).isEqualTo(
+                    ServerInterface.SYNC_CONNECT_TIMEOUT_RESTRICTED_MS);
 
-        Mockito.when(serverInterface.getRegionalProperty()).thenReturn(null);
-        assertThat(serverInterface.getConnectTimeoutMs()).isEqualTo(
-                ServerInterface.SYNC_CONNECT_TIMEOUT_OPEN_MS);
+            Mockito.when(serverInterface.getRegionalProperty()).thenReturn(null);
+            assertThat(serverInterface.getConnectTimeoutMs()).isEqualTo(
+                    ServerInterface.SYNC_CONNECT_TIMEOUT_OPEN_MS);
 
-        Mockito.when(serverInterface.getRegionalProperty()).thenReturn("");
-        assertThat(serverInterface.getConnectTimeoutMs()).isEqualTo(
-                ServerInterface.SYNC_CONNECT_TIMEOUT_OPEN_MS);
+            Mockito.when(serverInterface.getRegionalProperty()).thenReturn("");
+            assertThat(serverInterface.getConnectTimeoutMs()).isEqualTo(
+                    ServerInterface.SYNC_CONNECT_TIMEOUT_OPEN_MS);
 
-        Mockito.when(serverInterface.getRegionalProperty()).thenReturn("us");
-        assertThat(serverInterface.getConnectTimeoutMs())
-                .isEqualTo(ServerInterface.SYNC_CONNECT_TIMEOUT_OPEN_MS);
+            Mockito.when(serverInterface.getRegionalProperty()).thenReturn("us");
+            assertThat(serverInterface.getConnectTimeoutMs())
+                    .isEqualTo(ServerInterface.SYNC_CONNECT_TIMEOUT_OPEN_MS);
+        }
     }
 
     @Test
