@@ -16,14 +16,13 @@
 
 package com.android.rkpdapp.database;
 
-import android.os.Process;
 import androidx.room.Dao;
 import androidx.room.Delete;
 import androidx.room.Insert;
 import androidx.room.Query;
 import androidx.room.Transaction;
 import androidx.room.Update;
-import com.android.rkpd.flags.Flags;
+import com.android.rkpdapp.utils.Settings;
 import java.time.Instant;
 import java.util.List;
 
@@ -33,12 +32,6 @@ import java.util.List;
  */
 @Dao
 public abstract class ProvisionedKeyDao {
-    /**
-     * The uid of Keystore service. Even though this constant is stable and exposed by Keystore
-     * libraries, it is marked with @hide and cannot be accessed by mainline modules.
-     */
-    public static final int KEYSTORE_SERVICE_UID = 1017;
-
     /**
      * Insert keys to database.
      */
@@ -190,8 +183,7 @@ public abstract class ProvisionedKeyDao {
 
     private ProvisionedKey getAvailableKeyByHal(String irpcHal, Instant minExpiry, int clientUid,
             int keyId) {
-        if (Flags.enableFeedbackLoop() && clientUid == KEYSTORE_SERVICE_UID
-            && keyId == Process.myPid()) {
+        if (Settings.isCallForFeedbackLoop(clientUid, keyId)) {
             return getNewestUnassignedKeyForIrpc(irpcHal, minExpiry);
         }
         return getUnassignedKeyForIrpc(irpcHal, minExpiry);

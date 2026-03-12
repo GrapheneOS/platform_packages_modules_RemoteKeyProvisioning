@@ -74,7 +74,6 @@ import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestName;
@@ -390,12 +389,9 @@ public class KeystoreIntegrationTest {
     }
 
     @Test
-    @Ignore("Temporarily disabled")
     @RequiresFlagsEnabled(Flags.FLAG_ENABLE_FEEDBACK_LOOP)
     public void testLargeNumberOfAttestationRequests_doesNotDeadlock() throws Exception {
-        // Spin up more threads than the number of keystore threads (20), but less than the number
-        // of threads in the RKPD thread pool (32).
-        final int numThreads = ThreadPool.NUMBER_OF_THREADS - 1;
+        final int numThreads = ThreadPool.NUMBER_OF_THREADS * 4;
         final String baseAlias = "testKey_" + mName.getMethodName();
         ExecutorService executor = Executors.newFixedThreadPool(numThreads);
         List<Future<?>> futures = new ArrayList<>();
