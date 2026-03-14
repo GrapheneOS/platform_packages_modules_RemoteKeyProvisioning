@@ -151,7 +151,13 @@ public final class RegistrationBinder extends IRegistration.Stub {
             metrics.setStatus(ProvisioningAttempt.Status.PROVISIONING_DISABLED);
             return;
         }
-        mProvisioner.provisionKeys(metrics, mSystemInterface, response);
+
+        try {
+            mProvisioner.provisionKeys(metrics, mSystemInterface, response);
+        } catch (InterruptedException e) {
+            metrics.setStatus(ProvisioningAttempt.Status.INTERRUPTED);
+            throw e;
+        }
     }
 
     private ProvisionedKey tryToAssignKey(Instant minExpiry, int keyId) {
