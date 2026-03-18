@@ -44,6 +44,7 @@ import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
+import java.security.ProviderException;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
@@ -202,6 +203,13 @@ public class Provisioner {
             NoSuchAlgorithmException | NoSuchProviderException e) {
             throw new RkpdException(RkpdException.ErrorCode.INTERNAL_ERROR,
                     "Error generating attestation certificate", e);
+        } catch (ProviderException e) {
+            boolean isErrorTransient = e.getCause() instanceof android.security.KeyStoreException
+                    && ((android.security.KeyStoreException) e.getCause()).isTransientFailure();
+            String errorMessage = isErrorTransient ?
+                    "Transient error generating attestation certificate"
+                    : "Error generating attestation certificate";
+            throw new RkpdException(RkpdException.ErrorCode.INTERNAL_ERROR, errorMessage, e);
         }
     }
 
