@@ -432,7 +432,7 @@ public class RkpdDatabaseTest {
                 TEST_KEY_BLOB_4, TEST_KEY_EXPIRY_2);
         mKeyDao.insertKeys(List.of(key1, key2));
         ProvisionedKey assignedKey = mKeyDao.getOrAssignKey(TEST_HAL_1, Instant.now(),
-                Settings.KEYSTORE_SERVICE_UID, Process.myPid());
+                Settings.KEYSTORE_SERVICE_UID, Process.myUid());
         assertThat(assignedKey.keyBlob).isEqualTo(TEST_KEY_BLOB_4);
     }
 

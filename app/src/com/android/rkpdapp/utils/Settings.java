@@ -390,7 +390,7 @@ public class Settings {
      */
     public static boolean isCallForFeedbackLoop(int clientUid, int keyId) {
         return Flags.enableFeedbackLoop() && clientUid == KEYSTORE_SERVICE_UID
-                && keyId == Process.myPid();
+                && keyId == Process.myUid();
     }
 
     private static SharedPreferences getSharedPreferences(Context context) {
