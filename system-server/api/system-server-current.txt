@@ -1,12 +1,11 @@
 // Signature format: 6.0
 // - style=java
-// - type-argument-spacing=legacy
 package android.security.rkp.service {
 
   public class RegistrationProxy {
-    method public static void createAsync(@NonNull android.content.Context, int, @NonNull String, @NonNull java.time.Duration, @NonNull java.util.concurrent.Executor, @NonNull android.os.OutcomeReceiver<android.security.rkp.service.RegistrationProxy,Exception>);
-    method public void getKeyAsync(int, @NonNull android.os.CancellationSignal, @NonNull java.util.concurrent.Executor, @NonNull android.os.OutcomeReceiver<android.security.rkp.service.RemotelyProvisionedKey,Exception>);
-    method public void storeUpgradedKeyAsync(@NonNull byte[], @NonNull byte[], @NonNull java.util.concurrent.Executor, @NonNull android.os.OutcomeReceiver<Void,Exception>);
+    method public static void createAsync(@NonNull android.content.Context, int, @NonNull String, @NonNull java.time.Duration, @NonNull java.util.concurrent.Executor, @NonNull android.os.OutcomeReceiver<android.security.rkp.service.RegistrationProxy, Exception>);
+    method public void getKeyAsync(int, @NonNull android.os.CancellationSignal, @NonNull java.util.concurrent.Executor, @NonNull android.os.OutcomeReceiver<android.security.rkp.service.RemotelyProvisionedKey, Exception>);
+    method public void storeUpgradedKeyAsync(@NonNull byte[], @NonNull byte[], @NonNull java.util.concurrent.Executor, @NonNull android.os.OutcomeReceiver<Void, Exception>);
   }
 
   public class RemotelyProvisionedKey {
