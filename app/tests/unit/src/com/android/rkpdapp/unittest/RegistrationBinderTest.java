@@ -18,7 +18,6 @@ package com.android.rkpdapp.unittest;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
-
 import static org.junit.Assert.assertThrows;
 import static org.mockito.AdditionalAnswers.answer;
 import static org.mockito.AdditionalAnswers.answerVoid;
@@ -42,10 +41,8 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import android.content.Context;
 import android.os.Binder;
 import android.os.IBinder;
-
 import androidx.test.core.app.ApplicationProvider;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
-
 import com.android.rkpdapp.GeekResponse;
 import com.android.rkpdapp.IGetKeyCallback;
 import com.android.rkpdapp.IStoreUpgradedKeyCallback;
@@ -58,12 +55,6 @@ import com.android.rkpdapp.interfaces.SystemInterface;
 import com.android.rkpdapp.provisioner.Provisioner;
 import com.android.rkpdapp.service.RegistrationBinder;
 import com.android.rkpdapp.utils.Settings;
-
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.ArgumentMatcher;
-
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -74,6 +65,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.ArgumentMatcher;
 
 @RunWith(AndroidJUnit4.class)
 public class RegistrationBinderTest {
@@ -290,6 +285,8 @@ public class RegistrationBinderTest {
             case HTTP_SERVER_ERROR:
             case HTTP_UNKNOWN_ERROR:
             case INTERNAL_ERROR:
+                return IGetKeyCallback.Error.ERROR_UNKNOWN;
+            case TRANSIENT_ERROR:
                 return IGetKeyCallback.Error.ERROR_UNKNOWN;
         }
         throw new RuntimeException("Unexpected error code: " + errorCode);

@@ -158,6 +158,12 @@ public class Provisioner {
                     keystore, keyAlias, systemInterface.getHalInstanceName());
             rawPublicKey = getRkpRawPublicKeyFromAttestationCertChain(attestationCertChain);
         } catch (Exception e) {
+            if (e instanceof RkpdException && ((RkpdException) e).getErrorCode() ==
+                    RkpdException.ErrorCode.TRANSIENT_ERROR) {
+                Log.i(TAG, "Transient error generating attestation certificate. Skipping "
+                        + "certificate confirmation for now.", e);
+                return;
+            }
             Log.e(TAG, "Error generating attestation certificate. Reporting to the server"
                     + " and deleting provisioned keys from this batch.", e);
             mKeyDao.deleteKeys(keys);
@@ -204,12 +210,14 @@ public class Provisioner {
             throw new RkpdException(RkpdException.ErrorCode.INTERNAL_ERROR,
                     "Error generating attestation certificate", e);
         } catch (ProviderException e) {
-            boolean isErrorTransient = e.getCause() instanceof android.security.KeyStoreException
-                    && ((android.security.KeyStoreException) e.getCause()).isTransientFailure();
-            String errorMessage = isErrorTransient ?
-                    "Transient error generating attestation certificate"
-                    : "Error generating attestation certificate";
-            throw new RkpdException(RkpdException.ErrorCode.INTERNAL_ERROR, errorMessage, e);
+            if (e.getCause() instanceof android.security.KeyStoreException kse) {
+                if (kse.isTransientFailure()) {
+                    throw new RkpdException(RkpdException.ErrorCode.TRANSIENT_ERROR,
+                            "Transient keystore error generating attestation certificate", e);
+                }
+            }
+            throw new RkpdException(RkpdException.ErrorCode.INTERNAL_ERROR,
+                    "Error generating attestation certificate", e);
         }
     }
 
