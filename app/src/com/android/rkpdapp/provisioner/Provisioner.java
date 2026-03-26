@@ -158,22 +158,29 @@ public class Provisioner {
                     keystore, keyAlias, systemInterface.getHalInstanceName());
             rawPublicKey = getRkpRawPublicKeyFromAttestationCertChain(attestationCertChain);
         } catch (Exception e) {
-            if (e instanceof RkpdException && ((RkpdException) e).getErrorCode() ==
+            if (e instanceof RkpdException rkpdException && rkpdException.getErrorCode() ==
                     RkpdException.ErrorCode.TRANSIENT_ERROR) {
-                Log.i(TAG, "Transient error generating attestation certificate. Skipping "
-                        + "certificate confirmation for now.", e);
+                new ServerInterface(mContext, mIsAsync)
+                    .confirmCertificatesWithException(
+                            Optional.of(systemInterface),
+                            e,
+                            new DerCertificateChains(certChains),
+                            requestId,
+                            metrics,
+                            ConfirmCertificates.Status.WARNING);
                 return;
             }
             Log.e(TAG, "Error generating attestation certificate. Reporting to the server"
                     + " and deleting provisioned keys from this batch.", e);
             mKeyDao.deleteKeys(keys);
             new ServerInterface(mContext, mIsAsync)
-                .confirmCertificatesError(
+                .confirmCertificatesWithException(
                         Optional.of(systemInterface),
                         e,
                         new DerCertificateChains(certChains),
                         requestId,
-                        metrics);
+                        metrics,
+                        ConfirmCertificates.Status.ERROR);
             throw e;
         }
         // Successfully generated attestation certificate, unassign and make available for reuse.
@@ -320,12 +327,13 @@ public class Provisioner {
                 certChain = X509Utils.formatX509Certs(chain);
             } catch (Exception e) {
                 new ServerInterface(mContext, mIsAsync)
-                        .confirmCertificatesError(
+                        .confirmCertificatesWithException(
                                 Optional.of(systemInterface),
                                 e,
                                 new DerCertificateChains(chain),
                                 requestId,
-                                metrics);
+                                metrics,
+                                ConfirmCertificates.Status.ERROR);
                 throw e;
             }
             X509Certificate leafCertificate = certChain[0];

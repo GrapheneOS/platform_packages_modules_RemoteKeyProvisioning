@@ -707,6 +707,117 @@ public class ProvisionerTest {
 
     @Test
     @RequiresFlagsEnabled({Flags.FLAG_ENABLE_FEEDBACK_LOOP, Flags.FLAG_REPORT_DEVICE_RESET})
+    public void
+        testGenerateAttestationCertificateTransientFailureTriggersConfirmCertificatesAndKeepsKeys()
+            throws Exception {
+        Array cborCertChains =
+                new Array()
+                        .add(new ByteString(ROOT_CERT.getEncoded())) // shared chain
+                        .add(
+                                new Array() // unique chains
+                                        .add(new ByteString(TEST_CERT_1.getEncoded())));
+        String base64Encoded =
+                Base64.encodeToString(CborUtils.encodeCbor(cborCertChains), Base64.DEFAULT);
+        FakeRkpServer.Response signCertsResponse = new FakeRkpServer.Response(base64Encoded);
+        try (FakeRkpServer server =
+                new FakeRkpServer(
+                        FakeRkpServer.Response.FETCH_EEK_OK,
+                        signCertsResponse,
+                        FakeRkpServer.Response.CONFIRM_CERTS_OK)) {
+            Settings.setDeviceConfig(sContext, 1, Duration.ofDays(1), server.getUrl());
+            ProvisioningAttempt atom = ProvisioningAttempt.createScheduledAttemptMetrics(sContext);
+            SystemInterface mockSystem = mock(SystemInterface.class);
+            doReturn(1).when(mockSystem).getBatchSize();
+            RkpKey rkpKey = new RkpKey(FAKE_RKP_KEY_BLOB_1, new byte[0], null, "hal",
+                    RAW_PUBLIC_KEY1);
+            doReturn(rkpKey).when(mockSystem).generateKey(eq(atom));
+            doReturn(new byte[1]).when(mockSystem).generateCsr(
+                    eq(atom), notNull(), notNull(), any(Context.class));
+            doReturn("strongbox").when(mockSystem).getHalInstanceName();
+
+            GeekResponse geekResponse = new GeekResponse();
+            geekResponse.setChallenge(new byte[1]);
+
+            Provisioner testProvisioner =
+                    new Provisioner(sContext, mKeyDao, false) {
+                        @Override
+                        protected Certificate[] generateAttestationCertificate(
+                                KeyStore keystore, String keyAlias,
+                                String halInstanceName)
+                                throws RkpdException {
+                            assertThat(mKeyDao.getAllKeys()).isNotEmpty();
+                            throw new RkpdException(RkpdException.ErrorCode.TRANSIENT_ERROR,
+                                    "Transient error generating attestation certificate");
+                        }
+                    };
+
+            // Transient error doesn't throw, it completes successfully but issues a warning.
+            testProvisioner.provisionKeys(atom, mockSystem, geekResponse);
+
+            // Confirm that confirmCertificates was called.
+            assertThat(server.getCapturedUri()).contains(":confirmCertificates");
+            // Verify that the keys were NOT deleted because it was a transient error.
+            assertThat(mKeyDao.getAllKeys()).isNotEmpty();
+        }
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_FEEDBACK_LOOP)
+    @RequiresFlagsDisabled(Flags.FLAG_REPORT_DEVICE_RESET)
+    public void testGenAttestCertTransientFailureTriggersConfirmCertsAndKeepsKeys_noDeviceResetFlag()
+            throws Exception {
+        Array cborCertChains =
+                new Array()
+                        .add(new ByteString(ROOT_CERT.getEncoded())) // shared chain
+                        .add(
+                                new Array() // unique chains
+                                        .add(new ByteString(TEST_CERT_1.getEncoded())));
+        String base64Encoded =
+                Base64.encodeToString(CborUtils.encodeCbor(cborCertChains), Base64.DEFAULT);
+        FakeRkpServer.Response signCertsResponse = new FakeRkpServer.Response(base64Encoded);
+        try (FakeRkpServer server =
+                new FakeRkpServer(
+                        FakeRkpServer.Response.FETCH_EEK_OK,
+                        signCertsResponse,
+                        FakeRkpServer.Response.CONFIRM_CERTS_OK)) {
+            Settings.setDeviceConfig(sContext, 1, Duration.ofDays(1), server.getUrl());
+            ProvisioningAttempt atom = ProvisioningAttempt.createScheduledAttemptMetrics(sContext);
+            SystemInterface mockSystem = mock(SystemInterface.class);
+            doReturn(1).when(mockSystem).getBatchSize();
+            RkpKey rkpKey = new RkpKey(FAKE_RKP_KEY_BLOB_1, new byte[0], null, "hal",
+                    RAW_PUBLIC_KEY1);
+            doReturn(rkpKey).when(mockSystem).generateKey(eq(atom));
+            doReturn(new byte[1]).when(mockSystem).generateCsr(eq(atom), notNull(), notNull());
+            doReturn("strongbox").when(mockSystem).getHalInstanceName();
+
+            GeekResponse geekResponse = new GeekResponse();
+            geekResponse.setChallenge(new byte[1]);
+
+            Provisioner testProvisioner =
+                    new Provisioner(sContext, mKeyDao, false) {
+                        @Override
+                        protected Certificate[] generateAttestationCertificate(
+                                KeyStore keystore, String keyAlias,
+                                String halInstanceName)
+                                throws RkpdException {
+                            assertThat(mKeyDao.getAllKeys()).isNotEmpty();
+                            throw new RkpdException(RkpdException.ErrorCode.TRANSIENT_ERROR,
+                                    "Transient error generating attestation certificate");
+                        }
+                    };
+
+            // Transient error doesn't throw, it completes successfully but issues a warning.
+            testProvisioner.provisionKeys(atom, mockSystem, geekResponse);
+
+            // Confirm that confirmCertificates was called.
+            assertThat(server.getCapturedUri()).contains(":confirmCertificates");
+            // Verify that the keys were NOT deleted because it was a transient error.
+            assertThat(mKeyDao.getAllKeys()).isNotEmpty();
+        }
+    }
+
+    @Test
+    @RequiresFlagsEnabled({Flags.FLAG_ENABLE_FEEDBACK_LOOP, Flags.FLAG_REPORT_DEVICE_RESET})
     public void testProvisionKeysHalNotStrongBoxOrDefaultDoesNotTriggerConfirmCertificates()
             throws Exception {
         try (FakeRkpServer server =
@@ -921,7 +1032,8 @@ public class ProvisionerTest {
 
     @Test
     @RequiresFlagsDisabled({Flags.FLAG_ENABLE_FEEDBACK_LOOP, Flags.FLAG_REPORT_DEVICE_RESET})
-    public void testGenerateAttestationCertificateNotCalledWhenFlagIsDisabled_withoutDeviceResetFlag() throws Exception {
+    public void testGenerateAttestationCertificateNotCalledWhenFlagDisabled_withoutDeviceResetFlag()
+            throws Exception {
         try (FakeRkpServer server =
                 new FakeRkpServer(
                         FakeRkpServer.Response.FETCH_EEK_OK,
