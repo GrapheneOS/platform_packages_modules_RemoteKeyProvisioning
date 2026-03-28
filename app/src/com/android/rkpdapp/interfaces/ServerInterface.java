@@ -174,12 +174,13 @@ public class ServerInterface {
         return SYNC_CONNECT_TIMEOUT_OPEN_MS;
     }
 
-    public void confirmCertificatesError(
+    public void confirmCertificatesWithException(
             Optional<SystemInterface> systemInterface,
             Exception e,
             Payload payload,
             String requestId,
-            ProvisioningAttempt metrics)
+            ProvisioningAttempt metrics,
+            ConfirmCertificates.Status status)
             throws RkpdException, InterruptedException {
         if (!Flags.enableFeedbackLoop()) {
             return;
@@ -191,9 +192,9 @@ public class ServerInterface {
         if (e.getCause() != null) {
             reason += ": " + e.getCause().getMessage();
         }
-        ConfirmCertificates errorInstance = ConfirmCertificates.createError(
-                halName, reason, Log.getStackTraceString(e), payload);
-        confirmCertificates(errorInstance, requestId, metrics);
+        ConfirmCertificates confirmCertsInstance = ConfirmCertificates.create(
+                halName, reason, Log.getStackTraceString(e), payload, status);
+        confirmCertificates(confirmCertsInstance, requestId, metrics);
     }
 
     public void confirmCertificates(
@@ -232,7 +233,7 @@ public class ServerInterface {
         // Reset the device config if we successfully sent an error instance to the server.
         // Important to do this after confirmCertificates is called so that the appropriate server
         // instance receives the request.
-        if (confirmCertificates.isError()) {
+        if (confirmCertificates.getType() == ConfirmCertificates.Status.ERROR) {
             Log.i(TAG, "ConfirmCertificates is an error instance. Resetting to defaults.");
             Settings.resetDefaultConfig(mContext);
         }
@@ -265,8 +266,13 @@ public class ServerInterface {
             certChains = CborUtils.parseSignedCertificates(cborBytes);
         } catch (Exception e) {
             metrics.setStatus(ProvisioningAttempt.Status.INTERNAL_ERROR);
-            confirmCertificatesError(
-                    systemInterface, e, new CertificateBundle(cborBytes), reqId, metrics);
+            confirmCertificatesWithException(
+                    systemInterface,
+                    e,
+                    new CertificateBundle(cborBytes),
+                    reqId,
+                    metrics,
+                    ConfirmCertificates.Status.ERROR);
             throw e;
         }
 
@@ -287,8 +293,13 @@ public class ServerInterface {
             throw new RkpdException(
                     RkpdException.ErrorCode.INTERNAL_ERROR, "Algorithm not found", e);
         } catch (Exception e) {
-            confirmCertificatesError(
-                systemInterface, e, new DerCertificateChains(certChains.get(0)), reqId, metrics);
+            confirmCertificatesWithException(
+                    systemInterface,
+                    e,
+                    new DerCertificateChains(certChains.get(0)),
+                    reqId,
+                    metrics,
+                    ConfirmCertificates.Status.ERROR);
             throw e;
         }
         return certChains;

@@ -26,6 +26,7 @@ import java.util.Optional;
 public class ConfirmCertificates {
     public static final UnicodeString HAL_INSTANCE_KEY = new UnicodeString("instance");
     public static final UnicodeString ERROR_INFO_KEY = new UnicodeString("error_info");
+    public static final UnicodeString WARNING_INFO_KEY = new UnicodeString("warning_info");
     public static final UnicodeString REASON_KEY = new UnicodeString("reason");
     public static final UnicodeString STACK_TRACE_KEY = new UnicodeString("stack_trace");
     public static final UnicodeString CHAINS_KEY = new UnicodeString("chains");
@@ -87,22 +88,30 @@ public class ConfirmCertificates {
     /** The stack trace if captured. */
     private Optional<String> stackTrace;
 
+    /** The payload if any. */
     private Optional<Payload> payload;
 
-    /** Whether the instance is an error instance. */
-    private boolean isError;
+    /** The kinds of outcome being confirmed by ConfirmCertificates. */
+    public enum Status {
+        SUCCESS,
+        ERROR,
+        WARNING
+    }
+
+    /** The outcome being confirmed by ConfirmCertificates. */
+    private Status status;
 
     private ConfirmCertificates(
             String halInstance,
             Optional<String> errorReason,
             Optional<String> stackTrace,
             Optional<Payload> payload,
-            boolean isError) {
+            Status status) {
         this.halInstance = (halInstance == null || halInstance.isEmpty()) ? "unknown" : halInstance;
         this.errorReason = errorReason;
         this.stackTrace = stackTrace;
         this.payload = payload;
-        this.isError = isError;
+        this.status = status;
     }
 
     public static ConfirmCertificates createSuccess(String halInstance) {
@@ -111,11 +120,11 @@ public class ConfirmCertificates {
                 Optional.empty(),
                 Optional.empty(),
                 Optional.empty(),
-                /* isError= */ false);
+                Status.SUCCESS);
     }
 
-    public static ConfirmCertificates createError(
-            String halInstance, String reason, String stackTrace, Payload payload) {
+    public static ConfirmCertificates create(
+            String halInstance, String reason, String stackTrace, Payload payload, Status status) {
         // Maximum length of the reason allowed by the server is 256.
         if (reason != null && reason.length() > 256) {
             reason = reason.substring(0, 256);
@@ -125,18 +134,19 @@ public class ConfirmCertificates {
                 Optional.ofNullable(reason),
                 Optional.ofNullable(stackTrace),
                 Optional.ofNullable(payload),
-                /* isError= */ true);
+                status);
     }
 
     public byte[] buildCborBytes() throws RkpdException {
         Map confirmCertificatesInfo =
                 new Map().put(HAL_INSTANCE_KEY, new UnicodeString(halInstance));
-        if (isError) {
+        if (status == Status.ERROR || status == Status.WARNING) {
             Map errorInfo = new Map();
             errorReason.ifPresent(r -> errorInfo.put(REASON_KEY, new UnicodeString(r)));
             stackTrace.ifPresent(s -> errorInfo.put(STACK_TRACE_KEY, new UnicodeString(s)));
             payload.ifPresent(p -> errorInfo.put(p.getLabel(), p.getValue()));
-            confirmCertificatesInfo.put(ERROR_INFO_KEY, errorInfo);
+            UnicodeString key = (status == Status.ERROR) ? ERROR_INFO_KEY : WARNING_INFO_KEY;
+            confirmCertificatesInfo.put(key, errorInfo);
         }
 
         try {
@@ -149,7 +159,7 @@ public class ConfirmCertificates {
         }
     }
 
-    public boolean isError() {
-        return isError;
+    public Status getType() {
+        return status;
     }
 }

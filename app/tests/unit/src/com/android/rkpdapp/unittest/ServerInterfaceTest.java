@@ -27,8 +27,13 @@ import android.platform.test.flag.junit.CheckFlagsRule;
 import android.platform.test.flag.junit.DeviceFlagsValueProvider;
 import android.util.Base64;
 import androidx.test.core.app.ApplicationProvider;
+import co.nstant.in.cbor.CborDecoder;
+import co.nstant.in.cbor.model.DataItem;
+import co.nstant.in.cbor.model.Map;
+import co.nstant.in.cbor.model.UnicodeString;
 import com.android.rkpd.flags.Flags;
 import com.android.rkpdapp.ConfirmCertificates;
+import com.android.rkpdapp.ConfirmCertificates.Status;
 import com.android.rkpdapp.GeekResponse;
 import com.android.rkpdapp.RkpdException;
 import com.android.rkpdapp.interfaces.ServerInterface;
@@ -496,6 +501,35 @@ public class ServerInterfaceTest {
 
     @Test
     @RequiresFlagsEnabled(Flags.FLAG_ENABLE_FEEDBACK_LOOP)
+    public void testConfirmCertificatesWarningDoesNotRetryOnServerFailure() throws Exception {
+        FakeRkpServer server =
+                new FakeRkpServer(
+                        FakeRkpServer.Response.FETCH_EEK_OK,
+                        FakeRkpServer.Response.SIGN_CERTS_OK_VALID_CBOR,
+                        FakeRkpServer.Response.INTERNAL_ERROR);
+        Settings.setDeviceConfig(
+                sContext,
+                1 /* extraKeys */,
+                TIME_TO_REFRESH_HOURS /* expiringBy */,
+                server.getUrl());
+        Settings.setMaxRequestTime(sContext, 100);
+        ConfirmCertificates confirmCertificates =
+                ConfirmCertificates.create(
+                        "strongbox",
+                        "error",
+                        "stackTrace",
+                        new ConfirmCertificates.DerCertificateChains(new byte[] {1, 2, 3}),
+                        Status.WARNING);
+
+        // Does not throw.
+        mServerInterface.confirmCertificates(
+                confirmCertificates,
+                "requestId",
+                ProvisioningAttempt.createScheduledAttemptMetrics(sContext));
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_FEEDBACK_LOOP)
     public void testConfirmCertificatesErrorDoesNotRetryOnServerFailure() throws Exception {
         FakeRkpServer server =
                 new FakeRkpServer(
@@ -509,11 +543,12 @@ public class ServerInterfaceTest {
                 server.getUrl());
         Settings.setMaxRequestTime(sContext, 100);
         ConfirmCertificates confirmCertificates =
-                ConfirmCertificates.createError(
+                ConfirmCertificates.create(
                         "strongbox",
                         "error",
                         "stackTrace",
-                        new ConfirmCertificates.DerCertificateChains(new byte[] {1, 2, 3}));
+                        new ConfirmCertificates.DerCertificateChains(new byte[] {1, 2, 3}),
+                        Status.ERROR);
 
         // Does not throw.
         mServerInterface.confirmCertificates(
@@ -577,6 +612,41 @@ public class ServerInterfaceTest {
 
     @Test
     @RequiresFlagsEnabled(Flags.FLAG_ENABLE_FEEDBACK_LOOP)
+    public void testConfirmCertificatesWarningInstanceDoesNotResetDeviceConfig() throws Exception {
+        try (FakeRkpServer server =
+                new FakeRkpServer(
+                        FakeRkpServer.Response.FETCH_EEK_OK,
+                        FakeRkpServer.Response.SIGN_CERTS_OK_VALID_CBOR,
+                        FakeRkpServer.Response.CONFIRM_CERTS_OK)) {
+            Settings.setDeviceConfig(
+                    sContext,
+                    1 /* extraKeys */,
+                    TIME_TO_REFRESH_HOURS /* expiringBy */,
+                    server.getUrl());
+
+            // The method does not return anything, but should not throw an exception.
+            mServerInterface.confirmCertificates(
+                    ConfirmCertificates.create(
+                            "strongbox",
+                            "warning",
+                            "stackTrace",
+                            new ConfirmCertificates.DerCertificateChains(new byte[] {1, 2, 3}),
+                            Status.WARNING),
+                    "requestId",
+                    ProvisioningAttempt.createScheduledAttemptMetrics(sContext));
+
+            assertThat(server.getCapturedUri()).contains(":confirmCertificates");
+            assertThat(server.getCapturedParams()).containsEntry("request_id", "requestId");
+
+            // The device config should not be reset.
+            assertThat(Settings.getUrl(sContext)).isEqualTo(server.getUrl());
+            assertThat(Settings.getExpiringBy(sContext)).isEqualTo(TIME_TO_REFRESH_HOURS);
+            assertThat(Settings.getExtraSignedKeysAvailable(sContext)).isEqualTo(1);
+        }
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_FEEDBACK_LOOP)
     public void testConfirmCertificatesErrorInstanceResetsDeviceConfig() throws Exception {
         try (FakeRkpServer server =
                 new FakeRkpServer(
@@ -591,11 +661,12 @@ public class ServerInterfaceTest {
 
             // The method does not return anything, but should not throw an exception.
             mServerInterface.confirmCertificates(
-                    ConfirmCertificates.createError(
+                    ConfirmCertificates.create(
                             "strongbox",
                             "error",
                             "stackTrace",
-                            new ConfirmCertificates.DerCertificateChains(new byte[] {1, 2, 3})),
+                            new ConfirmCertificates.DerCertificateChains(new byte[] {1, 2, 3}),
+                            Status.ERROR),
                     "requestId",
                     ProvisioningAttempt.createScheduledAttemptMetrics(sContext));
 
@@ -643,6 +714,45 @@ public class ServerInterfaceTest {
 
     @Test
     @RequiresFlagsEnabled(Flags.FLAG_ENABLE_FEEDBACK_LOOP)
+    public void testConfirmCertificatesWarningLongReasonIsTruncated() throws Exception {
+        ServerInterface spyServerInterface = Mockito.spy(mServerInterface);
+        ArgumentCaptor<ConfirmCertificates> captor =
+                ArgumentCaptor.forClass(ConfirmCertificates.class);
+        Mockito.doNothing()
+                .when(spyServerInterface)
+                .confirmCertificates(
+                        captor.capture(),
+                        Mockito.anyString(),
+                        Mockito.any(ProvisioningAttempt.class));
+        SystemInterface mockSystemInterface = Mockito.mock(SystemInterface.class);
+        doReturn("strongbox").when(mockSystemInterface).getHalInstanceName();
+
+        // Create an exception with a message and cause that will exceed 256 chars.
+        String longMessage = "A".repeat(200);
+        String longCauseMessage = "B".repeat(200);
+
+        spyServerInterface.confirmCertificatesWithException(
+                Optional.of(mockSystemInterface),
+                new Exception(longMessage, new Throwable(longCauseMessage)),
+                new ConfirmCertificates.DerCertificateChains(new byte[] {1, 2, 3}),
+                "requestId",
+                ProvisioningAttempt.createScheduledAttemptMetrics(sContext),
+                Status.WARNING);
+
+        byte[] cborBytes = captor.getValue().buildCborBytes();
+        List<DataItem> dataItems =
+                new CborDecoder(new ByteArrayInputStream(cborBytes)).decode();
+        Map confirmCertificatesInfo = (Map) dataItems.get(0);
+        Map warningInfo = (Map) confirmCertificatesInfo.get(new UnicodeString("warning_info"));
+        UnicodeString reason =(UnicodeString) warningInfo.get(new UnicodeString("reason"));
+
+        String expectedReason = (longMessage + ": " + longCauseMessage).substring(0, 256);
+        assertThat(reason.getString()).isEqualTo(expectedReason);
+        assertThat(reason.getString().length()).isEqualTo(256);
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_FEEDBACK_LOOP)
     public void testConfirmCertificatesErrorLongReasonIsTruncated() throws Exception {
         ServerInterface spyServerInterface = Mockito.spy(mServerInterface);
         ArgumentCaptor<ConfirmCertificates> captor =
@@ -657,28 +767,22 @@ public class ServerInterfaceTest {
         doReturn("strongbox").when(mockSystemInterface).getHalInstanceName();
 
         // Create an exception with a message and cause that will exceed 256 chars.
-        String longMessage = new String(new char[200]).replace('\0', 'A');
+        String longMessage = "A".repeat(200);
         String longCauseMessage = new String(new char[200]).replace('\0', 'B');
 
-        spyServerInterface.confirmCertificatesError(
+        spyServerInterface.confirmCertificatesWithException(
                 Optional.of(mockSystemInterface),
                 new Exception(longMessage, new Throwable(longCauseMessage)),
                 new ConfirmCertificates.DerCertificateChains(new byte[] {1, 2, 3}),
                 "requestId",
-                ProvisioningAttempt.createScheduledAttemptMetrics(sContext));
+                ProvisioningAttempt.createScheduledAttemptMetrics(sContext),
+                Status.ERROR);
 
         byte[] cborBytes = captor.getValue().buildCborBytes();
-        List<co.nstant.in.cbor.model.DataItem> dataItems =
-                new co.nstant.in.cbor.CborDecoder(new ByteArrayInputStream(cborBytes)).decode();
-        co.nstant.in.cbor.model.Map confirmCertificatesInfo =
-                (co.nstant.in.cbor.model.Map) dataItems.get(0);
-        co.nstant.in.cbor.model.Map errorInfo =
-                (co.nstant.in.cbor.model.Map)
-                        confirmCertificatesInfo.get(
-                                new co.nstant.in.cbor.model.UnicodeString("error_info"));
-        co.nstant.in.cbor.model.UnicodeString reason =
-                (co.nstant.in.cbor.model.UnicodeString)
-                        errorInfo.get(new co.nstant.in.cbor.model.UnicodeString("reason"));
+        List<DataItem> dataItems = new CborDecoder(new ByteArrayInputStream(cborBytes)).decode();
+        Map confirmCertificatesInfo = (Map) dataItems.get(0);
+        Map errorInfo = (Map) confirmCertificatesInfo.get(new UnicodeString("error_info"));
+        UnicodeString reason = (UnicodeString) errorInfo.get(new UnicodeString("reason"));
 
         String expectedReason = (longMessage + ": " + longCauseMessage).substring(0, 256);
         assertThat(reason.getString()).isEqualTo(expectedReason);

@@ -18,6 +18,7 @@ import static com.android.rkpdapp.ConfirmCertificates.ERROR_INFO_KEY;
 import static com.android.rkpdapp.ConfirmCertificates.HAL_INSTANCE_KEY;
 import static com.android.rkpdapp.ConfirmCertificates.REASON_KEY;
 import static com.android.rkpdapp.ConfirmCertificates.STACK_TRACE_KEY;
+import static com.android.rkpdapp.ConfirmCertificates.WARNING_INFO_KEY;
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertArrayEquals;
 
@@ -36,6 +37,7 @@ import com.android.rkpd.flags.Flags;
 import com.android.rkpdapp.ConfirmCertificates;
 import com.android.rkpdapp.ConfirmCertificates.CertificateBundle;
 import com.android.rkpdapp.ConfirmCertificates.DerCertificateChains;
+import com.android.rkpdapp.ConfirmCertificates.Status;
 import com.android.rkpdapp.RkpdException;
 import java.io.ByteArrayInputStream;
 import java.util.List;
@@ -62,19 +64,20 @@ public class ConfirmCertificatesTest {
         return (Map) dataItems.get(0);
     }
 
-    private static void verifyErrorCertificateInfoWithBundle(
+    private static void verifyCertificateInfoWithBundle(
             Map confirmCertificatesInfo,
             String halInstance,
             String reason,
             String stackTrace,
-            byte[] payload) {
+            byte[] payload,
+            UnicodeString infoKey) {
         assertThat(confirmCertificatesInfo.getKeys()).hasSize(2);
         assertThat(
                         ((UnicodeString) confirmCertificatesInfo.get(HAL_INSTANCE_KEY))
                                 .getString())
                 .isEqualTo(halInstance);
 
-        Map errorInfo = (Map) confirmCertificatesInfo.get(ERROR_INFO_KEY);
+        Map errorInfo = (Map) confirmCertificatesInfo.get(infoKey);
         int expectedErrorInfoSize = 0;
         if (reason != null) {
             expectedErrorInfoSize++;
@@ -95,18 +98,19 @@ public class ConfirmCertificatesTest {
         assertThat(errorInfo.getKeys()).hasSize(expectedErrorInfoSize);
     }
 
-    private static void verifyErrorCertificateInfoWithChains(
+    private static void verifyCertificateInfoWithChains(
             Map confirmCertificatesInfo,
             String halInstance,
             String reason,
             String stackTrace,
-            List<byte[]> derCertChains) {
+            List<byte[]> derCertChains,
+            UnicodeString infoKey) {
         assertThat(confirmCertificatesInfo.getKeys()).hasSize(2);
         assertThat(((UnicodeString) confirmCertificatesInfo.get(HAL_INSTANCE_KEY))
                                 .getString())
                 .isEqualTo(halInstance);
 
-        Map errorInfo = (Map) confirmCertificatesInfo.get(ERROR_INFO_KEY);
+        Map errorInfo = (Map) confirmCertificatesInfo.get(infoKey);
         int expectedErrorInfoSize = 0;
         if (reason != null) {
             expectedErrorInfoSize++;
@@ -139,7 +143,7 @@ public class ConfirmCertificatesTest {
         assertThat(map.getKeys().size()).isEqualTo(1);
         assertThat(((UnicodeString) map.get(new UnicodeString("instance"))).getString())
                 .isEqualTo("unknown");
-        assertThat(success.isError()).isFalse();
+        assertThat(success.getType()).isEqualTo(Status.SUCCESS);
     }
 
     @Test
@@ -150,43 +154,45 @@ public class ConfirmCertificatesTest {
         assertThat(map.getKeys().size()).isEqualTo(1);
         assertThat(((UnicodeString) map.get(new UnicodeString("instance"))).getString())
                 .isEqualTo("unknown");
-        assertThat(success.isError()).isFalse();
+        assertThat(success.getType()).isEqualTo(Status.SUCCESS);
     }
 
     @Test
     public void buildCborBytesErrorWithEmptyStringErrorReason()
             throws RkpdException, CborException {
-        ConfirmCertificates error =
-                ConfirmCertificates.createError(
-                        HAL_INSTANCE, "", null, new DerCertificateChains(PAYLOAD));
+        ConfirmCertificates error = ConfirmCertificates.create(
+                HAL_INSTANCE, "", null, new DerCertificateChains(PAYLOAD), Status.ERROR);
         byte[] encodedInfo = error.buildCborBytes();
 
         Map map = decodeCbor(encodedInfo);
-        verifyErrorCertificateInfoWithChains(map, HAL_INSTANCE, "", null, List.of(PAYLOAD));
-        assertThat(error.isError()).isTrue();
+        verifyCertificateInfoWithChains(
+                map, HAL_INSTANCE, "", null, List.of(PAYLOAD), ERROR_INFO_KEY);
+        assertThat(error.getType()).isEqualTo(Status.ERROR);
     }
 
     @Test
     public void buildCborBytesErrorWithNullPayload() throws RkpdException, CborException {
-        ConfirmCertificates error =
-                ConfirmCertificates.createError(HAL_INSTANCE, ERROR_REASON, null, null);
+        ConfirmCertificates error = ConfirmCertificates.create(
+                HAL_INSTANCE, ERROR_REASON, null, null, Status.ERROR);
         byte[] encodedInfo = error.buildCborBytes();
 
         Map map = decodeCbor(encodedInfo);
-        verifyErrorCertificateInfoWithBundle(map, HAL_INSTANCE, ERROR_REASON, null, null);
-        assertThat(error.isError()).isTrue();
+        verifyCertificateInfoWithBundle(
+                map, HAL_INSTANCE, ERROR_REASON, null, null, ERROR_INFO_KEY);
+        assertThat(error.getType()).isEqualTo(Status.ERROR);
     }
 
     @Test
     public void buildCborBytesErrorWithEmptyPayload() throws RkpdException, CborException {
         CertificateBundle payload = new CertificateBundle(new byte[0]);
-        ConfirmCertificates error =
-                ConfirmCertificates.createError(HAL_INSTANCE, ERROR_REASON, null, payload);
+        ConfirmCertificates error = ConfirmCertificates.create(
+                HAL_INSTANCE, ERROR_REASON, null, payload, Status.ERROR);
         byte[] encodedInfo = error.buildCborBytes();
 
         Map map = decodeCbor(encodedInfo);
-        verifyErrorCertificateInfoWithBundle(map, HAL_INSTANCE, ERROR_REASON, null, new byte[0]);
-        assertThat(error.isError()).isTrue();
+        verifyCertificateInfoWithBundle(
+                map, HAL_INSTANCE, ERROR_REASON, null, new byte[0], ERROR_INFO_KEY);
+        assertThat(error.getType()).isEqualTo(Status.ERROR);
     }
 
     @Test
@@ -198,57 +204,59 @@ public class ConfirmCertificatesTest {
         assertThat(map.getKeys().size()).isEqualTo(1);
         assertThat(((UnicodeString) map.get(new UnicodeString("instance"))).getString())
                 .isEqualTo(HAL_INSTANCE);
-        assertThat(success.isError()).isFalse();
+        assertThat(success.getType()).isEqualTo(Status.SUCCESS);
     }
 
     @Test
     public void buildCborBytesErrorWithCertBundle() throws RkpdException, CborException {
         CertificateBundle payload = new CertificateBundle(PAYLOAD);
-        ConfirmCertificates error =
-                ConfirmCertificates.createError(HAL_INSTANCE, ERROR_REASON, null, payload);
+        ConfirmCertificates error = ConfirmCertificates.create(
+                HAL_INSTANCE, ERROR_REASON, null, payload, Status.ERROR);
         byte[] encodedInfo = error.buildCborBytes();
 
         Map map = decodeCbor(encodedInfo);
-        verifyErrorCertificateInfoWithBundle(map, HAL_INSTANCE, ERROR_REASON, null, PAYLOAD);
-        assertThat(error.isError()).isTrue();
+        verifyCertificateInfoWithBundle(
+                map, HAL_INSTANCE, ERROR_REASON, null, PAYLOAD, ERROR_INFO_KEY);
+        assertThat(error.getType()).isEqualTo(Status.ERROR);
     }
 
     @Test
     public void buildCborBytesErrorWithDerChain() throws RkpdException, CborException {
         DerCertificateChains payload = new DerCertificateChains(PAYLOAD);
-        ConfirmCertificates error =
-                ConfirmCertificates.createError(HAL_INSTANCE, ERROR_REASON, null, payload);
+        ConfirmCertificates error = ConfirmCertificates.create(
+                HAL_INSTANCE, ERROR_REASON, null, payload, Status.ERROR);
         byte[] encodedInfo = error.buildCborBytes();
 
         Map map = decodeCbor(encodedInfo);
-        verifyErrorCertificateInfoWithChains(
-                map, HAL_INSTANCE, ERROR_REASON, null, List.of(PAYLOAD));
-        assertThat(error.isError()).isTrue();
+        verifyCertificateInfoWithChains(
+                map, HAL_INSTANCE, ERROR_REASON, null, List.of(PAYLOAD), ERROR_INFO_KEY);
+        assertThat(error.getType()).isEqualTo(Status.ERROR);
     }
 
     @Test
     public void buildCborBytesErrorWithStackTrace() throws RkpdException, CborException {
         CertificateBundle payload = new CertificateBundle(PAYLOAD);
         String stackTrace = "stack trace";
-        ConfirmCertificates error =
-                ConfirmCertificates.createError(HAL_INSTANCE, ERROR_REASON, stackTrace, payload);
+        ConfirmCertificates error = ConfirmCertificates.create(
+                HAL_INSTANCE, ERROR_REASON, stackTrace, payload, Status.ERROR);
         byte[] encodedInfo = error.buildCborBytes();
         Map map = decodeCbor(encodedInfo);
-        verifyErrorCertificateInfoWithBundle(
-                map, HAL_INSTANCE, ERROR_REASON, stackTrace, PAYLOAD);
-        assertThat(error.isError()).isTrue();
+        verifyCertificateInfoWithBundle(
+                map, HAL_INSTANCE, ERROR_REASON, stackTrace, PAYLOAD, ERROR_INFO_KEY);
+        assertThat(error.getType()).isEqualTo(Status.ERROR);
     }
 
     @Test
     public void buildCborBytesErrorWithNullErrorReason() throws RkpdException, CborException {
         DerCertificateChains payload = new DerCertificateChains(PAYLOAD);
-        ConfirmCertificates error =
-                ConfirmCertificates.createError(HAL_INSTANCE, null, null, payload);
+        ConfirmCertificates error = ConfirmCertificates.create(
+                HAL_INSTANCE, null, null, payload, Status.ERROR);
         byte[] encodedInfo = error.buildCborBytes();
 
         Map map = decodeCbor(encodedInfo);
-        verifyErrorCertificateInfoWithChains(map, HAL_INSTANCE, null, null, List.of(PAYLOAD));
-        assertThat(error.isError()).isTrue();
+        verifyCertificateInfoWithChains(
+                map, HAL_INSTANCE, null, null, List.of(PAYLOAD), ERROR_INFO_KEY);
+        assertThat(error.getType()).isEqualTo(Status.ERROR);
     }
 
     @Test
@@ -256,12 +264,13 @@ public class ConfirmCertificatesTest {
         String longReason = new String(new char[300]).replace('\0', 'A');
         String truncatedReason = longReason.substring(0, 256);
         CertificateBundle payload = new CertificateBundle(PAYLOAD);
-        ConfirmCertificates error =
-                ConfirmCertificates.createError(HAL_INSTANCE, longReason, null, payload);
+        ConfirmCertificates error = ConfirmCertificates.create(
+                HAL_INSTANCE, longReason, null, payload, Status.ERROR);
         byte[] encodedInfo = error.buildCborBytes();
         Map map = decodeCbor(encodedInfo);
-        verifyErrorCertificateInfoWithBundle(map, HAL_INSTANCE, truncatedReason, null, PAYLOAD);
-        assertThat(error.isError()).isTrue();
+        verifyCertificateInfoWithBundle(
+                map, HAL_INSTANCE, truncatedReason, null, PAYLOAD, ERROR_INFO_KEY);
+        assertThat(error.getType()).isEqualTo(Status.ERROR);
     }
 
     @Test
@@ -269,46 +278,77 @@ public class ConfirmCertificatesTest {
         byte[] payload2 = new byte[] {0x04, 0x05, 0x06};
         List<byte[]> chains = List.of(PAYLOAD, payload2);
         DerCertificateChains payload = new DerCertificateChains(chains);
-        ConfirmCertificates error =
-                ConfirmCertificates.createError(HAL_INSTANCE, ERROR_REASON, null, payload);
+        ConfirmCertificates error = ConfirmCertificates.create(
+                HAL_INSTANCE, ERROR_REASON, null, payload, Status.ERROR);
         byte[] encodedInfo = error.buildCborBytes();
         Map map = decodeCbor(encodedInfo);
-        verifyErrorCertificateInfoWithChains(map, HAL_INSTANCE, ERROR_REASON, null, chains);
-        assertThat(error.isError()).isTrue();
+        verifyCertificateInfoWithChains(
+                map, HAL_INSTANCE, ERROR_REASON, null, chains, ERROR_INFO_KEY);
+        assertThat(error.getType()).isEqualTo(Status.ERROR);
     }
 
     @Test
     public void buildCborBytesErrorWithEmptyDerChains() throws RkpdException, CborException {
         List<byte[]> chains = List.of();
         DerCertificateChains payload = new DerCertificateChains(chains);
-        ConfirmCertificates error =
-                ConfirmCertificates.createError(HAL_INSTANCE, ERROR_REASON, null, payload);
+        ConfirmCertificates error = ConfirmCertificates.create(
+                HAL_INSTANCE, ERROR_REASON, null, payload, Status.ERROR);
         byte[] encodedInfo = error.buildCborBytes();
         Map map = decodeCbor(encodedInfo);
-        verifyErrorCertificateInfoWithChains(map, HAL_INSTANCE, ERROR_REASON, null, chains);
-        assertThat(error.isError()).isTrue();
+        verifyCertificateInfoWithChains(
+                map, HAL_INSTANCE, ERROR_REASON, null, chains, ERROR_INFO_KEY);
+        assertThat(error.getType()).isEqualTo(Status.ERROR);
     }
 
     @Test
     public void buildCborBytesErrorWithNullDerChainsList() throws RkpdException, CborException {
         DerCertificateChains payload = new DerCertificateChains((List<byte[]>) null);
-        ConfirmCertificates error =
-                ConfirmCertificates.createError(HAL_INSTANCE, ERROR_REASON, null, payload);
+        ConfirmCertificates error = ConfirmCertificates.create(
+                HAL_INSTANCE, ERROR_REASON, null, payload, Status.ERROR);
         byte[] encodedInfo = error.buildCborBytes();
         Map map = decodeCbor(encodedInfo);
-        verifyErrorCertificateInfoWithChains(
-                map, HAL_INSTANCE, ERROR_REASON, null, List.of());
-        assertThat(error.isError()).isTrue();
+        verifyCertificateInfoWithChains(
+                map, HAL_INSTANCE, ERROR_REASON, null, List.of(), ERROR_INFO_KEY);
+        assertThat(error.getType()).isEqualTo(Status.ERROR);
     }
 
     @Test
     public void buildCborBytesErrorWithNullDerChain() throws RkpdException, CborException {
         DerCertificateChains payload = new DerCertificateChains((byte[]) null);
-        ConfirmCertificates error =
-                ConfirmCertificates.createError(HAL_INSTANCE, ERROR_REASON, null, payload);
+        ConfirmCertificates error = ConfirmCertificates.create(
+                HAL_INSTANCE, ERROR_REASON, null, payload, Status.ERROR);
         byte[] encodedInfo = error.buildCborBytes();
         Map map = decodeCbor(encodedInfo);
-        verifyErrorCertificateInfoWithChains(map, HAL_INSTANCE, ERROR_REASON, null, List.of());
-        assertThat(error.isError()).isTrue();
+        verifyCertificateInfoWithChains(
+                map, HAL_INSTANCE, ERROR_REASON, null, List.of(), ERROR_INFO_KEY);
+        assertThat(error.getType()).isEqualTo(Status.ERROR);
+    }
+
+    @Test
+    public void buildCborBytesWarningWithDerChain() throws RkpdException, CborException {
+        DerCertificateChains payload = new DerCertificateChains(PAYLOAD);
+        ConfirmCertificates warning =
+                ConfirmCertificates.create(
+                        HAL_INSTANCE, ERROR_REASON, null, payload, Status.WARNING);
+        byte[] encodedInfo = warning.buildCborBytes();
+
+        Map map = decodeCbor(encodedInfo);
+        verifyCertificateInfoWithChains(
+                map, HAL_INSTANCE, ERROR_REASON, null, List.of(PAYLOAD), WARNING_INFO_KEY);
+        assertThat(warning.getType()).isEqualTo(Status.WARNING);
+    }
+
+    @Test
+    public void buildCborBytesWarningWithCertBundle() throws RkpdException, CborException {
+        CertificateBundle payload = new CertificateBundle(PAYLOAD);
+        ConfirmCertificates warning =
+                ConfirmCertificates.create(
+                        HAL_INSTANCE, ERROR_REASON, null, payload, Status.WARNING);
+        byte[] encodedInfo = warning.buildCborBytes();
+
+        Map map = decodeCbor(encodedInfo);
+        verifyCertificateInfoWithBundle(
+                map, HAL_INSTANCE, ERROR_REASON, null, PAYLOAD, WARNING_INFO_KEY);
+        assertThat(warning.getType()).isEqualTo(Status.WARNING);
     }
 }
